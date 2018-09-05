@@ -1,0 +1,44 @@
+**** Header Files: ****
+
+ptable.hpp		- chemical constants
+units.hpp		- physical constants
+math_const.hpp	 	- mathematical constants
+math_special.hpp 	- special functions
+math_cmp.hpp 		- comparison functions
+math_function.hpp	- function evaluation
+
+string.hpp		- string utilities
+eigen.hpp		- matrix utilities
+parallel.hpp		- parallelization utilities
+serialize.hpp		- serialization utilities
+statistics.hpp		- statistics utilities
+map.hpp			- mapping two types
+
+optimize.hpp		- optimization functions
+
+cutoff.hpp		- cutoff functions
+basis_radial.hpp 	- radial basis (set of symmetry functions)
+symm_radial.hpp		- radial symmetry function interface
+symm_radial_g1.hpp	- Behler-Parinello G1 radial symmetry function
+symm_radial_g2.hpp	- Behler-Parinello G2 radial symmetry function
+basis_radial.hpp	- angular basis (set of symmetry functions)
+symm_angular.hpp	- angular symmetry function interface
+symm_angular_g3.hpp	- Behler-Parinello G3 radial symmetry function
+symm_angular_g4.hpp	- Behler-Parinello G4 radial symmetry function
+
+property.hpp		- atomic properties
+atom.hpp		- atom interface
+cell.hpp		- simulation cell
+structure.hpp		- storage of atoms/atomic properties
+vasp.hpp		- utilities for loading/reading from VASP files
+
+nn.hpp			- neural network 
+nn_pot.hpp		- neural network potential
+nn_pot_train_omp.hpp	- neural network potential - training - OpenMP parallelized
+
+**** Required Libraries ****
+Eigen - (v.3.0.0 or later) - eigen.tuxfamily.org
+	Template library for matrix multiplication and linear algebra.
+	Header only - no compilation required.
+	Include path required in makefile
+
