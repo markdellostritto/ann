@@ -208,7 +208,7 @@ void NNPot::initSpecies(const std::vector<Structure<AtomT> >& strucv){
 	}
 }
 
-//resize the symmetry function vectors to store the of inputs
+//resize the symmetry function vectors to store the inputs
 void NNPot::initSymm(Structure<AtomT>& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::initSymm(const Structure<AtomT>&):\n";
 	for(unsigned int n=0; n<struc.nSpecies(); ++n){
@@ -218,7 +218,7 @@ void NNPot::initSymm(Structure<AtomT>& struc){
 	}
 }
 
-//resize the symmetry function vectors to store the of inputs
+//resize the symmetry function vectors to store the inputs
 void NNPot::initSymm(std::vector<Structure<AtomT> >& strucv){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::initSymm(const std::vector<Structure<AtomT> >&):\n";
 	for(unsigned int i=0; i<strucv.size(); ++i){
@@ -240,7 +240,7 @@ void NNPot::setSpecies(const std::vector<std::string>& speciesNames){
 	}
 }
 
-//calculate inputs - symmetry functions - warning: no periodic self-interactions included
+//calculate inputs - symmetry functions 
 void NNPot::inputs_symm(Structure<AtomT>& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::inputs_symm(Structure<AtomT>&,unsigned int):\n";
 	//lattice vector shifts
@@ -406,12 +406,14 @@ void NNPot::forces(Structure<AtomT>& struc){
 double NNPot::energy(Structure<AtomT>& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::energy(Structure<AtomT>&):\n";
 	double energy=0;
+	//set the inputs for the atoms
+	inputs_symm(struc);
 	//loop over species
 	for(unsigned int n=0; n<struc.nSpecies(); ++n){
 		//loop over atoms
 		for(unsigned int m=0; m<struc.nAtoms(n); ++m){
 			//set the index
-			unsigned int index=speciesIndex(struc.atom(n,m).name());
+			unsigned int index=speciesMap_[struc.atom(n,m).name()];
 			//execute the network
 			nn_[index].execute(struc.atom(n,m).symm());
 			//add the energy
