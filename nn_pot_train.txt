@@ -1,0 +1,61 @@
+# GENERAL PARAMETERS
+seed		= 0 # seed for random number generator
+mode		= train # training mode
+#mode		= validate # validation mode
+# training data
+#data_train	= data_super.txt
+#data_train	= data_cubic.txt
+data_train	= data_md_nvt_test.txt
+#data_train	= data_md_nvt.txt
+# validation data
+data_val	= data_md_nve_test.txt
+print_chk	= nn_pot_train.chk
+load_chk	= nn_pot_train.chk
+
+# OPTIMIZATION
+#algo		= sdg		# steepest-descent - gradient only
+#algo		= sdm		# steepest-descent - momentum
+#algo		= nag		# Nesterov accelerated gradient
+#algo		= adagrad	# Adagrad
+#algo		= adadelta	# AdaDelta
+#algo		= adam		# Adam
+#algo		= rmsprop	# RMSprop
+algo		= rprop		# irprop+ (Igel, C.; Hüsken, M. Improving the Rprop Learning Algorithm; 2000)
+#algo		= bfgsg		# BFGS - gradient only
+opt_val		= ftol_abs	# type of break condition
+tol			= 1e-14		# break condition - training data
+tol_val		= 1e-4		# break condition - validation data
+max_iter	= 10000		# max number of iterations
+n_print		= 100		# print n optimization steps
+gamma		= 0.001		# step size for gradient descent
+eta			= 0.9		# memory term (NAG,Adaagrad,Adam)
+period		= 0			# period of oscillation of gamma (in steps)
+decay		= 0			# exponential decay parameter of gamma (in steps)
+
+# NN POTENTIAL
+nr			= 6			# number of radial basis functions
+na			= 6			# number of angular basis functions
+phirn		= G2		# type of radial function
+phian		= G4		# type of angular function
+r_min		= 0.5		# cutoff distance (distance units)
+r_cut		= 6			# cutoff distance (distance units)
+cutoff		= cos		# cutoff function
+lambda		= 0			# regularization parameter
+n_hidden	= 15 15		# number of hidden layers and nodes
+transfer	= tanh		# transfer function
+n_batch		= 0			# number of systems in batch (superceded by p_batch)
+p_batch		= 1			# percentage of system in batch
+pre_cond	= 0			# whether to pre-condition the network inputs
+post_cond	= 0			# whehter to post-condition the network outputs
+
+# algorithm performance (gamma=0.001,eta=0.9,t=10000)
+# (more * means faster/better convergence)
+# sdg		**
+# sdm		***
+# nag		****
+# adagrad	*
+# adadelta	*
+# adam		****
+# rmsprop	**
+# rprop		******
+# bfgsg		***
