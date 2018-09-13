@@ -8,19 +8,23 @@ namespace string{
 
 char* to_upper(char* str){
 	char* s=str;
-	while(*s){
-		*s=std::toupper(*s);
-		++s;
-	}
+	while(*s){*s=std::toupper(*s); ++s;}
 	return str;
 }
 
 char* to_lower(char* str){
 	char* s=str;
-	while(*s){
-		*s=std::tolower(*s);
-		++s;
-	}
+	while(*s){*s=std::tolower(*s); ++s;}
+	return str;
+}
+
+std::string& to_upper(std::string& str){
+	for(unsigned int i=0; i<str.size(); ++i) str[i]=std::toupper(str[i]);
+	return str;
+}
+
+std::string& to_lower(std::string& str){
+	for(unsigned int i=0; i<str.size(); ++i) str[i]=std::tolower(str[i]);
 	return str;
 }
 
@@ -133,83 +137,21 @@ unsigned int substrN(const char* str, const char* delim){
 }
 
 //******************************************************
-//Parser class
+//Splitting string
 //******************************************************
-/*
-int Parser::parse(const char* str, const char* delim){
-	std::strcpy(str_,str);
-	std::strcpy(delim_,delim);
-	strLen_=std::strlen(str_);
-	delimLen_=std::strlen(delim_);
-	substr_[0]='\0';
-	posn_=0;
-	
-	if(delimLen_<=0) throw std::invalid_argument("No delimieter provided.");
-	if(strLen_<=0) throw std::invalid_argument("Cannot parse empty string.");
-	else if(strLen_>M) throw std::invalid_argument("Cannot parse, string too large.");
-	
-	return substrN(str_,delim_);
+
+unsigned int split(const char* str, const char* delim, std::vector<std::string>& strlist){
+	unsigned int n=substrN(str,delim);
+	strlist.resize(n);
+	n=0;
+	while(std::strpbrk(str,delim)){
+		const char* stemp=std::strpbrk(str,delim);
+		if(stemp-str>0) strlist[n++]=std::string(str,stemp-str);
+		str=std::strpbrk(str,delim)+1;
+	}
+	if(std::strlen(str)>0) strlist[n++]=std::string(str,std::strlen(str));
+	return strlist.size();
 }
 
-const char* Parser::next(){
-	//local function variables
-	bool match;
-	int substrBeg=-1;
-	int substrEnd=-1;
-	
-	//starting from posn_, search for the first character in "str" which is not in "delim"
-	for(int i=posn_; i<strLen_; i++){
-		match=false;
-		for(int j=0; j<delimLen_; j++){
-			if(str_[i]==delim_[j]){
-				match=true; break;
-			}
-		}
-		if(!match){
-			substrBeg=i;
-			posn_=i+1;
-			break;
-		}
-	}
-	
-	//if we could not find a non-delimeter character, return an empty string
-	if(substrBeg<0){
-		substr_[0]='\0';
-		return substr_;
-	}
-	
-	//now that we have found the beginning of a substring, we copy characters to substr until we find a delimiting character
-	for(int i=substrBeg; i<strLen_; i++){
-		match=false;
-		for(int j=0; j<delimLen_; j++){
-			if(str_[i]==delim_[j]){
-				match=true; break;
-			}
-		}
-		if(!match){
-			substr_[i-substrBeg]=str_[i];
-		} else {
-			substrEnd=i-substrBeg;
-			posn_=i+1;
-			break;
-		}
-	}
-	
-	//add the null character
-	if(substrEnd<0){
-		substrEnd=strLen_-substrBeg;
-		posn_=strLen_;
-	}
-	substr_[substrEnd]='\0';
-	
-	return substr_;
-}
 
-const char* Parser::next(int n){
-	for(int i=0; i<n-1; i++){
-		next();
-	}
-	return next();
-}
-*/
 }

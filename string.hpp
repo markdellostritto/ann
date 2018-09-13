@@ -6,6 +6,8 @@
 #include <cctype>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace string{
 	
@@ -23,6 +25,8 @@ namespace string{
 	//******************************************************
 	char* to_upper(char* str);
 	char* to_lower(char* str);
+	std::string& to_upper(std::string& str);
+	std::string& to_lower(std::string& str);
 	
 	//******************************************************
 	//Trimming
@@ -49,25 +53,11 @@ namespace string{
 	unsigned int substrN(const char* str, const char* delim);
 	
 	//******************************************************
-	//Parser class
+	//Splitting string
 	//******************************************************
-	/*class Parser{
-	private:
-		static const int M=500;
-		char str_[M];//stores the string we are parsing
-		char substr_[M];//stores the substrings of the string we are parsing
-		char delim_[M];//stores the delimeters
-		int strLen_;//length of str
-		int delimLen_;//length of delim
-		int posn_;//the current position in the string
-	public:
-		Parser():posn_(0),strLen_(0),delimLen_(0){};
-		~Parser(){};
-		
-		int parse(const char* str, const char* delim);
-		const char* next();
-		const char* next(int n);
-	};*/
+	
+	unsigned int split(const char* str, const char* delim, std::vector<std::string>& strlist);
+	
 }	
 
 #endif
