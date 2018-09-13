@@ -259,17 +259,17 @@ std::ostream& operator<<(std::ostream& out, const ElectronegativityType::type& t
 
 //********** NAME **********
 //name
-const char* elementName(unsigned int atomicNumber);
-const char* elementNameMass(double mass);
+const char* name(unsigned int atomicNumber);
+//const char* elementNameMass(double mass);
 //********** ATOMIC_NUMBER **********
 //atomic number 
-int atomicNumber(const char* name);
-unsigned int atomicNumber(double mass);
+int an(const char* name);
+unsigned int an(double mass);
 //period
 unsigned int period(unsigned int atomicNumber);
 //********** MASS **********
 //mass 
-double elementMass(unsigned int atomicNumber);
+double mass(unsigned int atomicNumber);
 //********** RADIUS **********
 //atomic radius
 double atomicRadius(unsigned int atomicNumber);
