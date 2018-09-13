@@ -7,6 +7,8 @@
 std::ostream& operator<<(std::ostream& out, const NNPotOpt& nnPotOpt){
 	out<<"**************************************************\n";
 	out<<"****************** NN - POT - OPT ****************\n";
+	out<<"P_BATCH             = "<<nnPotOpt.pBatch_<<"\n";
+	out<<"N_BATCH             = "<<nnPotOpt.nBatch_<<"\n";
 	out<<"N_PRINT             = "<<nnPotOpt.nPrint_<<"\n";
 	out<<"N_WRITE             = "<<nnPotOpt.nWrite_<<"\n";
 	out<<"N_THREADS           = "<<nnPotOpt.nThreads_<<"\n";
@@ -128,41 +130,6 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 	if(strucTrain_==NULL) throw std::runtime_error("NULL POINTER: no training simulations.");
 	else if(strucTrain_->size()==0) throw std::invalid_argument("No training data provided.");
 	
-	//====== initialize omp ======
-	if(NN_POT_PRINT_STATUS>-1) std::cout<<"Initializing OMP...\n";
-	nThreads_=1;
-	#ifdef _OPENMP
-		nThreads_=omp_get_max_threads();
-	#endif
-	parallel::gen_thread_dist(nThreads_,strucTrain_->size(),tdTrain_);
-	parallel::gen_thread_offset(nThreads_,strucTrain_->size(),toTrain_);
-	if(strucVal_!=NULL){
-		parallel::gen_thread_dist(nThreads_,strucVal_->size(),tdVal_);
-		parallel::gen_thread_offset(nThreads_,strucVal_->size(),toVal_);
-	}
-	if(strucTest_!=NULL){parallel::gen_thread_dist(nThreads_,strucTest_->size(),tdTest_);
-		parallel::gen_thread_offset(nThreads_,strucTest_->size(),toTest_);
-	}
-	error_train_thread_.resize(nThreads_);
-	error_val_thread_.resize(nThreads_);
-	
-	//====== print the optimizer ======
-	std::cout<<*this<<"\n";
-	
-	//====== initialize the species ======
-	if(NN_POT_PRINT_STATUS>-1) std::cout<<"Initializing species...\n";
-	nnpot.initSpecies(*strucTrain_);
-	
-	//====== initialize the potential ======
-	if(NN_POT_PRINT_STATUS>-1) std::cout<<"Initializing potential...\n";
-	nnpot.init();
-	
-	//====== initialize the symmetry functions ======
-	if(NN_POT_PRINT_STATUS>-1) std::cout<<"Initializing symmetry functions...\n";
-	nnpot.initSymm(*strucTrain_);
-	if(strucVal_!=NULL) nnpot.initSymm(*strucVal_);
-	if(strucTest_!=NULL) nnpot.initSymm(*strucTest_);
-	
 	//====== set the number of atoms of each element ======
 	nAtoms_.resize(nnpot.nSpecies());
 	for(unsigned int i=0; i<strucTrain_->size(); ++i){
@@ -177,7 +144,6 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 	if(NN_POT_PRINT_STATUS>-1) std::cout<<"Setting the inputs (symmetry functions) - training...\n";
 	start=std::chrono::high_resolution_clock::now();
 	nnpot_.resize(nThreads_,nnpot);
-	//for(unsigned int n=0; n<strucTrain_->size(); ++n){std::cout<<"system["<<n<<"]\n"; nnpot.inputs_symm((*strucTrain_)[n],0);}
 	#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
 	for(unsigned int nt=0; nt<nThreads_; ++nt){
 		for(unsigned int n=toTrain_[nt]; n<toTrain_[nt]+tdTrain_[nt]; ++n){
@@ -187,7 +153,6 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 	}
 	if(strucVal_!=NULL){
 		if(NN_POT_PRINT_STATUS>-1) std::cout<<"Setting the inputs (symmetry functions) - validation...\n";
-		//for(unsigned int n=0; n<strucVal_->size(); ++n){std::cout<<"system["<<n<<"]\n"; nnpot.inputs_symm((*strucVal_)[n],0);}
 		#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
 		for(unsigned int nt=0; nt<nThreads_; ++nt){
 			for(unsigned int n=toVal_[nt]; n<toVal_[nt]+tdVal_[nt]; ++n){
@@ -198,7 +163,6 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 	}
 	if(strucTest_!=NULL){
 		if(NN_POT_PRINT_STATUS>-1) std::cout<<"Setting the inputs (symmetry functions) - testing...\n";
-		//for(unsigned int n=0; n<strucTest_->size(); ++n){std::cout<<"system["<<n<<"]\n"; nnpot.inputs_symm((*strucTest_)[n],0);}
 		#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
 		for(unsigned int nt=0; nt<nThreads_; ++nt){
 			for(unsigned int n=toTrain_[nt]; n<toTrain_[nt]+tdTrain_[nt]; ++n){
@@ -246,13 +210,19 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 	for(unsigned int i=0; i<batch_.size(); ++i) std::cout<<"batch["<<i<<"] = "<<batch_[i]<<"\n";
 	
 	//====== precondition the input ======
-	if(nnpot.preCond()){
+	if(preCond_){
 		if(NN_POT_PRINT_STATUS>-1) std::cout<<"Pre-conditioning input...\n";
 		//local variables
-		avg_in.resize(nnpot.nSpecies(),Eigen::VectorXd::Zero(nnpot.nInput_));
-		max_in.resize(nnpot.nSpecies(),Eigen::VectorXd::Zero(nnpot.nInput_));
-		min_in.resize(nnpot.nSpecies(),Eigen::VectorXd::Zero(nnpot.nInput_));
-		stddev_in.resize(nnpot.nSpecies(),Eigen::VectorXd::Zero(nnpot.nInput_));
+		avg_in.resize(nnpot.nSpecies());
+		max_in.resize(nnpot.nSpecies());
+		min_in.resize(nnpot.nSpecies());
+		stddev_in.resize(nnpot.nSpecies());
+		for(unsigned int i=0; i<nnpot.nSpecies(); ++i){
+			avg_in[i]=Eigen::VectorXd::Zero(nnpot.nInput_[i]);
+			max_in[i]=Eigen::VectorXd::Zero(nnpot.nInput_[i]);
+			min_in[i]=Eigen::VectorXd::Zero(nnpot.nInput_[i]);
+			stddev_in[i]=Eigen::VectorXd::Zero(nnpot.nInput_[i]);
+		}
 		std::vector<double> N(nnpot.nSpecies());//total number of inputs for each element 
 		//compute the max/min
 		if(NN_POT_PRINT_STATUS>0) std::cout<<"Compute the max/min...\n";
@@ -260,7 +230,7 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 			//find the index of the current species
 			unsigned int index=nnpot.speciesMap_[(*strucTrain_)[0].atomNames(i)];
 			//loop over all bases
-			for(unsigned int k=0; k<nnpot.nInput_; ++k){
+			for(unsigned int k=0; k<nnpot.nInput_[i]; ++k){
 				//find the max and min
 				max_in[index][k]=(*strucTrain_)[0].atom(i,0).symm()[k];
 				min_in[index][k]=(*strucTrain_)[0].atom(i,0).symm()[k];
@@ -274,7 +244,7 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 				//loop over all atoms of the species
 				for(unsigned int j=0; j<(*strucTrain_)[n].nAtoms(i); ++j){
 					//loop over all bases
-					for(unsigned int k=0; k<nnpot.nInput_; ++k){
+					for(unsigned int k=0; k<nnpot.nInput_[i]; ++k){
 						//find the max and min
 						if((*strucTrain_)[n].atom(i,j).symm()[k]>max_in[index][k]) max_in[index][k]=(*strucTrain_)[n].atom(i,j).symm()[k];
 						if((*strucTrain_)[n].atom(i,j).symm()[k]<min_in[index][k]) min_in[index][k]=(*strucTrain_)[n].atom(i,j).symm()[k];
@@ -319,20 +289,24 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 		}
 		//set the preconditioning vectors
 		if(NN_POT_PRINT_STATUS>0) std::cout<<"Set the preconditiong vectors...\n";
-		nnpot.preBias_=avg_in; for(unsigned int i=0; i<nnpot.preBias_.size(); ++i) nnpot.preBias_[i]*=-1;
-		nnpot.preScale_=stddev_in;
-		for(unsigned int i=0; i<nnpot.preScale_.size(); ++i){
-			for(unsigned int j=0; j<nnpot.preScale_[i].size(); ++j){
-				if(nnpot.preScale_[i][j]==0) nnpot.preScale_[i][j]=1;
-				else nnpot.preScale_[i][j]=1.0/(3.0*nnpot.preScale_[i][j]+1e-6);
+		preBias_=avg_in; for(unsigned int i=0; i<preBias_.size(); ++i) preBias_[i]*=-1;
+		preScale_=stddev_in;
+		for(unsigned int i=0; i<preScale_.size(); ++i){
+			for(unsigned int j=0; j<preScale_[i].size(); ++j){
+				if(preScale_[i][j]==0) preScale_[i][j]=1;
+				else preScale_[i][j]=1.0/(3.0*preScale_[i][j]+1e-6);
 			}
 		}
 	} else {
-		nnpot.preBias_.resize(nnpot.nSpecies(),Eigen::VectorXd::Constant(nnpot.nInput_,0.0));
-		nnpot.preScale_.resize(nnpot.nSpecies(),Eigen::VectorXd::Constant(nnpot.nInput_,1.0));
+		preBias_.resize(nnpot.nSpecies());
+		preScale_.resize(nnpot.nSpecies());
+		for(unsigned int i=0; i<nnpot.nSpecies(); ++i){
+			preBias_[i]=Eigen::VectorXd::Constant(nnpot.nInput_[i],0.0);
+			preScale_[i]=Eigen::VectorXd::Constant(nnpot.nInput_[i],1.0);
+		}
 	}
 	//====== precondition the output ======
-	if(nnpot.postCond()){
+	/*if(nnpot.postCond()){
 		if(NN_POT_PRINT_STATUS>-1) std::cout<<"Post-conditioning output...\n";
 		max_out=(*strucTrain_)[0].energy();
 		min_out=(*strucTrain_)[0].energy();
@@ -355,13 +329,13 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 	} else {
 		nnpot.postBias_=0.0;
 		nnpot.postScale_=1.0;
-	}
+	}*/
 	
 	//====== set the bias for each of the species ======
 	if(NN_POT_PRINT_STATUS>-1) std::cout<<"Setting the bias for each species...\n";
 	for(unsigned int n=0; n<nnpot.nSpecies(); ++n){
-		for(unsigned int i=0; i<nnpot.nn_[n].nInput(); ++i) nnpot.nn_[n].preBias(i)=nnpot.preBias_[n][i];
-		for(unsigned int i=0; i<nnpot.nn_[n].nInput(); ++i) nnpot.nn_[n].preScale(i)=nnpot.preScale_[n][i];
+		for(unsigned int i=0; i<nnpot.nn_[n].nInput(); ++i) nnpot.nn_[n].preBias(i)=preBias_[n][i];
+		for(unsigned int i=0; i<nnpot.nn_[n].nInput(); ++i) nnpot.nn_[n].preScale(i)=preScale_[n][i];
 		nnpot.nn_[n].postBias(0)=0.0;
 		nnpot.nn_[n].postScale(0)=1.0;
 	}
@@ -396,10 +370,7 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 	//====== distribute the potential ======
 	if(NN_POT_PRINT_STATUS>-1) std::cout<<"Distributing the potential...\n";
 	//nnpot_.resize(nThreads_,nnpot);
-	for(unsigned int nt=0; nt<nThreads_; ++nt){
-		nnpot_[nt]=nnpot;
-		std::cout<<"nnpot_["<<nt<<"] = \n"<<nnpot_[nt]<<"\n";
-	}
+	for(unsigned int nt=0; nt<nThreads_; ++nt) nnpot_[nt]=nnpot;
 	
 	//====== set the objective function ======
 	if(NN_POT_PRINT_STATUS>-1) std::cout<<"Setting the objective function...\n";
@@ -418,16 +389,14 @@ void NNPotOpt::train(NNPot& nnpot, Opt& opt, unsigned int batchSize){
 		std::cout<<"STDDEV - INPUT  = \n";
 		for(unsigned int i=0; i<stddev_in.size(); ++i) std::cout<<"\t"<<stddev_in[i].transpose()<<"\n";
 		std::cout<<"PRE-BIAS        = \n";
-		for(unsigned int i=0; i<nnpot.preBias_.size(); ++i) std::cout<<"\t"<<nnpot.preBias_[i].transpose()<<"\n";
+		for(unsigned int i=0; i<preBias_.size(); ++i) std::cout<<"\t"<<preBias_[i].transpose()<<"\n";
 		std::cout<<"PRE-SCALE       = \n";
-		for(unsigned int i=0; i<nnpot.preScale_.size(); ++i) std::cout<<"\t"<<nnpot.preScale_[i].transpose()<<"\n";
+		for(unsigned int i=0; i<preScale_.size(); ++i) std::cout<<"\t"<<preScale_[i].transpose()<<"\n";
 		std::cout<<"scaling-output:\n";
 		std::cout<<"MAX - OUTPUT    = "<<max_out<<"\n";
 		std::cout<<"MIN - OUTPUT    = "<<min_out<<"\n";
 		std::cout<<"AVG - OUTPUT    = "<<avg_out<<"\n";
 		std::cout<<"STDDEV - OUTPUT = "<<stddev_out<<"\n";
-		std::cout<<"POST-BIAS       = "<<nnpot.postBias_<<"\n";
-		std::cout<<"POST-SCALE      = "<<nnpot.postScale_<<"\n";
 		std::cout<<"******************* OPT - DATA *******************\n";
 		std::cout<<"**************************************************\n";
 	}
@@ -480,7 +449,7 @@ double NNPotOpt::error(const Eigen::VectorXd& x, Eigen::VectorXd& gradTot){
 		double error_val=0;
 	//gradients
 		Eigen::VectorXd dcda=Eigen::VectorXd::Zero(1);
-		Eigen::VectorXd gradLocal=Eigen::VectorXd::Zero(nnpot_[0].nParams_);
+		VecList gElementLoc_=gElement_;
 	
 	//====== reset the error ======
 	for(unsigned int nt=0; nt<error_train_thread_.size(); ++nt) error_train_thread_[nt]=0;
@@ -508,7 +477,6 @@ double NNPotOpt::error(const Eigen::VectorXd& x, Eigen::VectorXd& gradTot){
 	for(unsigned int nt=0; nt<gElementT_.size(); ++nt){
 		for(unsigned int i=0; i<gElementT_[nt].size(); ++i) gElementT_[nt][i].setZero();
 	}
-	for(unsigned int i=0; i<gElement_.size(); ++i) gElement_[i].setZero();
 	
 	//====== randomize the batch ======
 	if(batch_.size()<strucTrain_->size()){
@@ -520,7 +488,7 @@ double NNPotOpt::error(const Eigen::VectorXd& x, Eigen::VectorXd& gradTot){
 	
 	//====== compute training error and gradient ======
 	if(NN_POT_PRINT_STATUS>1) std::cout<<"Computing training error and gradient...\n";
-	#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads()) firstprivate(dcda,gradLocal)
+	#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads()) firstprivate(dcda,gElementLoc_)
 	for(unsigned int nt=0; nt<nThreads_; ++nt){
 		for(unsigned int i=toTrain_[nt]; i<toTrain_[nt]+tdTrain_[nt]; ++i){
 			//set the local simulation reference
@@ -535,11 +503,9 @@ double NNPotOpt::error(const Eigen::VectorXd& x, Eigen::VectorXd& gradTot){
 					//execute the network
 					nnpot_[nt].nn_[index].execute(siml.atom(n,m).symm());
 					//add the energy to the total
-					energy+=nnpot_[nt].nn_[index].output()[0];
+					energy+=nnpot_[nt].nn_[index].output()[0]+nnpot_[nt].energyAtom(index);
 				}
 			}
-			//scale the energy
-			energy=energy*nnpot_[nt].postScale_+nnpot_[nt].postBias_;
 			//add to the error
 			error_train_thread_[nt]+=0.5*(energy-siml.energy())*(energy-siml.energy());
 			//compute the gradient
@@ -552,9 +518,9 @@ double NNPotOpt::error(const Eigen::VectorXd& x, Eigen::VectorXd& gradTot){
 					//execute the network
 					nnpot_[nt].nn_[index].execute(siml.atom(n,m).symm());
 					//compute the gradient
-					nnpot_[nt].nn_[index].grad(dcda,gradLocal);
+					nnpot_[nt].nn_[index].grad(dcda,gElementLoc_[n]);
 					//add the gradient to the total
-					gElementT_[nt][index].noalias()+=gradLocal;
+					gElementT_[nt][index].noalias()+=gElementLoc_[n];
 				}
 			}
 		}
@@ -587,11 +553,11 @@ double NNPotOpt::error(const Eigen::VectorXd& x, Eigen::VectorXd& gradTot){
 						//execute the network
 						nnpot_[nt].nn_[index].execute(siml.atom(n,m).symm());
 						//add the energy to the total
-						energy+=nnpot_[nt].nn_[index].output()[0];
+						energy+=nnpot_[nt].nn_[index].output()[0]+nnpot_[nt].energyAtom(index);
 					}
 				}
 				//scale the energy
-				energy=energy*nnpot_[0].postScale_+nnpot_[0].postBias_;
+				energy=energy;
 				//add to the error
 				error_val_thread_[nt]+=0.5*(energy-siml.energy())*(energy-siml.energy());
 			}
@@ -604,27 +570,35 @@ double NNPotOpt::error(const Eigen::VectorXd& x, Eigen::VectorXd& gradTot){
 	}
 	
 	//====== print energy ======
-	if(NN_POT_PRINT_DATA>0 && opt_count_%nPrint_==0){
-		std::vector<double> energyExact((*strucTrain_).size(),0);
-		std::vector<double> energyNN((*strucTrain_).size(),0);
+	if(NN_POT_PRINT_DATA>-1 && opt_count_%nPrint_==0){
+		std::vector<double> energy_train((*strucTrain_).size());
+		std::vector<double> energy_exact((*strucTrain_).size());
 		std::cout<<"============== ENERGIES ==============\n";
-		for(unsigned int i=0; i<(*strucTrain_).size(); ++i){
-			Structure<AtomT>& siml=(*strucTrain_)[i];
-			energyExact[i]=siml.energy();
-			double energy=0;
-			for(unsigned int n=0; n<siml.nSpecies(); ++n){
-				//find the nn index
-				unsigned int index=nnpot_[0].speciesIndex(siml.atomNames(n));
-				//calculate the taomic energies
-				for(unsigned int m=0; m<siml.nAtoms(n); ++m){
-					//execute the network
-					nnpot_[0].nn_[index].execute(siml.atom(n,m).symm());
-					//add the energy to the total
-					energy+=nnpot_[0].nn_[index].output()[0];
+		#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads()) firstprivate(dcda,gElementLoc_)
+		for(unsigned int nt=0; nt<nThreads_; ++nt){
+			for(unsigned int i=toTrain_[nt]; i<toTrain_[nt]+tdTrain_[nt]; ++i){
+				//set the local simulation reference
+				Structure<AtomT>& siml=(*strucTrain_)[batch_[i]];
+				//compute the energy
+				double energy=0;
+				for(unsigned int n=0; n<siml.nSpecies(); ++n){
+					//find the element index in the nn
+					unsigned int index=nnpot_[nt].speciesIndex(siml.atomNames(n));
+					//loop over all atoms of the species
+					for(unsigned int m=0; m<siml.nAtoms(n); ++m){
+						//execute the network
+						nnpot_[nt].nn_[index].execute(siml.atom(n,m).symm());
+						//add the energy to the total
+						energy+=nnpot_[nt].nn_[index].output()[0]+nnpot_[nt].energyAtom(index);
+					}
 				}
+				//scale the energy
+				energy_train[i]=energy;
+				energy_exact[i]=siml.energy();
 			}
-			energyNN[i]=energy*nnpot_[0].postScale_+nnpot_[0].postBias_;
-			std::cout<<"sim"<<i<<" "<<energyExact[i]<<" "<<energyNN[i]<<" "<<0.5*(energyNN[i]-energyExact[i])*(energyNN[i]-energyExact[i])<<"\n";
+		}
+		for(unsigned int i=0; i<(*strucTrain_).size(); ++i){
+			std::cout<<"sim"<<i<<" "<<energy_exact[i]<<" "<<energy_train[i]<<" "<<0.5*(energy_train[i]-energy_exact[i])*(energy_train[i]-energy_exact[i])<<"\n";
 		}
 		std::cout<<"======================================\n";
 	}
@@ -672,6 +646,9 @@ double NNPotOpt::error(const Eigen::VectorXd& x, Eigen::VectorXd& gradTot){
 	if(opt_count_%nPrint_==0) std::cout<<"opt "<<opt_count_<<" error_train "<<error_train<<" error_val "<<error_val<<" gl "<<gl_<<" pr "<<progress_<<" pq "<<pq_<<"\n";
 	//if(opt_count_%nPrint_==0) std::cout<<"error_train_min_ "<<error_train_min_<<" error_val_min_ "<<error_val_min_<<"\n";
 	
+	//====== write the basis and potentials ======
+	if(opt_count_%nWrite_==0) nnpot_[0].write();
+	
 	//====== increment the opt count ======
 	++opt_count_;
 	
@@ -697,11 +674,12 @@ int main(int argc, char* argv[]){
 		MODE::type mode=MODE::TRAIN;
 	//nn potential
 		NNPot nnPot;
+		NNPot::Init nnPotInit;
 	//nn potential - opt
 		Opt opt;//optimization class
 		NNPotOpt nnPotOpt;//nn potential optimization data
-		unsigned int nBatch=0;//size of training batch - number
-		double pBatch=0;//size of training batch - percent
+		std::vector<double> energy_;
+		std::vector<std::string> name_;
 	//simulations
 		unsigned int nSpecies=0;//number of atomic species
 		std::vector<std::string> speciesNames;//names of atomic species
@@ -730,6 +708,9 @@ int main(int argc, char* argv[]){
 	//file i/o
 		FILE* reader=NULL;
 		FILE* writer=NULL;
+		std::vector<std::string> strlist;
+		std::vector<std::string> fileNNPot;
+		std::vector<std::string> fileName;
 		char* paramfile=(char*)malloc(sizeof(char)*string::M);
 		char* datafile=(char*)malloc(sizeof(char)*string::M);
 		char* input=(char*)malloc(sizeof(char)*string::M);
@@ -752,87 +733,95 @@ int main(int argc, char* argv[]){
 		if(NN_POT_TRAIN_DEBUG>0) std::cout<<"Reading in parameters...\n";
 		while(fgets(input,string::M,reader)!=NULL){
 			string::trim_right(input,string::COMMENT);
-			string::trim_all(string::to_upper(string::copy_left(temp,input,"=")));
+			if(string::split(input,string::WS,strlist)==0) continue;
+			string::to_upper(strlist.at(0));
 			//data and execution mode
-			if(std::strcmp(temp,"MODE")==0){
-				string::to_upper(string::trim(std::strcpy(temp,std::strpbrk(input,"=")+1)));
-				if(std::strcmp(temp,"TRAIN")==0) mode=MODE::TRAIN;
-				else if(std::strcmp(temp,"TEST")==0) mode=MODE::TEST;	
+			if(strlist.at(0)=="MODE"){
+				string::to_upper(strlist.at(1));
+				if(strlist.at(1)=="TRAIN") mode=MODE::TRAIN;
+				else if(strlist.at(1)=="TEST") mode=MODE::TEST;	
 				else throw std::invalid_argument("Invalid mode.");
-			} else if(std::strcmp(temp,"DATA_TRAIN")==0){
-				data_train.push_back(std::string(string::trim(std::strcpy(temp,std::strpbrk(input,"=")+1))));
-			} else if(std::strcmp(temp,"DATA_VAL")==0){
-				data_val.push_back(std::string(string::trim(std::strcpy(temp,std::strpbrk(input,"=")+1))));
-			} else if(std::strcmp(temp,"DATA_TEST")==0){
-				data_test.push_back(std::string(string::trim(std::strcpy(temp,std::strpbrk(input,"=")+1))));
+			} else if(strlist.at(0)=="DATA_TRAIN"){
+				std::cout<<"data_train\n";
+				data_train.push_back(strlist.at(1));
+				std::cout<<data_train.back()<<"\n";
+			} else if(strlist.at(0)=="DATA_VAL"){
+				data_val.push_back(strlist.at(1));
+			} else if(strlist.at(0)=="DATA_TEST"){
+				data_test.push_back(strlist.at(1));
 			}
 			//optimization
-			if(std::strcmp(temp,"ALGO")==0){
-				opt.algo()=OPT_METHOD::load(string::to_upper(string::trim(std::strcpy(temp,std::strpbrk(input,"=")+1))));
-			} else if(std::strcmp(temp,"GAMMA")==0){
-				opt.gamma()=std::atof(std::strpbrk(input,"=")+1);
+			if(strlist.at(0)=="ALGO"){
+				opt.algo()=OPT_METHOD::load(string::to_upper(strlist.at(1)).c_str());
+			} else if(strlist.at(0)=="GAMMA"){
+				opt.gamma()=std::atof(strlist.at(1).c_str());
 				if(opt.gamma()<=0) throw std::invalid_argument("Invalid descent parameter.");
-			} else if(std::strcmp(temp,"ETA")==0){
-				opt.eta()=std::atof(std::strpbrk(input,"=")+1);
+			} else if(strlist.at(0)=="ETA"){
+				opt.eta()=std::atof(strlist.at(1).c_str());
 				if(opt.eta()<=0) throw std::invalid_argument("Invalid descent parameter.");
-			} else if(std::strcmp(temp,"PERIOD")==0){
-				opt.period()=std::atoi(std::strpbrk(input,"=")+1);
-			} else if(std::strcmp(temp,"OPT_VAL")==0){
-				opt.optVal()=OPT_VAL::load(string::to_upper(string::trim(std::strcpy(temp,std::strpbrk(input,"=")+1))));
-			} else if(std::strcmp(temp,"TOL")==0){
-				opt.tol()=std::atof(std::strpbrk(input,"=")+1);
-			} else if(std::strcmp(temp,"MAX_ITER")==0){
-				opt.maxIter()=std::atof(std::strpbrk(input,"=")+1);
-			} else if(std::strcmp(temp,"N_PRINT")==0){
-				opt.nPrint()=std::atoi(std::strpbrk(input,"=")+1);
+			} else if(strlist.at(0)=="PERIOD"){
+				opt.period()=std::atoi(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="OPT_VAL"){
+				opt.optVal()=OPT_VAL::load(string::to_upper(strlist.at(1)).c_str());
+			} else if(strlist.at(0)=="TOL"){
+				opt.tol()=std::atof(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="MAX_ITER"){
+				opt.maxIter()=std::atof(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="N_PRINT"){
+				opt.nPrint()=std::atoi(strlist.at(1).c_str());
 			}
-			//neural network potential
-			if(std::strcmp(temp,"NR")==0){//number of radial basis functions
-				nnPot.nR()=std::atoi(std::strpbrk(input,"=")+1);
-			} else if(std::strcmp(temp,"NA")==0){//number of angular basis functions
-				nnPot.nA()=std::atoi(std::strpbrk(input,"=")+1);
-			} else if(std::strcmp(temp,"PHIRN")==0){//type of radial basis functions
-				nnPot.phiRN()=PhiRN::load(string::to_upper(string::trim_all(std::strpbrk(input,"=")+1)));
-			} else if(std::strcmp(temp,"PHIAN")==0){//type of angular basis functions
-				nnPot.phiAN()=PhiAN::load(string::to_upper(string::trim_all(std::strpbrk(input,"=")+1)));
-			} else if(std::strcmp(temp,"R_CUT")==0){//distance cutoff
-				nnPot.rc()=std::atof(std::strpbrk(input,"=")+1);
-			} else if(std::strcmp(temp,"R_MIN")==0){//distance cutoff
-				nnPot.rm()=std::atof(std::strpbrk(input,"=")+1);
-			} else if(std::strcmp(temp,"CUTOFF")==0){//type of cutoff function
-				nnPot.tcut()=CutoffN::load(string::to_upper(string::trim(std::strcpy(temp,std::strpbrk(input,"=")+1))));
-			} else if(std::strcmp(temp,"LAMBDA")==0){//regularization parameter
-				nnPot.lambda()=std::atof(std::strpbrk(input,"=")+1);
-			} else if(std::strcmp(temp,"N_HIDDEN")==0){//number of hidden layers
-				unsigned int nl=string::substrN(std::strpbrk(input,"=")+1,string::WS);
-				if(nl==0) throw std::invalid_argument("Invalid hidden layer configuration.");
+			//neural network potential - initialization
+			if(strlist.at(0)=="NR"){//number of radial basis functions
+				nnPotInit.nR=std::atoi(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="NA"){//number of angular basis functions
+				nnPotInit.nA=std::atoi(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="PHIRN"){//type of radial basis functions
+				nnPotInit.phiRN=PhiRN::load(string::to_upper(strlist.at(1)).c_str());
+			} else if(strlist.at(0)=="PHIAN"){//type of angular basis functions
+				nnPotInit.phiAN=PhiAN::load(string::to_upper(strlist.at(1)).c_str());
+			} else if(strlist.at(0)=="R_CUT"){//distance cutoff
+				nnPotInit.rc=std::atof(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="R_MIN"){//distance cutoff
+				nnPotInit.rm=std::atof(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="CUTOFF"){//type of cutoff function
+				nnPotInit.tcut=CutoffN::load(string::to_upper(strlist.at(1)).c_str());
+			} else if(strlist.at(0)=="LAMBDA"){//regularization parameter
+				nnPotInit.lambda=std::atof(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="N_HIDDEN"){//number of hidden layers
+				int nl=strlist.size()-1;
+				if(nl<=0) throw std::invalid_argument("Invalid hidden layer configuration.");
 				std::vector<unsigned int> nh(nl);
-				std::strtok(input,"=");
 				for(unsigned int i=0; i<nl; ++i){
-					nh[i]=std::atoi(std::strtok(NULL,string::WS));
-					if(nh[i]==0) throw std::invalid_argument("Invalid hidden layer configuration.");
+					nh.at(i)=std::atoi(strlist.at(i+1).c_str());
+					if(nh.at(i)==0) throw std::invalid_argument("Invalid hidden layer configuration.");
 				}
-				nnPot.nh()=nh;
-			} else if(std::strcmp(temp,"TRANSFER")==0){//transfer function
-				nnPot.tfType()=NN::TransferN::load(string::to_upper(string::trim(std::strcpy(temp,std::strpbrk(input,"=")+1))));
-			} else if(std::strcmp(temp,"PRE_COND")==0){//whether to precondition the inputs
-				nnPot.preCond()=string::boolean(string::trim_all(std::strpbrk(input,"=")+1));
-			} else if(std::strcmp(temp,"POST_COND")==0){//whether to precondition the outputs
-				nnPot.postCond()=string::boolean(string::trim_all(std::strpbrk(input,"=")+1));
-			}else if(std::strcmp(temp,"N_BATCH")==0){//size of the batch
-				nBatch=std::atoi(std::strpbrk(input,"=")+1);
-			} else if(std::strcmp(temp,"P_BATCH")==0){//batch percentage
-				pBatch=std::atof(std::strpbrk(input,"=")+1);
+				nnPotInit.nh=nh;
+			} else if(strlist.at(0)=="TRANSFER"){//transfer function
+				nnPotInit.tfType=NN::TransferN::load(string::to_upper(strlist.at(1)).c_str());
 			} 
 			//neural network potential optimization
-			if(std::strcmp(temp,"N_PRINT")==0){
-				nnPotOpt.nPrint_=std::atoi(std::strpbrk(input,"=")+1);
-			} else if(std::strcmp(temp,"N_WRITE")==0){
-				nnPotOpt.nWrite_=std::atoi(std::strpbrk(input,"=")+1);
+			if(strlist.at(0)=="PRE_COND"){//whether to precondition the inputs
+				nnPotOpt.preCond_=string::boolean(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="POST_COND"){//whether to precondition the outputs
+				nnPotOpt.postCond_=string::boolean(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="N_BATCH"){//size of the batch
+				nnPotOpt.nBatch_=std::atoi(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="P_BATCH"){//batch percentage
+				nnPotOpt.pBatch_=std::atof(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="N_PRINT"){
+				nnPotOpt.nPrint_=std::atoi(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="N_WRITE"){
+				nnPotOpt.nWrite_=std::atoi(strlist.at(1).c_str());
 			}
 			//general
-			if(std::strcmp(temp,"SEED")==0){
-				seed=std::atoi(std::strpbrk(input,"=")+1);
+			if(strlist.at(0)=="SEED"){
+				seed=std::atoi(strlist.at(1).c_str());
+			} else if(strlist.at(0)=="ENERGY"){
+				name_.push_back(strlist.at(1));
+				energy_.push_back(std::atof(strlist.at(2).c_str()));
+			} else if(strlist.at(0)=="READ"){
+				fileName.push_back(strlist.at(1));
+				fileNNPot.push_back(strlist.at(2));
 			}
 		}
 		
@@ -845,10 +834,12 @@ int main(int argc, char* argv[]){
 		std::cout<<"**************************************************\n";
 		std::cout<<"*************** GENERAL PARAMETERS ***************\n";
 		std::cout<<"\tSEED       = "<<seed<<"\n";
+		std::cout<<"\tENERGIES   = \n"; 
+		for(unsigned int i=0; i<energy_.size(); ++i) std::cout<<"\t\t"<<name_[i]<<" "<<energy_[i]<<"\n";
+		std::cout<<"\tFILES      = \n"; 
+		for(unsigned int i=0; i<fileNNPot.size(); ++i) std::cout<<"\t\t"<<fileName[i]<<" "<<fileNNPot[i]<<"\n";
 		if(mode==MODE::TRAIN) std::cout<<"\tMODE       = TRAIN\n";
 		else if(mode==MODE::TEST) std::cout<<"\tMODE       = TEST\n";
-		std::cout<<"\tP_BATCH    = "<<pBatch<<"\n";
-		std::cout<<"\tN_BATCH    = "<<nBatch<<"\n";
 		std::cout<<"\tDATA_TRAIN = \n"; for(unsigned int i=0; i<data_train.size(); ++i) std::cout<<"\t\t"<<data_train[i]<<"\n";
 		std::cout<<"\tDATA_VAL   = \n"; for(unsigned int i=0; i<data_val.size(); ++i) std::cout<<"\t\t"<<data_val[i]<<"\n";
 		std::cout<<"\tDATA_TEST  = \n"; for(unsigned int i=0; i<data_test.size(); ++i) std::cout<<"\t\t"<<data_test[i]<<"\n";
@@ -864,9 +855,9 @@ int main(int argc, char* argv[]){
 		//======== check the parameters ========
 		if(mode==MODE::TRAIN && data_train.size()==0) throw std::invalid_argument("No training data provided.");
 		else if(mode==MODE::TEST && data_test.size()==0) throw std::invalid_argument("No test data provided.");
-		if(pBatch<0 || pBatch>1) throw std::invalid_argument("Invalid batch size.");
+		if(nnPotOpt.pBatch_<0 || nnPotOpt.pBatch_>1) throw std::invalid_argument("Invalid batch size.");
 		
-		//======== load the trainin data ========
+		//======== load the training data ========
 		if(NN_POT_TRAIN_DEBUG>0) std::cout<<"Loading training data...\n";
 		for(unsigned i=0; i<data_train.size(); ++i){
 			//open the data file
@@ -957,166 +948,209 @@ int main(int argc, char* argv[]){
 			if(NN_POT_TRAIN_DEBUG>1) for(unsigned int i=0; i<files_test.size(); ++i) std::cout<<"\t"<<files_test[i]<<" "<<struc_test[i].energy()<<"\n";
 		}
 		
-		//======== find the total number of species and names ========
-		if(NN_POT_TRAIN_DEBUG>0) std::cout<<"Determining species number and names...\n";
-		nSpecies=0; speciesNames.clear();
-		for(unsigned int i=0; i<files_train.size(); ++i){
-			for(unsigned int n=0; n<struc_train[i].nSpecies(); ++n){
-				bool match=false;
-				for(unsigned int m=0; m<nSpecies; ++m){
-					if(struc_train[i].atomNames(n)==speciesNames[m]){
-						match=true; break;
-					}
-				}
-				if(!match){
-					speciesNames.push_back(struc_train[i].atomNames(n));
-					++nSpecies;
-				}
-			}
-		}
-		if(NN_POT_TRAIN_DEBUG>0){
-			std::cout<<"N_SPECIES = "<<nSpecies<<"\n";
-			std::cout<<"SPECIES_NAMES = "; for(unsigned int i=0; i<speciesNames.size(); ++i) std::cout<<speciesNames[i]<<" "; std::cout<<"\n";
-		}
+		//data - train
+			std::vector<double> energy_exact_train(struc_train.size(),0);
+			std::vector<double> energy_nn_train(struc_train.size(),0);
+			std::vector<double> error_energy_train(struc_train.size(),0);
+			std::vector<double> error_energy_p_train(struc_train.size(),0);
+			std::vector<std::vector<Eigen::Vector3d> > forces_exact_train(struc_train.size());
+			std::vector<std::vector<Eigen::Vector3d> > forces_nn_train(struc_train.size());
+			std::vector<double> error_force_train(struc_train.size(),0);
+			std::vector<double> error_force_p_train(struc_train.size(),0);
+		//data - val	
+			std::vector<double> energy_exact_val(struc_val.size(),0);
+			std::vector<double> energy_nn_val(struc_val.size(),0);
+			std::vector<double> error_energy_val(struc_val.size(),0);
+			std::vector<double> error_energy_p_val(struc_val.size(),0);
+			std::vector<std::vector<Eigen::Vector3d> > forces_exact_val(struc_val.size());
+			std::vector<std::vector<Eigen::Vector3d> > forces_nn_val(struc_val.size());
+			std::vector<double> error_force_val(struc_val.size(),0);
+			std::vector<double> error_force_p_val(struc_val.size(),0);
+		//data - test
+			std::vector<double> energy_exact_test(struc_test.size(),0);
+			std::vector<double> energy_nn_test(struc_test.size(),0);
+			std::vector<double> error_energy_test(struc_test.size(),0);
+			std::vector<double> error_energy_p_test(struc_test.size(),0);
+			std::vector<std::vector<Eigen::Vector3d> > forces_exact_test(struc_test.size());
+			std::vector<std::vector<Eigen::Vector3d> > forces_nn_test(struc_test.size());
+			std::vector<double> error_force_test(struc_test.size(),0);
+			std::vector<double> error_force_p_test(struc_test.size(),0);
 		
 		//======== set the batch size ========
-		if(pBatch>0) nBatch=std::floor(pBatch*struc_train.size());
-		if(nBatch==0) throw std::invalid_argument("Invalid batch size.");
-		if(nBatch>struc_train.size()) throw std::invalid_argument("Invalid batch size.");
+		if(nnPotOpt.pBatch_>0) nnPotOpt.nBatch_=std::floor(nnPotOpt.pBatch_*struc_train.size());
+		if(nnPotOpt.nBatch_==0) throw std::invalid_argument("Invalid batch size.");
+		if(nnPotOpt.nBatch_>struc_train.size()) throw std::invalid_argument("Invalid batch size.");
 		
 		//======== set the data ========
 		if(struc_train.size()>0) nnPotOpt.strucTrain_=&struc_train;
 		if(struc_val.size()>0) nnPotOpt.strucVal_=&struc_val;
 		if(struc_test.size()>0) nnPotOpt.strucTest_=&struc_test;
 		
-		//======== train the nn potential ========
-		if(NN_POT_TRAIN_DEBUG>0) std::cout<<"Training the nn potential...\n";
-		nnPotOpt.train(nnPot,opt,nBatch);
-		
-		//======== calculate the final energies - training set ========
-		std::cout<<"Final energies - training set ... \n";
-		std::vector<double> energy_exact_train(struc_train.size(),0);
-		std::vector<double> energy_nn_train(struc_train.size(),0);
-		std::vector<double> error_energy_train(struc_train.size(),0);
-		std::vector<double> error_energy_p_train(struc_train.size(),0);
-		start=std::chrono::high_resolution_clock::now();
-		for(unsigned int n=0; n<struc_train.size(); ++n){
-			energy_nn_train[n]=nnPot.energy(struc_train[n]);
-			energy_exact_train[n]=struc_train[n].energy();
-			error_energy_train[n]=std::fabs(energy_nn_train[n]-energy_exact_train[n]);
-			error_energy_p_train[n]=std::fabs((energy_exact_train[n]-energy_nn_train[n])/energy_exact_train[n])*100.0;
+		//====== set the vacuum energy ======
+		if(NN_POT_PRINT_STATUS>-1) std::cout<<"Set the vacuum energy...\n";
+		nnPot.resize(struc_train);
+		for(unsigned int i=0; i<name_.size(); ++i){
+			nnPot.energyAtom(nnPot.speciesIndex(name_[i]))=energy_[i];
 		}
-		stop=std::chrono::high_resolution_clock::now();
-		time_energy_train=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
 		
-		//======== calculate the final energies - validation set ========
-		std::vector<double> energy_exact_val(struc_val.size(),0);
-		std::vector<double> energy_nn_val(struc_val.size(),0);
-		std::vector<double> error_energy_val(struc_val.size(),0);
-		std::vector<double> error_energy_p_val(struc_val.size(),0);
-		if(struc_val.size()>0){
-			std::cout<<"Final energies - validation set ... \n";
+		//====== initialize the potential ======
+		if(NN_POT_PRINT_STATUS>-1) std::cout<<"Initializing potential...\n";
+		nnPot.init(nnPotInit);
+		
+		//====== read neural network potentials ======
+		for(unsigned int i=0; i<fileNNPot.size(); ++i){
+			std::cout<<"Reading nn-pot for \""<<fileName[i]<<"\" from \""<<fileNNPot[i]<<"\"...\n";
+			nnPot.read(nnPot.speciesIndex(fileName[i]),fileNNPot[i]);
+		}
+		
+		//====== initialize the symmetry functions ======
+		if(NN_POT_PRINT_STATUS>-1) std::cout<<"Initializing symmetry functions...\n";
+		nnPot.initSymm(struc_train);
+		if(struc_val.size()>0) nnPot.initSymm(struc_val);
+		if(struc_test.size()>0) nnPot.initSymm(struc_test);
+		
+		//====== initialize omp ======
+		if(NN_POT_PRINT_STATUS>-1) std::cout<<"Initializing OMP...\n";
+		nnPotOpt.nThreads_=1;
+		#ifdef _OPENMP
+			nnPotOpt.nThreads_=omp_get_max_threads();
+		#endif
+		parallel::gen_thread_dist(nnPotOpt.nThreads_,nnPotOpt.strucTrain_->size(),nnPotOpt.tdTrain_);
+		parallel::gen_thread_offset(nnPotOpt.nThreads_,nnPotOpt.strucTrain_->size(),nnPotOpt.toTrain_);
+		if(nnPotOpt.strucVal_!=NULL){
+			parallel::gen_thread_dist(nnPotOpt.nThreads_,nnPotOpt.strucVal_->size(),nnPotOpt.tdVal_);
+			parallel::gen_thread_offset(nnPotOpt.nThreads_,nnPotOpt.strucVal_->size(),nnPotOpt.toVal_);
+		}
+		if(nnPotOpt.strucTest_!=NULL){
+			parallel::gen_thread_dist(nnPotOpt.nThreads_,nnPotOpt.strucTest_->size(),nnPotOpt.tdTest_);
+			parallel::gen_thread_offset(nnPotOpt.nThreads_,nnPotOpt.strucTest_->size(),nnPotOpt.toTest_);
+		}
+		nnPotOpt.error_train_thread_.resize(nnPotOpt.nThreads_);
+		nnPotOpt.error_val_thread_.resize(nnPotOpt.nThreads_);
+		
+		//====== print the optimizer ======
+		std::cout<<nnPotOpt<<"\n";
+		
+		if(mode==MODE::TRAIN){
+			//======== train the nn potential ========
+			if(NN_POT_TRAIN_DEBUG>0) std::cout<<"Training the nn potential...\n";
+			nnPotOpt.train(nnPot,opt,nnPotOpt.nBatch_);
+			
+			//======== calculate the final energies - training set ========
+			std::cout<<"Final energies - training set ... \n";
 			start=std::chrono::high_resolution_clock::now();
-			for(unsigned int n=0; n<struc_val.size(); ++n){
-				energy_nn_val[n]=nnPot.energy(struc_val[n]);
-				energy_exact_val[n]=struc_val[n].energy();
-				error_energy_val[n]=std::fabs(energy_nn_val[n]-energy_exact_val[n]);
-				error_energy_p_val[n]=std::fabs((energy_exact_val[n]-energy_nn_val[n])/energy_exact_val[n])*100.0;
+			#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
+			for(unsigned int nt=0; nt<nnPotOpt.nThreads_; ++nt){
+				for(unsigned int i=nnPotOpt.toTrain_[nt]; i<nnPotOpt.toTrain_[nt]+nnPotOpt.tdTrain_[nt]; ++i){
+					std::cout<<"system-train["<<i<<"]\n";
+					energy_nn_train[i]=nnPotOpt.nnpot_[nt].energy(struc_train[i]);
+					energy_exact_train[i]=struc_train[i].energy();
+					error_energy_train[i]=std::fabs(energy_nn_train[i]-energy_exact_train[i]);
+					error_energy_p_train[i]=std::fabs((energy_exact_train[i]-energy_nn_train[i])/energy_exact_train[i])*100.0;
+				}
 			}
 			stop=std::chrono::high_resolution_clock::now();
-			time_energy_val=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
-		}
+			time_energy_train=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
+			
+			//======== calculate the final energies - validation set ========
+			if(struc_val.size()>0){
+				std::cout<<"Final energies - validation set ... \n";
+				start=std::chrono::high_resolution_clock::now();
+				#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
+				for(unsigned int nt=0; nt<nnPotOpt.nThreads_; ++nt){
+					for(unsigned int i=nnPotOpt.toVal_[nt]; i<nnPotOpt.toVal_[nt]+nnPotOpt.tdVal_[nt]; ++i){
+						std::cout<<"system-val["<<i<<"]\n";
+						energy_nn_val[i]=nnPotOpt.nnpot_[nt].energy(struc_val[i]);
+						energy_exact_val[i]=struc_val[i].energy();
+						error_energy_val[i]=std::fabs(energy_nn_val[i]-energy_exact_val[i]);
+						error_energy_p_val[i]=std::fabs((energy_exact_val[i]-energy_nn_val[i])/energy_exact_val[i])*100.0;
+					}
+				}
+				stop=std::chrono::high_resolution_clock::now();
+				time_energy_val=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
+			}
+		} else nnPotOpt.nnpot_.resize(nnPotOpt.nThreads_,nnPot);
 		
 		//======== calculate the final energies - test set ========
-		std::vector<double> energy_exact_test(struc_test.size(),0);
-		std::vector<double> energy_nn_test(struc_test.size(),0);
-		std::vector<double> error_energy_test(struc_test.size(),0);
-		std::vector<double> error_energy_p_test(struc_test.size(),0);
 		if(struc_test.size()>0){
 			std::cout<<"Final energies - test set ... \n";
 			start=std::chrono::high_resolution_clock::now();
-			for(unsigned int n=0; n<struc_test.size(); ++n){
-				energy_nn_test[n]=nnPot.energy(struc_test[n]);
-				energy_exact_test[n]=struc_test[n].energy();
-				error_energy_test[n]=std::fabs(energy_nn_test[n]-energy_exact_test[n]);
-				error_energy_p_test[n]=std::fabs((energy_exact_test[n]-energy_nn_test[n])/energy_exact_test[n])*100.0;
+			#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
+			for(unsigned int nt=0; nt<nnPotOpt.nThreads_; ++nt){
+				for(unsigned int i=nnPotOpt.toTest_[nt]; i<nnPotOpt.toTest_[nt]+nnPotOpt.tdTest_[nt]; ++i){
+					std::cout<<"system-test["<<i<<"]\n";
+					energy_nn_test[i]=nnPotOpt.nnpot_[nt].energy(struc_test[i]);
+					energy_exact_test[i]=struc_test[i].energy();
+					error_energy_test[i]=std::fabs(energy_nn_test[i]-energy_exact_test[i]);
+					error_energy_p_test[i]=std::fabs((energy_exact_test[i]-energy_nn_test[i])/energy_exact_test[i])*100.0;
+				}
 			}
 			stop=std::chrono::high_resolution_clock::now();
 			time_energy_test=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
 		}
 		
-		//======== calculate the final forces - training set ========
-		std::cout<<"Calculating final forces - training set...\n";
-		std::vector<std::vector<Eigen::Vector3d> > forces_exact_train(struc_train.size());
-		std::vector<std::vector<Eigen::Vector3d> > forces_nn_train(struc_train.size());
-		std::vector<double> error_force_train(struc_train.size(),0);
-		std::vector<double> error_force_p_train(struc_train.size(),0);
-		start=std::chrono::high_resolution_clock::now();
-		#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
-		for(unsigned int nt=0; nt<nnPotOpt.nThreads_; ++nt){
-			for(unsigned int i=nnPotOpt.toTrain_[nt]; i<nnPotOpt.toTrain_[nt]+nnPotOpt.tdTrain_[nt]; ++i){
-				std::cout<<"system-train["<<i<<"]\n";
-				forces_exact_train[i].resize(struc_train[i].nAtoms());
-				forces_nn_train[i].resize(struc_train[i].nAtoms());
-				for(unsigned int j=0; j<struc_train[i].nAtoms(); ++j) forces_exact_train[i][j]=struc_train[i].atom(j).force();
-				nnPotOpt.nnpot_[nt].forces(struc_train[i]);
-				for(unsigned int j=0; j<struc_train[i].nAtoms(); ++j) forces_nn_train[i][j]=struc_train[i].atom(j).force();
-			}
-		}
-		for(unsigned int i=0; i<struc_train.size(); ++i){
-			for(unsigned int j=0; j<struc_train[i].nAtoms(); ++j){
-				error_force_train[i]+=(forces_exact_train[i][j]-forces_nn_train[i][j]).squaredNorm();
-				error_force_p_train[i]+=(forces_exact_train[i][j]-forces_nn_train[i][j]).squaredNorm()/forces_exact_train[i][j].squaredNorm();
-			}
-			error_force_train[i]=std::sqrt(error_force_train[i])/struc_train[i].nAtoms();
-			error_force_p_train[i]=std::sqrt(error_force_p_train[i])/struc_train[i].nAtoms();
-		}
-		stop=std::chrono::high_resolution_clock::now();
-		time_force_train=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
-		
-		//======== calculate the final forces - validation set ========
-		std::vector<std::vector<Eigen::Vector3d> > forces_exact_val(struc_val.size());
-		std::vector<std::vector<Eigen::Vector3d> > forces_nn_val(struc_val.size());
-		std::vector<double> error_force_val(struc_val.size(),0);
-		std::vector<double> error_force_p_val(struc_val.size(),0);
-		if(struc_val.size()>0){
-			std::cout<<"Calculating final forces - validation set...\n";
+		if(mode==MODE::TRAIN){
+			//======== calculate the final forces - training set ========
+			std::cout<<"Calculating final forces - training set...\n";
 			start=std::chrono::high_resolution_clock::now();
 			#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
 			for(unsigned int nt=0; nt<nnPotOpt.nThreads_; ++nt){
-				for(unsigned int i=nnPotOpt.toVal_[nt]; i<nnPotOpt.toVal_[nt]+nnPotOpt.tdVal_[nt]; ++i){
+				for(unsigned int i=nnPotOpt.toTrain_[nt]; i<nnPotOpt.toTrain_[nt]+nnPotOpt.tdTrain_[nt]; ++i){
 					std::cout<<"system-train["<<i<<"]\n";
-					forces_exact_val[i].resize(struc_val[i].nAtoms());
-					forces_nn_val[i].resize(struc_val[i].nAtoms());
-					for(unsigned int j=0; j<struc_val[i].nAtoms(); ++j) forces_exact_val[i][j]=struc_val[i].atom(j).force();
-					nnPotOpt.nnpot_[nt].forces(struc_val[i]);
-					for(unsigned int j=0; j<struc_val[i].nAtoms(); ++j) forces_nn_val[i][j]=struc_val[i].atom(j).force();
+					forces_exact_train[i].resize(struc_train[i].nAtoms());
+					forces_nn_train[i].resize(struc_train[i].nAtoms());
+					for(unsigned int j=0; j<struc_train[i].nAtoms(); ++j) forces_exact_train[i][j]=struc_train[i].atom(j).force();
+					nnPotOpt.nnpot_[nt].forces(struc_train[i]);
+					for(unsigned int j=0; j<struc_train[i].nAtoms(); ++j) forces_nn_train[i][j]=struc_train[i].atom(j).force();
 				}
 			}
-			for(unsigned int i=0; i<struc_val.size(); ++i){
-				for(unsigned int j=0; j<struc_val[i].nAtoms(); ++j){
-					error_force_val[i]+=(forces_exact_val[i][j]-forces_nn_val[i][j]).squaredNorm();
-					error_force_p_val[i]+=(forces_exact_val[i][j]-forces_nn_val[i][j]).squaredNorm()/forces_exact_val[i][j].squaredNorm();
+			for(unsigned int i=0; i<struc_train.size(); ++i){
+				for(unsigned int j=0; j<struc_train[i].nAtoms(); ++j){
+					error_force_train[i]+=(forces_exact_train[i][j]-forces_nn_train[i][j]).squaredNorm();
+					error_force_p_train[i]+=(forces_exact_train[i][j]-forces_nn_train[i][j]).squaredNorm()/forces_exact_train[i][j].squaredNorm();
 				}
-				error_force_val[i]=std::sqrt(error_force_val[i])/struc_val[i].nAtoms();
-				error_force_p_val[i]=std::sqrt(error_force_p_val[i])/struc_val[i].nAtoms();
+				error_force_train[i]=std::sqrt(error_force_train[i])/struc_train[i].nAtoms();
+				error_force_p_train[i]=std::sqrt(error_force_p_train[i])/struc_train[i].nAtoms();
 			}
 			stop=std::chrono::high_resolution_clock::now();
 			time_force_train=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
+			
+			//======== calculate the final forces - validation set ========
+			if(struc_val.size()>0){
+				std::cout<<"Calculating final forces - validation set...\n";
+				start=std::chrono::high_resolution_clock::now();
+				#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
+				for(unsigned int nt=0; nt<nnPotOpt.nThreads_; ++nt){
+					for(unsigned int i=nnPotOpt.toVal_[nt]; i<nnPotOpt.toVal_[nt]+nnPotOpt.tdVal_[nt]; ++i){
+						std::cout<<"system-val["<<i<<"]\n";
+						forces_exact_val[i].resize(struc_val[i].nAtoms());
+						forces_nn_val[i].resize(struc_val[i].nAtoms());
+						for(unsigned int j=0; j<struc_val[i].nAtoms(); ++j) forces_exact_val[i][j]=struc_val[i].atom(j).force();
+						nnPotOpt.nnpot_[nt].forces(struc_val[i]);
+						for(unsigned int j=0; j<struc_val[i].nAtoms(); ++j) forces_nn_val[i][j]=struc_val[i].atom(j).force();
+					}
+				}
+				for(unsigned int i=0; i<struc_val.size(); ++i){
+					for(unsigned int j=0; j<struc_val[i].nAtoms(); ++j){
+						error_force_val[i]+=(forces_exact_val[i][j]-forces_nn_val[i][j]).squaredNorm();
+						error_force_p_val[i]+=(forces_exact_val[i][j]-forces_nn_val[i][j]).squaredNorm()/forces_exact_val[i][j].squaredNorm();
+					}
+					error_force_val[i]=std::sqrt(error_force_val[i])/struc_val[i].nAtoms();
+					error_force_p_val[i]=std::sqrt(error_force_p_val[i])/struc_val[i].nAtoms();
+				}
+				stop=std::chrono::high_resolution_clock::now();
+				time_force_train=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
+			}
+		} else {
+			for(unsigned int i=0; i<nnPotOpt.nThreads_; ++i) nnPotOpt.nnpot_[i]=nnPot;
 		}
-		
 		//======== calculate the final forces - test set ========
-		std::vector<std::vector<Eigen::Vector3d> > forces_exact_test(struc_test.size());
-		std::vector<std::vector<Eigen::Vector3d> > forces_nn_test(struc_test.size());
-		std::vector<double> error_force_test(struc_test.size(),0);
-		std::vector<double> error_force_p_test(struc_test.size(),0);
 		if(struc_test.size()>0){
 			std::cout<<"Calculating final forces - test set...\n";
 			start=std::chrono::high_resolution_clock::now();
 			#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
 			for(unsigned int nt=0; nt<nnPotOpt.nThreads_; ++nt){
 				for(unsigned int i=nnPotOpt.toTest_[nt]; i<nnPotOpt.toTest_[nt]+nnPotOpt.tdTest_[nt]; ++i){
-					std::cout<<"system-train["<<i<<"]\n";
 					forces_exact_test[i].resize(struc_test[i].nAtoms());
 					forces_nn_test[i].resize(struc_test[i].nAtoms());
 					for(unsigned int j=0; j<struc_test[i].nAtoms(); ++j) forces_exact_test[i][j]=struc_test[i].atom(j).force();
@@ -1124,8 +1158,8 @@ int main(int argc, char* argv[]){
 					for(unsigned int j=0; j<struc_test[i].nAtoms(); ++j) forces_nn_test[i][j]=struc_test[i].atom(j).force();
 				}
 			}
-			for(unsigned int i=0; i<struc_val.size(); ++i){
-				for(unsigned int j=0; j<struc_val[i].nAtoms(); ++j){
+			for(unsigned int i=0; i<struc_test.size(); ++i){
+				for(unsigned int j=0; j<struc_test[i].nAtoms(); ++j){
 					error_force_test[i]+=(forces_exact_test[i][j]-forces_nn_test[i][j]).squaredNorm();
 					error_force_p_test[i]+=(forces_exact_test[i][j]-forces_nn_test[i][j]).squaredNorm()/forces_exact_test[i][j].squaredNorm();
 				}
@@ -1149,7 +1183,7 @@ int main(int argc, char* argv[]){
 		std::cout<<"**************************************************\n";
 		
 		//======== print the error statistics - training ========
-		{
+		if(mode==MODE::TRAIN){
 		std::cout<<"**************************************************\n";
 		std::cout<<"********* STATISTICS - ERROR - TRAINING *********\n";
 		std::cout<<"ENERGY:\n";
@@ -1183,7 +1217,7 @@ int main(int argc, char* argv[]){
 		}
 		
 		//======== print the error statistics - validation ========
-		if(struc_val.size()>0){
+		if(struc_val.size()>0 && mode==MODE::TRAIN){
 		std::cout<<"**************************************************\n";
 		std::cout<<"******** STATISTICS - ERROR - VALIDATION ********\n";
 		std::cout<<"ENERGY:\n";
@@ -1216,6 +1250,40 @@ int main(int argc, char* argv[]){
 		std::cout<<"**************************************************\n";
 		}
 		
+		//======== print the error statistics - test ========
+		if(struc_test.size()>0){
+		std::cout<<"**************************************************\n";
+		std::cout<<"******** STATISTICS - ERROR - TEST ********\n";
+		std::cout<<"ENERGY:\n";
+		std::cout<<"\tAVG        = "<<stats::average(error_energy_test)<<" "<<stats::average(error_energy_p_test)<<"\n";
+		std::cout<<"\tSTDDEV     = "<<stats::stddev(error_energy_test)<<" "<<stats::stddev(error_energy_p_test)<<"\n";
+		std::cout<<"\tMAX        = "<<stats::max(error_energy_test)<<" "<<stats::max(error_energy_p_test)<<"\n";
+		r2=stats::lin_reg(energy_exact_test,energy_nn_test,m,b);
+		std::cout<<"\tM          = "<<m<<"\n";
+		std::cout<<"\tR2         = "<<r2<<"\n";
+		std::cout<<"FORCE:\n";
+		std::cout<<"\tAVG        = "<<stats::average(error_force_test)<<" "<<stats::average(error_force_p_test)<<"\n";
+		std::cout<<"\tSTDDEV     = "<<stats::stddev(error_force_test)<<" "<<stats::stddev(error_force_p_test)<<"\n";
+		std::cout<<"\tMAX        = "<<stats::max(error_force_test)<<" "<<stats::max(error_force_p_test)<<"\n";
+		double mx,my,mz,r2x,r2y,r2z;
+		unsigned int nfTot=0,count;
+		for(unsigned int i=0; i<struc_test.size(); ++i) nfTot+=struc_test[i].nAtoms();
+		std::vector<double> fc_exact(nfTot),fc_nn(nfTot);
+		count=0; for(int i=0; i<struc_test.size(); ++i) for(int j=0; j<struc_test[i].nAtoms(); ++j) fc_exact[count++]=forces_exact_test[i][j][0];
+		count=0; for(int i=0; i<struc_test.size(); ++i) for(int j=0; j<struc_test[i].nAtoms(); ++j) fc_nn[count++]=forces_nn_test[i][j][0];
+		r2x=stats::lin_reg(fc_exact,fc_nn,mx,b);
+		count=0; for(int i=0; i<struc_test.size(); ++i) for(int j=0; j<struc_test[i].nAtoms(); ++j) fc_exact[count++]=forces_exact_test[i][j][1];
+		count=0; for(int i=0; i<struc_test.size(); ++i) for(int j=0; j<struc_test[i].nAtoms(); ++j) fc_nn[count++]=forces_nn_test[i][j][1];
+		r2y=stats::lin_reg(fc_exact,fc_nn,my,b);
+		count=0; for(int i=0; i<struc_test.size(); ++i) for(int j=0; j<struc_test[i].nAtoms(); ++j) fc_exact[count++]=forces_exact_test[i][j][2];
+		count=0; for(int i=0; i<struc_test.size(); ++i) for(int j=0; j<struc_test[i].nAtoms(); ++j) fc_nn[count++]=forces_nn_test[i][j][2];
+		r2z=stats::lin_reg(fc_exact,fc_nn,mz,b);
+		std::cout<<"\t(MX,MY,MZ) = ("<<mx<<","<<my<<","<<mz<<")\n";
+		std::cout<<"\t(RX,RY,RZ) = ("<<r2x<<","<<r2y<<","<<r2z<<")\n";
+		std::cout<<"******** STATISTICS - ERROR - TEST ********\n";
+		std::cout<<"**************************************************\n";
+		}
+		
 		//======== print the energies - training set ========
 		std::cout<<"Printing the energies - training set...\n";
 		writer=fopen("nn_pot_energy_train.dat","w");
@@ -1236,7 +1304,8 @@ int main(int argc, char* argv[]){
 			} else std::cout<<"WARNING: Could not open: \"nn_pot_energy_val.dat\"\n";
 		}
 		
-		//======== print the forces ========
+		//======== print the forces - training set ========
+		if(mode==MODE::TRAIN){
 		std::cout<<"Printing the forces - training set...\n";
 		writer=fopen("nn_pot_force_train.dat","w");
 		if(writer!=NULL){
@@ -1250,9 +1319,10 @@ int main(int argc, char* argv[]){
 				}
 			}
 		} else std::cout<<"WARNING: Could not open: \"nn_pot_force_train.dat\"\n";
+		}
 		
-		//======== print the forces ========
-		if(struc_val.size()>0){
+		//======== print the forces - validation set ========
+		if(struc_val.size()>0 && mode==MODE::TRAIN){
 			std::cout<<"Printing the forces - validation set...\n";
 			writer=fopen("nn_pot_force_val.dat","w");
 			if(writer!=NULL){
@@ -1268,7 +1338,25 @@ int main(int argc, char* argv[]){
 			} else std::cout<<"WARNING: Could not open: \"nn_pot_force_val.dat\"\n";
 		}
 		
-		//======== print the energies ========
+		//======== print the forces - test set ========
+		if(struc_test.size()>0 && mode==MODE::TEST){
+			std::cout<<"Printing the forces - test set...\n";
+			writer=fopen("nn_pot_force_test.dat","w");
+			if(writer!=NULL){
+				fprintf(writer,"sim atom f_exact_x f_exact_y f_exact_z f_nn_x f_nn_y f_nn_z\n");
+				for(unsigned int i=0; i<struc_test.size(); ++i){
+					for(unsigned int j=0; j<struc_test[i].nAtoms(); ++j){
+						fprintf(writer,"%s %s%i %f %f %f %f %f %f\n",files_val[i].c_str(),struc_test[i].atom(j).name().c_str(),struc_test[i].atom(j).index()+1,
+							forces_exact_test[i][j][0],forces_exact_test[i][j][1],forces_exact_test[i][j][2],
+							forces_nn_test[i][j][0],forces_nn_test[i][j][1],forces_nn_test[i][j][2]
+						);
+					}
+				}
+			} else std::cout<<"WARNING: Could not open: \"nn_pot_force_val.dat\"\n";
+		}
+		
+		//======== print the error ========
+		if(mode==MODE::TRAIN){
 		std::cout<<"Printing the error...\n";
 		writer=fopen("nn_pot_error.dat","w");
 		if(writer!=NULL){
@@ -1278,6 +1366,7 @@ int main(int argc, char* argv[]){
 			}
 			fclose(writer); writer=NULL;
 		} else std::cout<<"WARNING: Could not open: \"nn_pot_error.dat\"\n";
+		}
 		
 		//======== print the nn's ========
 		std::cout<<"Printing the nn's...\n";

@@ -36,6 +36,9 @@ public:
 	//nn
 		unsigned int nParams_;//total number of parameters
 		std::vector<NNPot> nnpot_;//neural network potentials (nThreads)
+		VecList preBias_,preScale_;//one for each specie (nn)
+		bool preCond_;
+		bool postCond_;
 	//input/output
 		unsigned int nPrint_;//print status every n steps
 		unsigned int nWrite_;//write potential every n steps
@@ -44,6 +47,8 @@ public:
 		unsigned int memory_;//memory for monitoring changes in the error
 		double gl_,progress_,pq_;//generalization loss, progress, and progress quotient
 		double tol_val_;//tolerance of the validation set
+		unsigned int nBatch_;
+		double pBatch_;
 	//error
 		double error_val_min_;//minimum error for the validation set
 		double error_train_min_;//minum error for the training set
