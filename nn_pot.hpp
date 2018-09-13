@@ -98,7 +98,6 @@ private:
 	Eigen::Vector3d rIJ_,rIK_,rJK_;
 	Eigen::Vector3d rIJt_,rIKt_,rJKt_;
 	VecList R_;
-	VecList dEdG_;
 public:
 	//initialization data - aggregates data necessary for starting training from scratch
 	struct Init{

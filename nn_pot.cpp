@@ -415,6 +415,8 @@ void NNPot::inputs_symm(Structure<AtomT>& struc){
 //calculate forces
 void NNPot::forces(Structure<AtomT>& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::forces(Structure<AtomT>&):\n";
+	//local variables
+	Eigen::VectorXd dEdG;
 	//reset the force
 	for(unsigned int i=0; i<struc.nAtoms(); ++i) struc.atom(i).force().setZero();
 	//lattice vector shifts
@@ -432,25 +434,18 @@ void NNPot::forces(Structure<AtomT>& struc){
 	}
 	//set the inputs for the atoms
 	inputs_symm(struc);
-	//calculate the network gradients
-	dEdG_.resize(struc.nAtoms());
-	for(unsigned int i=0; i<struc.nAtoms(); ++i){
-		//resize the gradient
-		dEdG_[i]=Eigen::VectorXd::Zero(nInput_[speciesMap_[struc.atom(i).name()]]);
-		//set the index for the species
-		unsigned int index=speciesMap_[struc.atom(i).name()];
-		//execute the appropriate network
-		nn_[index].execute(struc.atom(i).symm());
-		//calculate the network gradients
-		nn_[index].grad_out();
-		//set the gradient
-		dEdG_[i]=nn_[index].dOut(0).row(0);
-	}
 	//loop over all atoms
 	for(unsigned int i=0; i<struc.nAtoms(); ++i){
-		unsigned int II=speciesMap_[struc.atom(i).name()];
+		//local loop variables
 		double dIJ,dIK,dJK;
-		Eigen::Vector3d force=Eigen::Vector3d::Zero();
+		//find the index of the species of atom i
+		unsigned int II=speciesMap_[struc.atom(i).name()];
+		//execute the appropriate network
+		nn_[II].execute(struc.atom(i).symm());
+		//calculate the network gradient
+		nn_[II].grad_out();
+		//set the gradient
+		dEdG=nn_[II].dOut(0).row(0);
 		//loop over pairs
 		for(unsigned int j=0; j<struc.nAtoms(); ++j){
 			if(i==j) continue;
@@ -465,7 +460,7 @@ void NNPot::forces(Structure<AtomT>& struc){
 					//compute the IJ contribution to the radial force
 					Eigen::Vector3d ftemp=Eigen::Vector3d::Zero();
 					for(unsigned int nr=0; nr<basisR_[II][JJ].fR.size(); ++nr){
-						ftemp+=-1*rIJt_/dIJ*dEdG_[i][offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR[nr]->grad(dIJ);
+						ftemp+=-1*rIJt_/dIJ*dEdG[offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR[nr]->grad(dIJ);
 					}
 					struc.atom(i).force().noalias()+=ftemp;
 					struc.atom(j).force().noalias()-=ftemp;
@@ -486,7 +481,7 @@ void NNPot::forces(Structure<AtomT>& struc){
 								if(dIK<rc_ && dJK<rc_){
 									//compute the IJ,IK,JK contribution to the angular force
 									double cosIJK,amp;
-									// first version - mathematically more transparent, but less efficient, have to skip around memory a lot
+									//==== first version - mathematically more transparent, but less efficient, have to skip around memory a lot ====
 									/*
 									for(unsigned int na=0; na<basisA_[II](JJ,KK).fA.size(); ++na){
 										//gradient - cosine - central atom
@@ -522,7 +517,7 @@ void NNPot::forces(Structure<AtomT>& struc){
 										struc.atom(i).force().noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,2)*rIKt_/dIK;
 									}
 									*/
-									// second version - mathematically more obtuses, but more efficient, better memory locality
+									//==== second version - mathematically more obtuse, but more efficient, better memory locality ====
 									///*
 									Eigen::Vector3d fij1=Eigen::Vector3d::Zero();
 									Eigen::Vector3d fij2=Eigen::Vector3d::Zero();
@@ -533,13 +528,13 @@ void NNPot::forces(Structure<AtomT>& struc){
 									for(unsigned int na=0; na<basisA_[II](JJ,KK).fA.size(); ++na){
 										//gradient - cosine - central atom
 										cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
-										amp=-0.5*basisA_[II](JJ,KK).fA[na]->grad_angle(cosIJK)*basisA_[II](JJ,KK).fA[na]->dist(dIJ,dIK,dJK)*dEdG_[i][nInputR_[II]+offsetA_[II][JJ]+na];
+										amp=-0.5*basisA_[II](JJ,KK).fA[na]->grad_angle(cosIJK)*basisA_[II](JJ,KK).fA[na]->dist(dIJ,dIK,dJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
 										fij1.noalias()+=amp*(-cosIJK/dIJ)*rIJt_/dIJ;
 										fij2.noalias()+=amp*(1.0/dIK)*rIJt_/dIJ;
 										fik1.noalias()+=amp*(-cosIJK/dIK)*rIKt_/dIK;
 										fik2.noalias()+=amp*(1.0/dIJ)*rIKt_/dIK;
 										//gradient distance - central atom
-										amp=-0.5*basisA_[II](JJ,KK).fA[na]->angle(cosIJK)*dEdG_[i][nInputR_[II]+offsetA_[II][JJ]+na];
+										amp=-0.5*basisA_[II](JJ,KK).fA[na]->angle(cosIJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
 										fij.noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
 										fik.noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
 									}
@@ -561,6 +556,8 @@ void NNPot::forces(Structure<AtomT>& struc){
 //calculate forces
 void NNPot::forces_radial(Structure<AtomT>& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::force_radial(Structure<AtomT>&,unsigned int):\n";
+	//local variables
+	Eigen::VectorXd dEdG;
 	//reset the force
 	for(unsigned int i=0; i<struc.nAtoms(); ++i) struc.atom(i).force().setZero();
 	//lattice vector shifts
@@ -578,27 +575,19 @@ void NNPot::forces_radial(Structure<AtomT>& struc){
 	}
 	//set the inputs for the atoms
 	inputs_symm(struc);
-	//calculate the network gradients
-	dEdG_.resize(struc.nAtoms());
-	if(NN_POT_PRINT_STATUS>0) std::cout<<"Calculating network gradients...\n";
-	for(unsigned int i=0; i<struc.nAtoms(); ++i){
-		//resize the gradient
-		dEdG_[i]=Eigen::VectorXd::Zero(nInput_[speciesMap_[struc.atom(i).name()]]);
-		//set the index for the species
-		unsigned int index=speciesMap_[struc.atom(i).name()];
-		//execute the appropriate network
-		nn_[index].execute(struc.atom(i).symm());
-		//calculate the network gradients
-		nn_[index].grad_out();
-		//set the gradient
-		dEdG_[i]=nn_[index].dOut(0).row(0);
-	}
 	//loop over all atoms
 	Eigen::Vector3d force=Eigen::Vector3d::Zero();
 	//loop over pairs
 	if(NN_POT_PRINT_STATUS>0) std::cout<<"Calculating radial force...\n";
 	for(unsigned int i=0; i<struc.nAtoms(); ++i){
+		//find the index of the species of atom i
 		unsigned int II=speciesMap_[struc.atom(i).name()];
+		//execute the appropriate network
+		nn_[II].execute(struc.atom(i).symm());
+		//calculate the network gradient
+		nn_[II].grad_out();
+		//set the gradient
+		dEdG=nn_[II].dOut(0).row(0);
 		for(unsigned int j=0; j<struc.nAtoms(); ++j){
 			if(i==j) continue;
 			//find the index of the species of atom j
@@ -618,7 +607,7 @@ void NNPot::forces_radial(Structure<AtomT>& struc){
 					}*/
 					Eigen::Vector3d ftemp=Eigen::Vector3d::Zero();
 					for(unsigned int nr=0; nr<basisR_[II][JJ].fR.size(); ++nr){
-						ftemp+=-1*rIJt_/dIJ*dEdG_[i][offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR[nr]->grad(dIJ);
+						ftemp+=-1*rIJt_/dIJ*dEdG[offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR[nr]->grad(dIJ);
 					}
 					struc.atom(i).force().noalias()+=ftemp;
 					struc.atom(j).force().noalias()-=ftemp;
@@ -631,6 +620,8 @@ void NNPot::forces_radial(Structure<AtomT>& struc){
 //calculate forces
 void NNPot::forces_angular(Structure<AtomT>& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::forces_angular(Structure<AtomT>&):\n";
+	//local variables
+	Eigen::VectorXd dEdG;
 	//reset the forces
 	for(unsigned int i=0; i<struc.nAtoms(); ++i) struc.atom(i).force().setZero();
 	//lattice vector shifts
@@ -648,24 +639,18 @@ void NNPot::forces_angular(Structure<AtomT>& struc){
 	}
 	//set the inputs for the atoms
 	inputs_symm(struc);
-	//calculate the network gradients
-	dEdG_.resize(struc.nAtoms());
-	for(unsigned int i=0; i<struc.nAtoms(); ++i){
-		//resize the gradient
-		dEdG_[i]=Eigen::VectorXd::Zero(nInput_[speciesMap_[struc.atom(i).name()]]);
-		//set the index for the species
-		unsigned int index=speciesMap_[struc.atom(i).name()];
-		//execute the appropriate network
-		nn_[index].execute(struc.atom(i).symm());
-		//calculate the network gradients
-		nn_[index].grad_out();
-		//set the gradient
-		dEdG_[i]=nn_[index].dOut(0).row(0);
-	}
 	//loop over all atoms
 	for(unsigned int i=0; i<struc.nAtoms(); ++i){
-		unsigned int II=speciesMap_[struc.atom(i).name()];
+		//local loop variables
 		double dIJ,dIK,dJK;
+		//find the index of the species of atom i
+		unsigned int II=speciesMap_[struc.atom(i).name()];
+		//execute the appropriate network
+		nn_[II].execute(struc.atom(i).symm());
+		//calculate the network gradient
+		nn_[II].grad_out();
+		//set the gradient
+		dEdG=nn_[II].dOut(0).row(0);
 		//loop over pairs
 		for(unsigned int j=0; j<struc.nAtoms(); ++j){
 			if(i==j) continue;
@@ -692,78 +677,70 @@ void NNPot::forces_angular(Structure<AtomT>& struc){
 							for(unsigned short idJK=0; idJK<R_.size(); ++idJK){
 								rJKt_=rJK_; rJKt_.noalias()+=R_[idJK]; dJK=rJKt_.norm();
 								if(dIK<rc_ && dJK<rc_){
-									//compute the IJ,IK,JK contribution to all angular basis functions
-									double cosIJK,amp,c=1;
-									Eigen::Vector3d fij=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fik=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fij1=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fik1=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fij2=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fik2=Eigen::Vector3d::Zero();
-									// test - cosine only
+									//compute the IJ,IK,JK contribution to the angular force
+									double cosIJK,amp;
+									//==== first version - mathematically more transparent, but less efficient, have to skip around memory a lot ====
 									/*
-									cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
-									//struc.atom(i).force().noalias()+=-1*(-cosIJK/dIJ)*rIJt_/dIJ;
-									//struc.atom(i).force().noalias()+=-1*(1.0/dIK)*rIJt_/dIJ;
-									//struc.atom(i).force().noalias()+=-1*(-cosIJK/dIK)*rIKt_/dIK;
-									//struc.atom(i).force().noalias()+=-1*(1.0/dIJ)*rIKt_/dIK;
-									fij1.noalias()+=-1*(-cosIJK/dIJ)*rIJt_/dIJ;
-									fij2.noalias()+=-1*(1.0/dIK)*rIJt_/dIJ;
-									fik1.noalias()+=-1*(-cosIJK/dIK)*rIKt_/dIK;
-									fik2.noalias()+=-1*(1.0/dIJ)*rIKt_/dIK;
-									//cosIJK=-rIJt_.dot(rJKt_)/(dIJ*dJK);
-									//struc.atom(i).force().noalias()-=-1*cosIJK/dIJ*rIJt_/dIJ;
-									//struc.atom(i).force().noalias()-=-1*1.0/(dIJ)*rJKt_/dJK;
-									//cosIJK=-rJKt_.dot(rIJt_)/(dJK*dIJ);
-									//struc.atom(i).force().noalias()-=-1*cosIJK/dIJ*rIJt_/dIJ;
-									//struc.atom(i).force().noalias()-=-1*1.0/(dIJ)*rJKt_/dJK;
-									struc.atom(i).force().noalias()+=fij1+fij2;
-									struc.atom(i).force().noalias()+=fik1+fik2;
-									struc.atom(j).force().noalias()-=fij1+fik2;
-									struc.atom(k).force().noalias()-=fik1+fij2;
-									*/
-									
 									for(unsigned int na=0; na<basisA_[II](JJ,KK).fA.size(); ++na){
 										//gradient - cosine - central atom
 										cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
-										amp=c*basisA_[II](JJ,KK).fA[na]->grad_angle(cosIJK)*basisA_[II](JJ,KK).fA[na]->dist(dIJ,dIK,dJK)*dEdG_[i][nInputR_[II]+offsetA_[II][JJ]+na];
-										//struc.atom(i).force().noalias()+=-1*amp*(1.0/dIK-cosIJK/dIJ)*rIJt_/dIJ;
-										//struc.atom(i).force().noalias()+=-1*amp*(1.0/dIJ-cosIJK/dIK)*rIKt_/dIK;
-										fij1.noalias()+=-1*amp*(-cosIJK/dIJ)*rIJt_/dIJ;
-										fij2.noalias()+=-1*amp*(1.0/dIK)*rIJt_/dIJ;
-										fik1.noalias()+=-1*amp*(-cosIJK/dIK)*rIKt_/dIK;
-										fik2.noalias()+=-1*amp*(1.0/dIJ)*rIKt_/dIK;
+										amp=-0.5*basisA_[II](JJ,KK).fA[na]->grad_angle(cosIJK)*basisA_[II](JJ,KK).fA[na]->dist(dIJ,dIK,dJK)*dEdG_[i][nInputR_[II]+offsetA_[II][JJ]+na];
+										struc.atom(i).force().noalias()+=amp*(1.0/dIK-cosIJK/dIJ)*rIJt_/dIJ;
+										struc.atom(i).force().noalias()+=amp*(1.0/dIJ-cosIJK/dIK)*rIKt_/dIK;
 										//gradient distance - central atom
-										amp=c*basisA_[II](JJ,KK).fA[na]->angle(cosIJK)*dEdG_[i][nInputR_[II]+offsetA_[II][JJ]+na];
-										//struc.atom(i).force().noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
-										//struc.atom(i).force().noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
-										fij.noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
-										fik.noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
+										amp=-0.5*basisA_[II](JJ,KK).fA[na]->angle(cosIJK)*dEdG_[i][nInputR_[II]+offsetA_[II][JJ]+na];
+										struc.atom(i).force().noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
+										struc.atom(i).force().noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
+									}
+									for(unsigned int na=0; na<basisA_[JJ](II,KK).fA.size(); ++na){
 										//gradient - cosine - first neighbor
 										cosIJK=-rIJt_.dot(rJKt_)/(dIJ*dJK);
-										amp=c*basisA_[JJ](II,KK).fA[na]->grad_angle(cosIJK)*basisA_[JJ](II,KK).fA[na]->dist(dIJ,dJK,dIK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][II]+na];
-										//struc.atom(i).force().noalias()-=-1*amp*cosIJK/dIJ*rIJt_/dIJ;
-										//struc.atom(i).force().noalias()-=-1*amp*1.0/(dIJ)*rJKt_/dJK;
-										//gradient - distance - first neighbor
-										amp=c*basisA_[JJ](II,KK).fA[na]->angle(cosIJK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][II]+na];
-										//struc.atom(i).force().noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,0)*rIJt_/dIJ;
-										//struc.atom(i).force().noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,2)*rIKt_/dIK;
+										amp=-0.5*basisA_[JJ](II,KK).fA[na]->grad_angle(cosIJK)*basisA_[JJ](II,KK).fA[na]->dist(dIJ,dJK,dIK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][II]+na];
+										struc.atom(i).force().noalias()-=amp*cosIJK/dIJ*rIJt_/dIJ;
+										struc.atom(i).force().noalias()-=amp*1.0/(dIJ)*rJKt_/dJK;
+										//gradient - cosine - first neighbor
+										amp=-0.5*basisA_[JJ](II,KK).fA[na]->angle(cosIJK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][II]+na];
+										struc.atom(i).force().noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,0)*rIJt_/dIJ;
+										struc.atom(i).force().noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,2)*rIKt_/dIK;
+									}
+									for(unsigned int na=0; na<basisA_[JJ](KK,II).fA.size(); ++na){
 										//gradient - cosine - second neighbor
 										cosIJK=-rJKt_.dot(rIJt_)/(dJK*dIJ);
-										amp=c*basisA_[JJ](KK,II).fA[na]->grad_angle(cosIJK)*basisA_[JJ](KK,II).fA[na]->dist(dJK,dIJ,dIK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][KK]+na];
-										//struc.atom(i).force().noalias()-=-1*amp*cosIJK/dIJ*rIJt_/dIJ;
-										//struc.atom(i).force().noalias()-=-1*amp*1.0/(dIJ)*rJKt_/dJK;
-										//gradient - distance - second neighbor
-										amp=c*basisA_[JJ](KK,II).fA[na]->angle(cosIJK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][KK]+na];
-										//struc.atom(i).force().noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,1)*rIJt_/dIJ;
-										//struc.atom(i).force().noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,2)*rIKt_/dIK;
+										amp=-0.5*basisA_[JJ](KK,II).fA[na]->grad_angle(cosIJK)*basisA_[JJ](KK,II).fA[na]->dist(dJK,dIJ,dIK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][KK]+na];
+										struc.atom(i).force().noalias()-=amp*cosIJK/dIJ*rIJt_/dIJ;
+										struc.atom(i).force().noalias()-=amp*1.0/(dIJ)*rJKt_/dJK;
+										//gradient - cosine - second neighbor
+										amp=-0.5*basisA_[JJ](KK,II).fA[na]->angle(cosIJK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][KK]+na];
+										struc.atom(i).force().noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,1)*rIJt_/dIJ;
+										struc.atom(i).force().noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,2)*rIKt_/dIK;
 									}
-									
+									*/
+									//==== second version - mathematically more obtuse, but more efficient, better memory locality ====
+									///*
+									Eigen::Vector3d fij1=Eigen::Vector3d::Zero();
+									Eigen::Vector3d fij2=Eigen::Vector3d::Zero();
+									Eigen::Vector3d fik1=Eigen::Vector3d::Zero();
+									Eigen::Vector3d fik2=Eigen::Vector3d::Zero();
+									Eigen::Vector3d fij=Eigen::Vector3d::Zero();
+									Eigen::Vector3d fik=Eigen::Vector3d::Zero();
+									for(unsigned int na=0; na<basisA_[II](JJ,KK).fA.size(); ++na){
+										//gradient - cosine - central atom
+										cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
+										amp=-0.5*basisA_[II](JJ,KK).fA[na]->grad_angle(cosIJK)*basisA_[II](JJ,KK).fA[na]->dist(dIJ,dIK,dJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
+										fij1.noalias()+=amp*(-cosIJK/dIJ)*rIJt_/dIJ;
+										fij2.noalias()+=amp*(1.0/dIK)*rIJt_/dIJ;
+										fik1.noalias()+=amp*(-cosIJK/dIK)*rIKt_/dIK;
+										fik2.noalias()+=amp*(1.0/dIJ)*rIKt_/dIK;
+										//gradient distance - central atom
+										amp=-0.5*basisA_[II](JJ,KK).fA[na]->angle(cosIJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
+										fij.noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
+										fik.noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
+									}
 									struc.atom(i).force().noalias()+=fij1+fij2+fij;
 									struc.atom(i).force().noalias()+=fik1+fik2+fik;
 									struc.atom(j).force().noalias()-=fij1+fik2+fij;
 									struc.atom(k).force().noalias()-=fik1+fij2+fik;
-									
+									//*/
 								}
 							}
 						}
