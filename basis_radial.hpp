@@ -13,6 +13,8 @@
 #include "symm_radial_g2.hpp"
 //string
 #include "string.hpp"
+// local libraries - serialization
+#include "serialize.hpp"
 
 #ifndef BASIS_RADIAL_PRINT_FUNC
 #define BASIS_RADIAL_PRINT_FUNC 0
@@ -31,5 +33,27 @@ struct BasisR{
 	static void read(FILE* writer, BasisR& basis);
 };
 std::ostream& operator<<(std::ostream& out, const BasisR& basisR);
+
+namespace serialize{
+	
+	//**********************************************
+	// byte measures
+	//**********************************************
+	
+	template <> unsigned int nbytes(const BasisR& obj);
+	
+	//**********************************************
+	// packing
+	//**********************************************
+	
+	template <> void pack(const BasisR& obj, char* arr);
+	
+	//**********************************************
+	// unpacking
+	//**********************************************
+	
+	template <> void unpack(BasisR& obj, const char* arr);
+	
+}
 
 #endif

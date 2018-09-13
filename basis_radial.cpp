@@ -87,6 +87,7 @@ void BasisR::read(FILE* reader, BasisR& basis){
 			double rc=std::atof(strlist[1].c_str());
 			basis.fR[i]=std::shared_ptr<PhiR>(new PhiR_G1(tcut,rc));
 		}
+		basis.phiRN=PhiRN::G1;
 	} else if(strlist[1]=="G2"){
 		//tcut,rc,rs,eta
 		for(unsigned int i=0; i<basis.fR.size(); ++i){
@@ -104,6 +105,7 @@ void BasisR::read(FILE* reader, BasisR& basis){
 			double eta=std::atof(strlist[3].c_str());
 			basis.fR[i]=std::shared_ptr<PhiR>(new PhiR_G2(tcut,rc,rs,eta));
 		}
+		basis.phiRN=PhiRN::G2;
 	} else throw std::invalid_argument("Invalid radial function type");
 	//free local variables
 	free(input);
@@ -119,4 +121,65 @@ std::ostream& operator<<(std::ostream& out, const BasisR& basisR){
 		out<<"\t"<<static_cast<PhiR_G2&>(*basisR.fR.back());
 	}
 	return out;
+}
+
+namespace serialize{
+	
+	//**********************************************
+	// byte measures
+	//**********************************************
+	
+	template <> unsigned int nbytes(const BasisR& obj){
+		unsigned int N=0;
+		N+=sizeof(obj.phiRN);//name of symmetry functions
+		N+=sizeof(unsigned int);//number of symmetry functions
+		if(obj.phiRN==PhiRN::G1){
+			for(unsigned int i=0; i<obj.fR.size(); ++i) N+=nbytes(dynamic_cast<PhiR_G1&>(*obj.fR[i]));
+		} else if(obj.phiRN==PhiRN::G2){
+			for(unsigned int i=0; i<obj.fR.size(); ++i) N+=nbytes(dynamic_cast<PhiR_G2&>(*obj.fR[i]));
+		} else throw std::runtime_error("Invalid radial symmetry function.");
+		return N;
+	}
+	
+	//**********************************************
+	// packing
+	//**********************************************
+	
+	template <> void pack(const BasisR& obj, char* arr){
+		unsigned int pos=0,size=obj.fR.size();
+		std::memcpy(arr+pos,&obj.phiRN,sizeof(obj.phiRN)); pos+=sizeof(obj.phiRN);
+		std::memcpy(arr+pos,&size,sizeof(size)); pos+=sizeof(size);
+		if(obj.phiRN==PhiRN::G1){
+			for(unsigned int i=0; i<obj.fR.size(); ++i){
+				pack(dynamic_cast<const PhiR_G1&>(*obj.fR[i]),arr+pos); pos+=nbytes(dynamic_cast<const PhiR_G1&>(*obj.fR[i]));
+			}
+		} else if(obj.phiRN==PhiRN::G2){
+			for(unsigned int i=0; i<obj.fR.size(); ++i){
+				pack(dynamic_cast<const PhiR_G2&>(*obj.fR[i]),arr+pos); pos+=nbytes(dynamic_cast<const PhiR_G2&>(*obj.fR[i]));
+			}
+		} else throw std::runtime_error("Invalid radial symmetry function.");
+	}
+	
+	//**********************************************
+	// unpacking
+	//**********************************************
+	
+	template <> void unpack(BasisR& obj, const char* arr){
+		unsigned int pos=0,size=0;
+		std::memcpy(&obj.phiRN,arr+pos,sizeof(obj.phiRN)); pos+=sizeof(obj.phiRN);
+		std::memcpy(&size,arr+pos,sizeof(size)); pos+=sizeof(size);
+		obj.fR.resize(size);
+		if(obj.phiRN==PhiRN::G1){
+			for(unsigned int i=0; i<obj.fR.size(); ++i){
+				obj.fR[i].reset(new PhiR_G1());
+				unpack(dynamic_cast<PhiR_G1&>(*obj.fR[i]),arr+pos); pos+=nbytes(dynamic_cast<const PhiR_G1&>(*obj.fR[i]));
+			}
+		} else if(obj.phiRN==PhiRN::G2){
+			for(unsigned int i=0; i<obj.fR.size(); ++i){
+				obj.fR[i].reset(new PhiR_G2());
+				unpack(dynamic_cast<PhiR_G2&>(*obj.fR[i]),arr+pos); pos+=nbytes(dynamic_cast<const PhiR_G2&>(*obj.fR[i]));
+			}
+		} else throw std::runtime_error("Invalid radial symmetry function.");
+	}
+	
 }

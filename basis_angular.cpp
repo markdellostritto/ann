@@ -97,6 +97,7 @@ void BasisA::read(FILE* reader, BasisA& basis){
 			if(tcut==CutoffN::UNKNOWN) std::runtime_error("Invalid G3 cutoff.");
 			basis.fA[i]=std::shared_ptr<PhiA>(new PhiA_G3(tcut,rc,eta,zeta,lambda));
 		}
+		basis.phiAN=PhiAN::G3;
 	} else if(strlist[1]=="G4"){
 		//tcut,rc,eta,zeta,lambda
 		for(unsigned int i=0; i<basis.fA.size(); ++i){
@@ -114,6 +115,7 @@ void BasisA::read(FILE* reader, BasisA& basis){
 			if(tcut==CutoffN::UNKNOWN) std::runtime_error("Invalid G4 cutoff.");
 			basis.fA[i]=std::shared_ptr<PhiA>(new PhiA_G4(tcut,rc,eta,zeta,lambda));
 		}
+		basis.phiAN=PhiAN::G4;
 	} else throw std::invalid_argument("Invalid angular function type");
 	//free local variables
 	free(input);
@@ -129,4 +131,65 @@ std::ostream& operator<<(std::ostream& out, const BasisA& basisA){
 		out<<"\t"<<static_cast<PhiA_G4&>(*basisA.fA.back());
 	}
 	return out;
+}
+
+namespace serialize{
+	
+	//**********************************************
+	// byte measures
+	//**********************************************
+	
+	template <> unsigned int nbytes(const BasisA& obj){
+		unsigned int N=0;
+		N+=sizeof(obj.phiAN);//name of symmetry functions
+		N+=sizeof(unsigned int);//number of symmetry functions
+		if(obj.phiAN==PhiAN::G3){
+			for(unsigned int i=0; i<obj.fA.size(); ++i) N+=nbytes(dynamic_cast<PhiA_G3&>(*obj.fA[i]));
+		} else if(obj.phiAN==PhiAN::G4){
+			for(unsigned int i=0; i<obj.fA.size(); ++i) N+=nbytes(dynamic_cast<PhiA_G4&>(*obj.fA[i]));
+		} else throw std::runtime_error("Invalid angular symmetry function.");
+		return N;
+	}
+	
+	//**********************************************
+	// packing
+	//**********************************************
+	
+	template <> void pack(const BasisA& obj, char* arr){
+		unsigned int pos=0,size=obj.fA.size();
+		std::memcpy(arr+pos,&obj.phiAN,sizeof(obj.phiAN)); pos+=sizeof(obj.phiAN);
+		std::memcpy(arr+pos,&size,sizeof(size)); pos+=sizeof(size);
+		if(obj.phiAN==PhiAN::G3){
+			for(unsigned int i=0; i<obj.fA.size(); ++i){
+				pack(dynamic_cast<const PhiA_G3&>(*obj.fA[i]),arr+pos); pos+=nbytes(dynamic_cast<const PhiA_G3&>(*obj.fA[i]));
+			}
+		} else if(obj.phiAN==PhiAN::G4){
+			for(unsigned int i=0; i<obj.fA.size(); ++i){
+				pack(dynamic_cast<const PhiA_G4&>(*obj.fA[i]),arr+pos); pos+=nbytes(dynamic_cast<const PhiA_G4&>(*obj.fA[i]));
+			}
+		} else throw std::runtime_error("Invalid angular symmetry function.");
+	}
+	
+	//**********************************************
+	// unpacking
+	//**********************************************
+	
+	template <> void unpack(BasisA& obj, const char* arr){
+		unsigned int pos=0,size=0;
+		std::memcpy(&obj.phiAN,arr+pos,sizeof(obj.phiAN)); pos+=sizeof(obj.phiAN);
+		std::memcpy(&size,arr+pos,sizeof(size)); pos+=sizeof(size);
+		obj.fA.resize(size);
+		if(obj.phiAN==PhiAN::G3){
+			for(unsigned int i=0; i<obj.fA.size(); ++i){
+				obj.fA[i].reset(new PhiA_G3());
+				unpack(dynamic_cast<PhiA_G3&>(*obj.fA[i]),arr+pos); pos+=nbytes(dynamic_cast<const PhiA_G3&>(*obj.fA[i]));
+			}
+		} else if(obj.phiAN==PhiAN::G4){
+			for(unsigned int i=0; i<obj.fA.size(); ++i){
+				obj.fA[i].reset(new PhiA_G4());
+				unpack(dynamic_cast<PhiA_G4&>(*obj.fA[i]),arr+pos); pos+=nbytes(dynamic_cast<const PhiA_G4&>(*obj.fA[i]));
+			}
+		} else throw std::runtime_error("Invalid angular symmetry function.");
+	}
+	
 }
