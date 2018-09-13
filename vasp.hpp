@@ -33,7 +33,7 @@ static const char* NAMESPACE_GLOBAL="VASP";
 //utilities
 template <class AtomT> void setAN(AtomT& atom, std::false_type){};
 template <class AtomT> void setAN(AtomT& atom, std::true_type){
-	atom.an()=PTable::atomicNumber(atom.name().c_str());
+	atom.an()=PTable::an(atom.name().c_str());
 }
 
 //*****************************************************
@@ -53,6 +53,227 @@ struct Format{
 	static Format& load(const std::vector<std::string>& strlist, Format& format);
 };
 
+namespace POSCAR{
+
+//static variables
+static const char* NAMESPACE_LOCAL="POSCAR";
+
+template <class AtomT>
+void load(const char* file, Structure<AtomT>& struc){
+	const char* funcName="load<AtomT>(const char*,Structure<AtomT>&)";
+	if(DEBUG_VASP>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<funcName<<":\n";
+	/* local function variables */
+	//file i/o
+		FILE* reader=NULL;
+		char* input=(char*)malloc(sizeof(char)*string::M);
+		char* temp=(char*)malloc(sizeof(char)*string::M);
+	//simulation flags
+		bool direct;//whether the coordinates are in direct or Cartesian coordinates
+	//cell
+		Cell cell;
+		Eigen::Matrix3d lv;
+		double scale=1;
+	//atom info
+		unsigned int nSpecies=0;//the number of atomic species
+		std::vector<unsigned int> nAtoms;//the number of atoms in each species
+		std::vector<std::string> names;//the names of each species
+		unsigned int N=0;
+	//units
+		double s=0.0;
+		if(units::consts::system()==units::System::AU) s=units::BOHRpANG;
+		else if(units::consts::system()==units::System::METAL) s=1.0;
+		else throw std::runtime_error("Invalid units.");
+	//misc
+		bool error=false;
+		
+	try{
+		//open the file
+		if(DEBUG_VASP>1) std::cout<<"Opening file...\n";
+		reader=fopen(file,"r");
+		if(reader==NULL) throw std::runtime_error("Unable to open file.");
+		
+		//clear the simulation
+		struc.clear();
+		//set the periodicity (always true for VASP)
+		struc.periodic()=true;
+		
+		/* read in the system name */
+		if(DEBUG_VASP>1) std::cout<<"Reading system name...\n";
+		struc.system()=std::string(string::trim(fgets(input,string::M,reader)));
+		
+		/* load the simulation cell */
+		if(DEBUG_VASP>1) std::cout<<"Loading simulation cell...\n";
+		scale=std::atof(fgets(input, string::M, reader));
+		if(scale<0) scale=std::pow(-1.0*scale,1.0/3.0);
+		//read in the lattice vectors of the system
+		/*
+			Here we take the transpose of the lattice vector matrix.
+			The reason is that VASP stores the lattice vector matrix such that the lattice vectors
+			are the rows of the matrix.  However, it's more appropriate for operations on coordinates
+			for the lattice vectors to be columns of the matrix.
+		*/
+		if(DEBUG_VASP>1) std::cout<<"Reading in the lattice vectors...\n";
+		for(unsigned int i=0; i<3; ++i){
+			fgets(input, string::M, reader);
+			lv(0,i)=std::atof(std::strtok(input,string::WS));
+			for(unsigned int j=1; j<3; ++j){
+				lv(j,i)=std::atof(std::strtok(NULL,string::WS));
+			}
+		}
+		//initialize the cell
+		struc.cell().init(s*lv,scale);
+		
+		/* load the atom info */
+		//read in the number of species
+		if(DEBUG_VASP>1) std::cout<<"Reading in the number of species...\n";
+		fgets(input, string::M, reader);
+		nSpecies=string::substrN(input,string::WS);
+		names.resize(nSpecies);
+		nAtoms.resize(nSpecies);
+		//read in the species names
+		if(DEBUG_VASP>1) std::cout<<"Reading in the species names...\n";
+		names[0]=std::string(std::strtok(input,string::WS));
+		for(unsigned int i=1; i<nSpecies; ++i){
+			names[i]=std::string(std::strtok(NULL,string::WS));
+		}
+		//read in the species numbers
+		if(DEBUG_VASP>1) std::cout<<"Reading in the species numbers...\n";
+		fgets(input, string::M, reader);
+		nAtoms[0]=std::atoi(std::strtok(input,string::WS));
+		for(unsigned int i=1; i<nSpecies; ++i){
+			nAtoms[i]=std::atoi(std::strtok(NULL,string::WS));
+		}
+		
+		/* load the coordinate type */
+		fgets(input, string::M, reader);
+		if(input[0]=='D') direct=true;
+		else direct=false;
+		
+		/* print data to screen */
+		if(DEBUG_VASP>1){
+			std::cout<<"NAME = "<<struc.system()<<"\n";
+			std::cout<<"DIRECT = "<<(direct?"T":"F")<<"\n";
+			std::cout<<"CELL = \n"<<struc.cell()<<"\n";
+			std::cout<<"SPECIES = ";
+			for(unsigned int i=0; i<names.size(); ++i) std::cout<<names[i]<<" "; std::cout<<"\n";
+			std::cout<<"NUMBERS = ";
+			for(unsigned int i=0; i<nAtoms.size(); ++i) std::cout<<nAtoms[i]<<" "; std::cout<<"\n";
+		}
+		
+		/* resize the simulation */
+		if(DEBUG_VASP>0) std::cout<<"Allocating memory...\n";
+		struc.resize(nAtoms,names);
+		
+		/* load positions */
+		if(DEBUG_VASP>1) std::cout<<"Loading positions...\n";
+		//load the positions
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			fgets(input,string::M,reader);
+			struc.atom_posn()[n][0]=s*std::atof(std::strtok(input,string::WS));
+			struc.atom_posn()[n][1]=s*std::atof(std::strtok(NULL,string::WS));
+			struc.atom_posn()[n][2]=s*std::atof(std::strtok(NULL,string::WS));
+		}
+		
+		/* convert to cartesian coordinates (if necessary) */
+		if(DEBUG_VASP>1) std::cout<<"Converting to Cartesian coordinates...\n";
+		if(direct){
+			for(unsigned int n=0; n<struc.nAtoms(); ++n){
+				struc.atom_posn()[n]=struc.cell().R()*struc.atom_posn()[n];
+			}
+		}
+		
+		fclose(reader);
+		reader=NULL;
+	}catch(std::exception& e){
+		std::cout<<"ERROR in "<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<funcName<<":\n";
+		std::cout<<e.what()<<"\n";
+		error=true;
+	}
+	
+	//free all local variables
+	if(reader!=NULL) fclose(reader);
+	free(input);
+	free(temp);
+	
+	if(error) throw std::runtime_error("I/O Exception Occurred.");
+}
+
+template <class AtomT>
+void print(const char* file, const Structure<AtomT>& struc, bool direct=true){
+	static const char* funcName="load<AtomT>(const char*,Structure<AtomT>&)";
+	if(DEBUG_VASP>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<funcName<<":\n";
+	/* local function variables */
+	//file i/o
+		FILE* writer=NULL;
+	//misc
+		bool error=false;
+	
+	try{
+		//open the file
+		if(DEBUG_VASP>1) std::cout<<"Opening file...\n";
+		writer=fopen(file,"w");
+		if(writer==NULL) throw std::runtime_error("Unable to open file.");
+		
+		//print the system name
+		if(DEBUG_VASP>1) std::cout<<"Printing name...\n";
+		fprintf(writer,"%s\n",struc.system().c_str());
+		
+		//print the simulation cell (transpose)
+		if(DEBUG_VASP>1) std::cout<<"Printing cell...\n";
+		fprintf(writer," %10.4f\n",struc.cell().scale());
+		for(unsigned int i=0; i<3; ++i){
+			for(unsigned int j=0; j<3; ++j){
+				fprintf(writer," %11.6f",struc.cell().R()(j,i)/struc.cell().scale());
+			}
+			fprintf(writer,"\n");
+		}
+		
+		//print the atom info
+		if(DEBUG_VASP>1) std::cout<<"Printing atom info...\n";
+		for(unsigned int i=0; i<struc.nSpecies(); ++i){
+			fprintf(writer," %4s",struc.atomNames(i).c_str());
+		}
+		fprintf(writer,"\n");
+		for(unsigned int i=0; i<struc.nSpecies(); ++i){
+			fprintf(writer," %4i",struc.nAtoms(i));
+		}
+		fprintf(writer,"\n");
+		
+		//print the positions
+		if(DEBUG_VASP>1) std::cout<<"Printing posns...\n";
+		if(!direct){
+			fprintf(writer,"Cart\n");
+			for(unsigned int n=0; n<struc.nAtoms(); ++n){
+				fprintf(writer, "%.8f %.8f %.8f\n",
+					struc.atom_posn()[n][0],
+					struc.atom_posn()[n][1],
+					struc.atom_posn()[n][2]
+				);
+			}
+		} else {
+			fprintf(writer,"Direct\n");
+			for(unsigned int n=0; n<struc.nAtoms(); ++n){
+				Eigen::Vector3d posn=struc.cell().RInv()*struc.atom_posn()[n];
+				fprintf(writer, "%.8f %.8f %.8f\n",posn[0],posn[1],posn[2]);
+			}
+		}
+		
+		fclose(writer);
+		writer=NULL;
+	}catch(std::exception& e){
+		std::cout<<"ERROR in "<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<funcName<<":\n";
+		std::cout<<e.what()<<"\n";
+		error=true;
+	}
+	
+	//free local variables
+	if(writer!=NULL) fclose(writer);
+	
+	if(error) throw std::runtime_error("I/O Exception Occurred.");
+}
+
+}
+
 namespace XML{
 
 //static variables
@@ -60,7 +281,7 @@ static const char* NAMESPACE_LOCAL="XML";
 
 template <class AtomT> void load_forces(std::false_type, FILE* reader, Structure<AtomT>& struc, unsigned int t){};
 template <class AtomT> void load_forces(std::true_type, FILE* reader, Structure<AtomT>& struc, unsigned int t){
-	static const char* funcName="load_forces(std::true_type,FILE*,SimAtomic<AtomT>&)";
+	static const char* funcName="load_forces(std::true_type,FILE*,Structure<AtomT>&)";
 	if(DEBUG_VASP>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<funcName<<":\n";
 	//==== local variables ====
 	//string utilities
@@ -111,7 +332,7 @@ template <class AtomT> void load_forces(std::true_type, FILE* reader, Structure<
 
 template <class AtomT>
 void load(const char* file, Structure<AtomT>& struc, unsigned int t=0){
-	static const char* funcName="load<AtomT>(const char*,SimAtomic<AtomT>&,(int))";
+	static const char* funcName="load<AtomT>(const char*,Structure<AtomT>&,(int))";
 	if(DEBUG_VASP>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<funcName<<":\n";
 	//==== local function variables ====
 	//file i/o
