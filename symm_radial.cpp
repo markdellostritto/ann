@@ -19,3 +19,36 @@ std::ostream& operator<<(std::ostream& out, const PhiRN::type& t){
 std::ostream& operator<<(std::ostream& out, const PhiR& f){
 	return out<<"PhiR "<<f.tcut<<" "<<f.rc;
 }
+
+namespace serialize{
+	
+	//**********************************************
+	// byte measures
+	//**********************************************
+	
+	template <> unsigned int nbytes(const PhiR& obj){
+		unsigned int N=0;
+		N+=sizeof(double);//rc
+		N+=sizeof(obj.tcut);//cutoff type
+		return N;
+	}
+	
+	//**********************************************
+	// packing
+	//**********************************************
+	
+	template <> void pack(const PhiR& obj, char* arr){
+		std::memcpy(arr,&obj.rc,sizeof(double));
+		std::memcpy(arr+sizeof(double),&obj.tcut,sizeof(obj.tcut));
+	}
+	
+	//**********************************************
+	// unpacking
+	//**********************************************
+	
+	template <> void unpack(PhiR& obj, const char* arr){
+		std::memcpy(&obj.rc,arr,sizeof(double));
+		std::memcpy(&obj.tcut,arr+sizeof(double),sizeof(obj.tcut));
+	}
+	
+}

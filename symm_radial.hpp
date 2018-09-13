@@ -5,15 +5,17 @@
 #include <cstring>
 // c++ libraries
 #include <iostream>
-// local libraries
+// local libraries - cutoff
 #include "cutoff.hpp"
+// local libraries - serialization
+#include "serialize.hpp"
 
 //radial function names
 struct PhiRN{
 	enum type{
-		UNKNOWN,
-		G1,//Behler G1
-		G2//Behler G2
+		UNKNOWN=-1,
+		G1=0,//Behler G1
+		G2=1//Behler G2
 	};
 	static type load(const char* str);
 };
@@ -33,5 +35,27 @@ struct PhiR{
 	virtual double grad(double r)const noexcept=0;
 };
 std::ostream& operator<<(std::ostream& out, const PhiR& f);
+
+namespace serialize{
+	
+	//**********************************************
+	// byte measures
+	//**********************************************
+	
+	template <> unsigned int nbytes(const PhiR& obj);
+	
+	//**********************************************
+	// packing
+	//**********************************************
+	
+	template <> void pack(const PhiR& obj, char* arr);
+	
+	//**********************************************
+	// unpacking
+	//**********************************************
+	
+	template <> void unpack(PhiR& obj, const char* arr);
+	
+}
 
 #endif
