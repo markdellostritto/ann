@@ -2,18 +2,32 @@
 #include <cstdlib>
 // c++ libraries
 #include <iostream>
-#include "nn_pot_serial.hpp"
+#include "nn_pot.hpp"
 #include "vasp.hpp"
 
 int main(int argc, char* argv[]){
 
-	bool test_cut=true;
-	bool test_phir_g2=true;
-	bool test_phia_g4=true;
-	bool test_basisR_g2=true;
-	bool test_basisA_g4=true;
-	bool test_unit=true;
-	bool test_symm=true;
+	//======== cutoff ========
+	bool test_cut=false;
+	//======== symmetry functions ========
+	bool test_phir_g2=false;
+	bool test_phia_g4=false;
+	//======== basis ========
+	bool test_basisR_g2=false;
+	bool test_basisA_g4=false;
+	//======== unit test ========
+	bool test_unit=false;
+	//======== serialization ========
+	bool test_symm_radial_serialize=false;
+	bool test_symm_angular_serialize=false;
+	bool test_basis_radial_serialize=false;
+	bool test_basis_angular_serialize=false;
+	//======== i/o ========
+	bool test_io=false;
+	//======== forces ========
+	bool test_force_radial=true;
+	bool test_force_angular=true;
+	bool test_force=false;
 	
 	if(test_cut){
 	std::cout<<"************************************************************\n";
@@ -474,25 +488,29 @@ int main(int argc, char* argv[]){
 	try{
 		//local variables
 		NNPot nnpot;
+		NNPot::Init nnpotInit;
 		std::vector<unsigned int> nh(1,20);
 		
 		//set the nn pot parameters
 		std::cout<<"Setting the nn potential parameters...\n";
-		nnpot.nR()=5;
-		nnpot.nA()=8;
-		nnpot.rc()=6.0;
-		nnpot.lambda()=0.0;
-		nnpot.nh()=nh;
-		nnpot.tcut()=CutoffN::COS;
-		nnpot.tfType()=NN::TransferN::TANH;
-		nnpot.phiRN()=PhiRN::G2;
-		nnpot.phiAN()=PhiAN::G4;
+		nnpotInit.nR=5;
+		nnpotInit.nA=8;
+		nnpotInit.rc=6.0;
+		nnpotInit.lambda=0.0;
+		nnpotInit.nh=nh;
+		nnpotInit.tcut=CutoffN::COS;
+		nnpotInit.tfType=NN::TransferN::TANH;
+		nnpotInit.phiRN=PhiRN::G2;
+		nnpotInit.phiAN=PhiAN::G4;
+		
+		//initialize the species
+		std::cout<<"Initializing species...\n";
 		std::vector<std::string> speciesNames=std::vector<std::string>(1,std::string("H"));
-		nnpot.setSpecies(speciesNames);
+		nnpot.resize(speciesNames);
 		
 		//initialize the nn pot 
 		std::cout<<"Initializing the potential...\n";
-		nnpot.init();
+		nnpot.init(nnpotInit);
 		
 		//print the potential
 		std::cout<<nnpot<<"\n";
@@ -517,86 +535,492 @@ int main(int argc, char* argv[]){
 	std::cout<<"************************************************************\n";
 	}
 	
-	if(test_symm){
+	if(test_symm_radial_serialize){
 	std::cout<<"************************************************************\n";
-	std::cout<<"*********************** TEST - SYMM ***********************\n";
+	std::cout<<"************* TEST - SYMM - RADIAL - SERIALIZE *************\n";
 	try{
-		//local variables
-		Structure<AtomT> struc;
-		NNPot nnpot;
-		std::vector<unsigned int> nh(1,20);
+		PhiR_G1 phirG11(CutoffN::COS,6);
+		PhiR_G1 phirG12(CutoffN::TANH,1);
+		PhiR_G2 phirG21(CutoffN::COS,6,0.248928,1.5472894);
+		PhiR_G2 phirG22(CutoffN::COS,6,0.0,0.0);
+		char* arrG1=NULL;
+		char* arrG2=NULL;
+		unsigned int nBytes=0;
 		
-		//load simulation
-		VASP::XML::load("Si.xml",struc);
-		std::cout<<struc<<"\n";
+		//serialize g1
+		std::cout<<"Serializing G1...\n";
+		nBytes=serialize::nbytes(phirG11);
+		arrG1=new char[nBytes];
+		std::cout<<"Packing G1...\n";
+		serialize::pack(phirG11,arrG1);
+		std::cout<<"Unpacking G1...\n";
+		serialize::unpack(phirG12,arrG1);
+		std::cout<<"error = "<<(phirG11.rc-phirG12.rc)+(phirG11.tcut-phirG12.tcut)<<"\n";
 		
-		//initialize the potential
-		//set the nn pot parameters
-		std::cout<<"Setting the nn potential parameters...\n";
-		nnpot.nR()=6;
-		nnpot.nA()=8;
-		nnpot.rc()=6.0;
-		nnpot.lambda()=0.0;
-		nnpot.nh()=nh;
-		nnpot.phiRN()=PhiRN::G2;
-		nnpot.phiAN()=PhiAN::G4;
-		nnpot.tcut()=CutoffN::COS;
-		nnpot.tfType()=NN::TransferN::TANH;
-		nnpot.initSpecies(struc);
+		//serialize g1
+		std::cout<<"Serializing G2...\n";
+		nBytes=serialize::nbytes(phirG21);
+		arrG2=new char[nBytes];
+		std::cout<<"Packing G2...\n";
+		serialize::pack(phirG21,arrG2);
+		std::cout<<"Unpacking G2...\n";
+		serialize::unpack(phirG22,arrG2);
+		std::cout<<"error = "<<std::fabs(phirG21.rc-phirG22.rc)
+			+std::fabs(phirG21.tcut-phirG22.tcut)
+			+std::fabs(phirG21.eta-phirG22.eta)
+			+std::fabs(phirG21.rs-phirG22.rs)
+		<<"\n";
 		
-		//initialize the nn pot 
-		std::cout<<"Initializing the potential...\n";
-		nnpot.init();
-		
-		//initialize the symmetry functions
-		std::cout<<"Initializing the symmetry functions...\n";
-		nnpot.initSymm(struc);
-		
-		//print the potential
-		std::cout<<nnpot<<"\n";
-		
-		//calculate the inputs
-		std::cout<<"Calculating the inputs...\n";
-		nnpot.inputs_symm(struc);
-		
-		//printing the bases
-		std::cout<<"Printing the bases...\n";
-		std::cout<<"basisR = "<<nnpot.basisR()[0]<<"\n";
-		std::cout<<"basisA = "<<nnpot.basisA()(0,0)<<"\n";
-		
-		//print the inputs
-		std::cout<<"Printing the inputs...\n";
-		for(unsigned int i=0; i<struc.nAtoms(); ++i){
-			std::cout<<struc.atom(i).name()<<struc.atom(i).index()+1<<": "<<struc.atom(i).symm().transpose()<<"\n";
-		}
-		
-		//execute the network
-		std::cout<<"Executing the network...\n";
-		std::cout<<"energy = "<<nnpot.energy(struc)<<"\n";
-		
-		//print the network
-		std::cout<<"Printing the nn potential...\n";
-		//NNPot::print_chk("nn_pot_test_out.dat",nnpot);
-		std::cout<<"nn potential printed.\n";
-		
-		//load the network
-		std::cout<<"Loading the nn potential...\n";
-		//NNPot::load_chk("nn_pot_test_out.dat",nnpot);
-		std::cout<<"nn potential loaded.\n";
-		
-		std::cout<<"nnpot = "<<nnpot<<"\n";
-		
-		//print the network again
-		std::cout<<"Printing the nn potential again...\n";
-		//NNPot::print_chk("nn_pot_test_new_out.dat",nnpot);
-		std::cout<<"nn potential printed.\n";
-		
+		delete[] arrG1;
+		delete[] arrG2;
 	}catch(std::exception& e){
-		std::cout<<"ERROR in TEST - SYMM:\n";
+		std::cout<<"ERROR in TEST - SYMM - RADIAL - SERIALIZE:\n";
 		std::cout<<e.what()<<"\n";
 	}
-	std::cout<<"*********************** TEST - SYMM ***********************\n";
+	std::cout<<"************* TEST - SYMM - RADIAL - SERIALIZE *************\n";
 	std::cout<<"************************************************************\n";
 	}
 	
+	if(test_symm_angular_serialize){
+	std::cout<<"************************************************************\n";
+	std::cout<<"************ TEST - SYMM - ANGULAR - SERIALIZE ************\n";
+	try{
+		PhiA_G3 phirG31(CutoffN::COS,6,0.27884,3.589201,1);
+		PhiA_G3 phirG32(CutoffN::TANH,1,0,0,0);
+		PhiA_G4 phirG41(CutoffN::COS,6,0.248928,1.5472894,1);
+		PhiA_G4 phirG42(CutoffN::TANH,1,0,0,0);
+		char* arrG3=NULL;
+		char* arrG4=NULL;
+		unsigned int nBytes=0;
+		
+		//serialize g1
+		std::cout<<"Serializing G3...\n";
+		nBytes=serialize::nbytes(phirG31);
+		arrG3=new char[nBytes];
+		std::cout<<"Packing G3...\n";
+		serialize::pack(phirG31,arrG3);
+		std::cout<<"Unpacking G3...\n";
+		serialize::unpack(phirG32,arrG3);
+		std::cout<<"error = "<<(phirG31.rc-phirG32.rc)
+			+(phirG31.tcut-phirG32.tcut)
+			+(phirG31.eta-phirG32.eta)
+			+(phirG31.zeta-phirG32.zeta)
+			+(phirG31.lambda-phirG32.lambda)
+		<<"\n";
+		
+		//serialize g1
+		std::cout<<"Serializing G4...\n";
+		nBytes=serialize::nbytes(phirG41);
+		arrG4=new char[nBytes];
+		std::cout<<"Packing G4...\n";
+		serialize::pack(phirG41,arrG4);
+		std::cout<<"Unpacking G4...\n";
+		serialize::unpack(phirG42,arrG4);
+		std::cout<<"error = "<<std::fabs(phirG41.rc-phirG42.rc)
+			+(phirG41.tcut-phirG42.tcut)
+			+(phirG41.eta-phirG42.eta)
+			+(phirG41.zeta-phirG42.zeta)
+			+(phirG41.lambda-phirG42.lambda)
+		<<"\n";
+		
+		delete[] arrG3;
+		delete[] arrG4;
+	}catch(std::exception& e){
+		std::cout<<"ERROR in TEST - SYMM - ANGULAR - SERIALIZE:\n";
+		std::cout<<e.what()<<"\n";
+	}
+	std::cout<<"************ TEST - SYMM - ANGULAR - SERIALIZE ************\n";
+	std::cout<<"************************************************************\n";
+	}
+	
+	if(test_basis_radial_serialize){
+	std::cout<<"************************************************************\n";
+	std::cout<<"************ TEST - BASIS - RADIAL - SERIALIZE ************\n";
+	try{
+		BasisR basisR1,basisR2;
+		BasisR::init_G2(basisR1,6,CutoffN::COS,0.5,6.0);
+		BasisR::init_G2(basisR2,1,CutoffN::COS,0.5,2.0);
+		char* arr=NULL;
+		unsigned int nBytes=0;
+		std::cout<<"basis = "<<basisR1<<"\n";
+		
+		//serialize basisR
+		std::cout<<"Serializing basisR...\n";
+		nBytes=serialize::nbytes(basisR1);
+		std::cout<<"nBytes = "<<nBytes<<"\n";
+		arr=new char[nBytes];
+		std::cout<<"Packing basisR...\n";
+		serialize::pack(basisR1,arr);
+		std::cout<<"Unpacking basisR...\n";
+		serialize::unpack(basisR2,arr);
+		
+		std::cout<<"basis = "<<basisR2<<"\n";
+		
+		std::cout<<"Calculating error...\n";
+		double error=std::fabs(basisR1.phiRN-basisR2.phiRN);
+		for(unsigned int i=0; i<basisR1.fR.size(); ++i){
+			PhiR_G2& phirG21=static_cast<PhiR_G2&>(*basisR1.fR[i]);
+			PhiR_G2& phirG22=static_cast<PhiR_G2&>(*basisR2.fR[i]);
+			error+=std::fabs(phirG21.rc-phirG22.rc);
+			error+=std::fabs(phirG21.tcut-phirG22.tcut);
+			error+=std::fabs(phirG21.eta-phirG22.eta);
+			error+=std::fabs(phirG21.rs-phirG22.rs);
+		}
+		std::cout<<"error = "<<error<<"\n";
+		
+		delete[] arr;
+	}catch(std::exception& e){
+		std::cout<<"ERROR in TEST - BASIS - RADIAL - SERIALIZE:\n";
+		std::cout<<e.what()<<"\n";
+	}
+	std::cout<<"************ TEST - BASIS - RADIAL - SERIALIZE ************\n";
+	std::cout<<"************************************************************\n";
+	}
+	
+	if(test_basis_angular_serialize){
+	std::cout<<"************************************************************\n";
+	std::cout<<"************ TEST - BASIS - ANGULAR - SERIALIZE ************\n";
+	try{
+		BasisA basisA1,basisA2;
+		BasisA::init_G4(basisA1,6,CutoffN::COS,6.0);
+		BasisA::init_G4(basisA2,1,CutoffN::COS,2.0);
+		char* arr=NULL;
+		unsigned int nBytes=0;
+		std::cout<<"basis = "<<basisA1<<"\n";
+		
+		//serialize basisA
+		std::cout<<"Serializing basisA...\n";
+		nBytes=serialize::nbytes(basisA1);
+		std::cout<<"nBytes = "<<nBytes<<"\n";
+		arr=new char[nBytes];
+		std::cout<<"Packing basisA...\n";
+		serialize::pack(basisA1,arr);
+		std::cout<<"Unpacking basisA...\n";
+		serialize::unpack(basisA2,arr);
+		
+		std::cout<<"basis = "<<basisA2<<"\n";
+		
+		std::cout<<"Calculating error...\n";
+		double error=std::fabs(basisA1.phiAN-basisA2.phiAN);
+		for(unsigned int i=0; i<basisA1.fA.size(); ++i){
+			PhiA_G4& phirG41=static_cast<PhiA_G4&>(*basisA1.fA[i]);
+			PhiA_G4& phirG42=static_cast<PhiA_G4&>(*basisA2.fA[i]);
+			error+=std::fabs(phirG41.rc-phirG42.rc);
+			error+=std::fabs(phirG41.tcut-phirG42.tcut);
+			error+=std::fabs(phirG41.eta-phirG42.eta);
+			error+=std::fabs(phirG41.zeta-phirG42.zeta);
+			error+=std::fabs(phirG41.lambda-phirG42.lambda);
+		}
+		std::cout<<"error = "<<error<<"\n";
+		
+		delete[] arr;
+	}catch(std::exception& e){
+		std::cout<<"ERROR in TEST - BASIS - ANGULAR - SERIALIZE:\n";
+		std::cout<<e.what()<<"\n";
+	}
+	std::cout<<"************ TEST - BASIS - ANGULAR - SERIALIZE ************\n";
+	std::cout<<"************************************************************\n";
+	}
+	
+	if(test_io){
+	std::cout<<"************************************************************\n";
+	std::cout<<"************************ TEST - IO ************************\n";
+	try{
+		NNPot nnpot,nnpot_copy;
+		NNPot::Init nnpotInit;
+		nnpotInit.nR=6;
+		nnpotInit.nA=6;
+		nnpotInit.phiRN=PhiRN::G2;
+		nnpotInit.phiAN=PhiAN::G4;
+		nnpotInit.rm=0.5;
+		nnpotInit.rc=6;
+		nnpotInit.tcut=CutoffN::COS;
+		nnpotInit.lambda=0.0;
+		nnpotInit.tfType=NN::TransferN::TANH;
+		nnpotInit.nh.resize(1,15);
+		
+		nnpot_copy=nnpot;
+		
+		//initialize potential
+		std::cout<<"Initialize potential...\n";
+		std::vector<std::string> species(1,std::string("Si"));
+		nnpot.resize(species);
+		nnpot.init(nnpotInit);
+		nnpot.energyAtom(0)=-6.42789;
+		nnpot_copy.resize(species);
+		
+		//print the potential
+		std::cout<<"Writing potential...\n";
+		nnpot.write();
+		
+		//read the potential
+		std::cout<<"Reading potential...\n";
+		nnpot_copy.read();
+		
+		//print the potential
+		std::cout<<"Writing potential...\n";
+		nnpot_copy.header()="ann_copy_";
+		nnpot_copy.write();
+	}catch(std::exception& e){
+		std::cout<<"ERROR in TEST - IO:\n";
+		std::cout<<e.what()<<"\n";
+	}
+	std::cout<<"************************ TEST - IO ************************\n";
+	std::cout<<"************************************************************\n";
+	}
+	
+	if(test_force_radial){
+	std::cout<<"************************************************************\n";
+	std::cout<<"****************** TEST - FORCE - RADIAL ******************\n";
+	try{
+		// local variables
+		Structure<AtomT> struc;
+		NNPot nnpot;
+		Eigen::Vector3d ftot=Eigen::Vector3d::Zero();
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si.poscar",struc);
+		std::cout<<struc<<"\n";
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.read();
+		nnpot.initSymm(struc);
+		
+		//calculate force for each atom
+		std::cout<<"Calculating radial force...\n";
+		nnpot.forces_radial(struc);
+		ftot.setZero();
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).force().transpose()<<"\n";
+		}
+		std::cout<<"rc = "<<nnpot.rc()<<"\n";
+		std::cout<<"ftot = "<<ftot.transpose()<<"\n";
+		
+		nnpot.clear();
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si_n2.poscar",struc);
+		std::cout<<struc<<"\n";
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.read();
+		nnpot.initSymm(struc);
+		
+		//calculate force for each atom
+		std::cout<<"Calculating radial force...\n";
+		nnpot.forces_radial(struc);
+		ftot.setZero();
+		std::cout<<struc<<"\n";
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).posn().transpose()<<"\n";
+		}
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).force().transpose()<<"\n";
+		}
+		std::cout<<"rc = "<<nnpot.rc()<<"\n";
+		std::cout<<"ftot = "<<ftot.transpose()<<"\n";
+	}catch(std::exception& e){
+		std::cout<<"ERROR in TEST - FORCE - RADIAL:\n";
+		std::cout<<e.what()<<"\n";
+	}
+	std::cout<<"****************** TEST - FORCE - RADIAL ******************\n";
+	std::cout<<"************************************************************\n";
+	}
+	
+	if(test_force_angular){
+	std::cout<<"************************************************************\n";
+	std::cout<<"****************** TEST - FORCE - ANGULAR ******************\n";
+	try{
+		// local variables
+		Structure<AtomT> struc;
+		NNPot nnpot;
+		Eigen::Vector3d ftot=Eigen::Vector3d::Zero();
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si.poscar",struc);
+		std::cout<<struc<<"\n";
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.read();
+		nnpot.initSymm(struc);
+		
+		//calculate force for each atom
+		std::cout<<"Calculating angular force...\n";
+		nnpot.rc()=6;
+		nnpot.forces_angular(struc);
+		ftot.setZero();
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).force().transpose()<<"\n";
+		}
+		std::cout<<"ftot = "<<ftot.transpose()<<"\n";
+		
+		nnpot.clear();
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si_n2.poscar",struc);
+		std::cout<<struc<<"\n";
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.read();
+		nnpot.initSymm(struc);
+		
+		//calculate force for each atom
+		std::cout<<"Calculating angular force...\n";
+		nnpot.forces_angular(struc);
+		ftot.setZero();
+		std::cout<<struc<<"\n";
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).posn().transpose()<<"\n";
+		}
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).force().transpose()<<"\n";
+		}
+		std::cout<<"ftot = "<<ftot.transpose()<<"\n";
+		
+		nnpot.clear();
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si_n3.poscar",struc);
+		std::cout<<struc<<"\n";
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.read();
+		nnpot.initSymm(struc);
+		
+		//calculate force for each atom
+		std::cout<<"Calculating angular force...\n";
+		nnpot.forces_angular(struc);
+		ftot.setZero();
+		std::cout<<struc<<"\n";
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).posn().transpose()<<"\n";
+		}
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).force().transpose()<<"\n";
+		}
+		std::cout<<"ftot = "<<ftot.transpose()<<"\n";
+	}catch(std::exception& e){
+		std::cout<<"ERROR in TEST - FORCE - ANGULAR:\n";
+		std::cout<<e.what()<<"\n";
+	}
+	std::cout<<"****************** TEST - FORCE - ANGULAR ******************\n";
+	std::cout<<"************************************************************\n";
+	}
+	
+	if(test_force){
+	std::cout<<"************************************************************\n";
+	std::cout<<"*********************** TEST - FORCE ***********************\n";
+	try{
+		// local variables
+		Structure<AtomT> struc;
+		NNPot nnpot;
+		Eigen::Vector3d ftot=Eigen::Vector3d::Zero();
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si.poscar",struc);
+		std::cout<<struc<<"\n";
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.read();
+		nnpot.initSymm(struc);
+		
+		//calculate force for each atom
+		std::cout<<"Calculating force...\n";
+		nnpot.rc()=6;
+		nnpot.forces(struc);
+		ftot.setZero();
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).force().transpose()<<"\n";
+		}
+		std::cout<<"ftot = "<<ftot.transpose()<<"\n";
+		
+		nnpot.clear();
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si_n2.poscar",struc);
+		std::cout<<struc<<"\n";
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.read();
+		nnpot.initSymm(struc);
+		
+		//calculate force for each atom
+		std::cout<<"Calculating force...\n";
+		nnpot.forces(struc);
+		ftot.setZero();
+		std::cout<<struc<<"\n";
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).posn().transpose()<<"\n";
+		}
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).force().transpose()<<"\n";
+		}
+		std::cout<<"ftot = "<<ftot.transpose()<<"\n";
+		
+		nnpot.clear();
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si_n3.poscar",struc);
+		std::cout<<struc<<"\n";
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.read();
+		nnpot.initSymm(struc);
+		
+		//calculate force for each atom
+		std::cout<<"Calculating force...\n";
+		nnpot.forces(struc);
+		ftot.setZero();
+		std::cout<<struc<<"\n";
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).posn().transpose()<<"\n";
+		}
+		for(unsigned int n=0; n<struc.nAtoms(); ++n){
+			ftot.noalias()+=struc.atom(n).force();
+			std::cout<<struc.atom(n).name()<<" "<<struc.atom(n).force().transpose()<<"\n";
+		}
+		std::cout<<"ftot = "<<ftot.transpose()<<"\n";
+	}catch(std::exception& e){
+		std::cout<<"ERROR in TEST - FORCE:\n";
+		std::cout<<e.what()<<"\n";
+	}
+	std::cout<<"*********************** TEST - FORCE ***********************\n";
+	std::cout<<"************************************************************\n";
+	}
 }
