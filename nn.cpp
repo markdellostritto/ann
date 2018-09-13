@@ -32,8 +32,6 @@ std::ostream& operator<<(std::ostream& out, const Network& nn){
 	out<<"nn        = "<<nn.input_.size()<<" "; for(unsigned int n=0; n<nn.node_.size(); ++n) out<<nn.node_[n].size()<<" "; out<<"\n";
 	out<<"size      = "<<nn.size()<<"\n";
 	out<<"transfer  = "<<nn.tfType_<<"\n";
-	out<<"pre-cond  = "<<nn.preCond_<<"\n";
-	out<<"post-cond = "<<nn.postCond_<<"\n";
 	out<<"lambda    = "<<nn.lambda_<<"\n";
 	out<<"b-init    = "<<nn.bInit_<<"\n";
 	out<<"w-init    = "<<nn.wInit_<<"\n";
@@ -102,8 +100,8 @@ void Network::defaults(){
 		tf_.clear();
 		tfd_.clear();
 	//conditioning
-		preCond_=false;
-		postCond_=false;
+		//preCond_=false;
+		//postCond_=false;
 		preScale_.resize(0);
 		postScale_.resize(0);
 		preBias_.resize(0);
@@ -369,26 +367,8 @@ const Eigen::VectorXd& Network::execute(){
 }
 
 const Eigen::VectorXd& Network::execute(const Eigen::VectorXd& input){
-	//scale the input
 	input_.noalias()=input;
-	sinput_.noalias()=preScale_.cwiseProduct(input_+preBias_);
-	//first layer
-	node_.front()=bias_.front();
-	node_.front().noalias()+=edge_.front()*sinput_;
-	for(unsigned int n=0; n<node_.front().size(); ++n) dndz_.front()[n]=tfd_.front()(node_.front()[n]);
-	for(unsigned int n=0; n<node_.front().size(); ++n) node_.front()[n]=tf_.front()(node_.front()[n]);
-	//subsequent layers
-	for(unsigned int l=1; l<node_.size(); ++l){
-		node_[l]=bias_[l];
-		node_[l].noalias()+=edge_[l]*node_[l-1];
-		for(unsigned int n=0; n<node_[l].size(); ++n) dndz_[l][n]=tfd_[l](node_[l][n]);
-		for(unsigned int n=0; n<node_[l].size(); ++n) node_[l][n]=tf_[l](node_[l][n]);
-	}
-	//scale the output
-	output_=postBias_;
-	output_.noalias()+=node_.back().cwiseProduct(postScale_);
-	//return the output
-	return output_;
+	return execute();
 }
 
 //static functions
@@ -542,113 +522,130 @@ void Network::read(FILE* reader, Network& nn){
 	free(input);
 }
 
-double* Network::pack(const Network& nn, double* arr, unsigned int o){
-	if(NN_PRINT_FUNC>0) std::cout<<"Network::pack(const Network&,double*,unsigned int):\n";
-	//local variables
-	unsigned int count=0;
-	//parameters
-	if(NN_PRINT_STATUS>0) std::cout<<"Packing parameters...\n";
-	arr[o+(count++)]=nn.bInit();
-	arr[o+(count++)]=nn.wInit();
-	arr[o+(count++)]=nn.preCond();
-	arr[o+(count++)]=nn.postCond();
-	arr[o+(count++)]=nn.lambda();
-	arr[o+(count++)]=nn.tfType();
-	//layer sizes
-	if(NN_PRINT_STATUS>0) std::cout<<"Packing nn layer sizes...\n";
-	arr[o+(count++)]=nn.nlayer();
-	arr[o+(count++)]=nn.nInput();
-	for(unsigned int i=0; i<nn.nlayer(); ++i) arr[o+(count++)]=nn.nNodes(i);
-	//pre-/post-conditioning vectors
-	if(NN_PRINT_STATUS>0) std::cout<<"Packing pre-/post-conditioning vectors...\n";
-	for(unsigned int i=0; i<nn.nInput(); ++i) arr[o+(count++)]=nn.preBias(i);
-	for(unsigned int i=0; i<nn.nInput(); ++i) arr[o+(count++)]=nn.preScale(i);
-	for(unsigned int i=0; i<nn.nOutput(); ++i) arr[o+(count++)]=nn.postBias(i);
-	for(unsigned int i=0; i<nn.nOutput(); ++i) arr[o+(count++)]=nn.postScale(i);
-	//bias vectors
-	if(NN_PRINT_STATUS>0) std::cout<<"Packing bias vectors...\n";
-	for(unsigned int i=0; i<nn.nlayer(); ++i){
-		for(unsigned int j=0; j<nn.nNodes(i); ++j){
-			arr[o+(count++)]=nn.bias(i,j);
-		}
+}
+
+namespace serialize{
+	
+	//**********************************************
+	// byte measures
+	//**********************************************
+	
+	template <> unsigned int nbytes(const NN::Network& obj){
+		unsigned int N=0;
+		N+=sizeof(unsigned int);//nlayer_
+		N+=sizeof(unsigned int);//nInput_
+		N+=sizeof(unsigned int)*obj.nlayer();//number of nodes in each layer
+		N+=sizeof(int);//transfer function type
+		N+=sizeof(double);//lambda
+		for(unsigned int l=0; l<obj.nlayer(); ++l) N+=obj.bias(l).size()*sizeof(double);
+		for(unsigned int l=0; l<obj.nlayer(); ++l) N+=obj.edge(l).rows()*obj.edge(l).cols()*sizeof(double);
+		N+=obj.nInput()*sizeof(double);//pre-scale
+		N+=obj.nInput()*sizeof(double);//pre-bias
+		N+=obj.nOutput()*sizeof(double);//post-scale
+		N+=obj.nOutput()*sizeof(double);//post-bias
+		return N;
 	}
-	//edges
-	if(NN_PRINT_STATUS>0) std::cout<<"Packing edge matrices...\n";
-	for(unsigned int n=0; n<nn.nlayer(); ++n){
-		for(unsigned int i=0; i<nn.edge(n).cols(); ++i){
-			for(unsigned int j=0; j<nn.edge(n).rows(); ++j){
-				arr[o+(count++)]=nn.edge(n,j,i);
+	
+	//**********************************************
+	// packing
+	//**********************************************
+	
+	template <> void pack(const NN::Network& obj, char* arr){
+		unsigned int pos=0;
+		unsigned int tempInt=0;
+		std::memcpy(arr+pos,&(tempInt=obj.nlayer()),sizeof(unsigned int)); pos+=sizeof(unsigned int);
+		std::memcpy(arr+pos,&(tempInt=obj.nInput()),sizeof(unsigned int)); pos+=sizeof(unsigned int);
+		for(unsigned int l=0; l<obj.nlayer(); ++l){
+			std::memcpy(arr+pos,&(tempInt=obj.nNodes(l)),sizeof(unsigned int)); pos+=sizeof(unsigned int);
+		}
+		//transfer function type
+		std::memcpy(arr+pos,&(obj.tfType()),sizeof(obj.tfType())); pos+=sizeof(obj.tfType());
+		//lambda
+		std::memcpy(arr+pos,&(obj.lambda()),sizeof(double)); pos+=sizeof(double);
+		//bias
+		for(unsigned int l=0; l<obj.nlayer(); ++l){
+			for(unsigned int n=0; n<obj.bias(l).size(); ++n){
+				std::memcpy(arr+pos,&(obj.bias(l,n)),sizeof(double)); pos+=sizeof(double);
 			}
 		}
-	}
-	//return the array
-	if(NN_PRINT_STATUS>0) std::cout<<"Returning array...\n";
-	return arr;
-}
-
-const Network& Network::unpack(Network& nn, const double* arr, unsigned int o){
-	if(NN_PRINT_FUNC>0) std::cout<<"Network::unpack(Network&,const double*,unsigned int):\n";
-	//local variables
-	unsigned int count=0;
-	//parameters
-	if(NN_PRINT_STATUS>0) std::cout<<"Unpacking parameters...\n";
-	nn.bInit()=arr[o+(count++)];
-	nn.wInit()=arr[o+(count++)];
-	nn.preCond()=arr[o+(count++)];
-	nn.postCond()=arr[o+(count++)];
-	nn.lambda()=arr[o+(count++)];
-	nn.tfType()=static_cast<TransferN::type>(arr[o+(count++)]);
-	//layer sizes
-	if(NN_PRINT_STATUS>0) std::cout<<"Unpacking nn layer sizes...\n";
-	unsigned int nlayer=arr[o+(count++)];
-	unsigned int nInput=arr[o+(count++)];
-	std::vector<unsigned int> nNodes(nlayer,0);
-	for(unsigned int i=0; i<nn.nlayer(); ++i) nNodes[i]=arr[o+(count++)];
-	//resize the neural network
-	if(NN_PRINT_STATUS>0) std::cout<<"Resizing the neural network...\n";
-	nn.resize(nInput,nNodes);
-	//pre-/post-conditioning
-	if(NN_PRINT_STATUS>0) std::cout<<"Packing pre-/post-conditioning vectors...\n";
-	for(unsigned int i=0; i<nn.nInput(); ++i) nn.preBias(i)=arr[o+(count++)];
-	for(unsigned int i=0; i<nn.nInput(); ++i) nn.preScale(i)=arr[o+(count++)];
-	for(unsigned int i=0; i<nn.nOutput(); ++i) nn.postBias(i)=arr[o+(count++)];
-	for(unsigned int i=0; i<nn.nOutput(); ++i) nn.postScale(i)=arr[o+(count++)];
-	//bias vectors
-	if(NN_PRINT_STATUS>0) std::cout<<"Unpacking bias vectors...\n";
-	for(unsigned int i=0; i<nn.nlayer(); ++i){
-		for(unsigned int j=0; j<nn.nNodes(i); ++j){
-			nn.bias(i,j)=arr[o+(count++)];
-		}
-	}
-	//edges
-	if(NN_PRINT_STATUS>0) std::cout<<"Unpacking edge matrices...\n";
-	for(unsigned int n=0; n<nn.nlayer(); ++n){
-		for(unsigned int i=0; i<nn.edge(n).cols(); ++i){
-			for(unsigned int j=0; j<nn.edge(n).rows(); ++j){
-				nn.edge(n,j,i)=arr[o+(count++)];
+		//edge
+		for(unsigned int l=0; l<obj.nlayer(); ++l){
+			for(unsigned int n=0; n<obj.edge(l).cols(); ++n){
+				for(unsigned int m=0; m<obj.edge(l).rows(); ++m){
+					std::memcpy(arr+pos,&(obj.edge(l,m,n)),sizeof(double)); pos+=sizeof(double);
+				}
 			}
 		}
+		//pre-scale
+		for(unsigned int i=0; i<obj.nInput(); ++i){
+			std::memcpy(arr+pos,&(obj.preScale(i)),sizeof(double)); pos+=sizeof(double);
+		}
+		//pre-bias
+		for(unsigned int i=0; i<obj.nInput(); ++i){
+			std::memcpy(arr+pos,&(obj.preBias(i)),sizeof(double)); pos+=sizeof(double);
+		}
+		//post-scale
+		for(unsigned int i=0; i<obj.nOutput(); ++i){
+			std::memcpy(arr+pos,&(obj.postScale(i)),sizeof(double)); pos+=sizeof(double);
+		}
+		//post-bias
+		for(unsigned int i=0; i<obj.nOutput(); ++i){
+			std::memcpy(arr+pos,&(obj.postBias(i)),sizeof(double)); pos+=sizeof(double);
+		}
 	}
-	//return the network
-	if(NN_PRINT_STATUS>0) std::cout<<"Returning nn...\n";
-	return nn;
-}
-
-unsigned int Network::store(const Network& nn){
-	if(NN_PRINT_FUNC>0) std::cout<<"Network::store(const Network&):\n";
-	unsigned int size=0;
-	//parameters
-	size+=6;
-	//layer sizes
-	size+=2+nn.nlayer();
-	//pre-/post-conditioning vectors
-	size+=nn.nInput()*2+nn.nOutput()*2;
-	//bias vectors
-	for(unsigned int i=0; i<nn.nlayer(); ++i) size+=nn.nNodes(i);
-	//edge matrices
-	for(unsigned int n=0; n<nn.nlayer(); ++n) size+=nn.edge(n).rows()*nn.edge(n).cols();
-	//return size
-	return size;
-}
-
+	
+	//**********************************************
+	// unpacking
+	//**********************************************
+	
+	template <> void unpack(NN::Network& obj, const char* arr){
+		//local variables
+		unsigned int pos=0;
+		unsigned int nlayer=0,nInput=0;
+		std::vector<unsigned int> nNodes;
+		//load network configuration
+		std::memcpy(&nlayer,arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
+		nNodes.resize(nlayer,0);
+		std::memcpy(&nInput,arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
+		for(unsigned int i=0; i<nlayer; ++i){
+			std::memcpy(&nNodes[i],arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
+		}
+		//transfer function type
+		std::memcpy(&(obj.tfType()),arr+pos,sizeof(obj.tfType())); pos+=sizeof(obj.tfType());
+		//lambda
+		std::memcpy(&(obj.lambda()),arr+pos,sizeof(double)); pos+=sizeof(double);
+		//resize the network
+		obj.resize(nInput,nNodes);
+		//bias
+		for(unsigned int l=0; l<obj.nlayer(); ++l){
+			for(unsigned int n=0; n<obj.bias(l).size(); ++n){
+				std::memcpy(&(obj.bias(l,n)),arr+pos,sizeof(double)); pos+=sizeof(double);
+			}
+		}
+		//edge
+		for(unsigned int l=0; l<obj.nlayer(); ++l){
+			for(unsigned int n=0; n<obj.edge(l).cols(); ++n){
+				for(unsigned int m=0; m<obj.edge(l).rows(); ++m){
+					std::memcpy(&(obj.edge(l,m,n)),arr+pos,sizeof(double)); pos+=sizeof(double);
+				}
+			}
+		}
+		//pre-scale
+		for(unsigned int i=0; i<obj.nInput(); ++i){
+			std::memcpy(&(obj.preScale(i)),arr+pos,sizeof(double)); pos+=sizeof(double);
+		}
+		//pre-bias
+		for(unsigned int i=0; i<obj.nInput(); ++i){
+			std::memcpy(&(obj.preBias(i)),arr+pos,sizeof(double)); pos+=sizeof(double);
+		}
+		//post-scale
+		for(unsigned int i=0; i<obj.nOutput(); ++i){
+			std::memcpy(&(obj.postScale(i)),arr+pos,sizeof(double)); pos+=sizeof(double);
+		}
+		//post-bias
+		for(unsigned int i=0; i<obj.nOutput(); ++i){
+			std::memcpy(&(obj.postBias(i)),arr+pos,sizeof(double)); pos+=sizeof(double);
+		}
+	};
+	
 }

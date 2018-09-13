@@ -1,5 +1,5 @@
-#ifndef NN_HPP
-#define NN_HPP
+#ifndef ANN_NN_HPP
+#define ANN_NN_HPP
 
 // c libraries
 #include <cstdlib>
@@ -7,14 +7,16 @@
 #include <ctime>
 // c++ libraries
 #include <iostream>
-// eigen libraries
+// ann library - eigen utilities
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
-// local libraries - math 
+// ann library - math 
 #include "math_const.hpp"
 #include "math_special.hpp"
-// local libraries - string
+// ann library - string
 #include "string.hpp"
+// ann library - serialization
+#include "serialize.hpp"
 
 namespace NN{
 	
@@ -53,10 +55,10 @@ class NNOpt;
 
 struct TransferN{
 	enum type{
-		UNKNOWN,
-		TANH,
-		SIGMOID,
-		LINEAR
+		UNKNOWN=-1,
+		TANH=0,
+		SIGMOID=1,
+		LINEAR=2
 	};
 	static type load(const char* str);
 };
@@ -108,24 +110,24 @@ private:
 		std::vector<std::function<double(double)> > tf_;//transfer function - input for indexed layer (nlayer_)
 		std::vector<std::function<double(double)> > tfd_;//transfer derivative - input for indexed layer (nlayer_)
 	//conditioning
-		bool preCond_;//precondition input
-		bool postCond_;//precondition output
+		//bool preCond_;//precondition input
+		//bool postCond_;//precondition output
 	//regularization
 		double lambda_;//regularization weight
 public:
-	//friend declarations
+	//======== friend declarations ========
 	friend class NNOpt;
 	
-	//constructors/destructors
+	//======== constructors/destructors ========
 	Network(){defaults();};
 	~Network(){};
 	
-	/* operators */
+	//======== operators ========
 	friend std::ostream& operator<<(std::ostream& out, const Network& n);
 	friend Eigen::VectorXd& operator>>(const Network& nn, Eigen::VectorXd& v);
 	friend Network& operator<<(Network& nn, const Eigen::VectorXd& v);
 	
-	/* access */
+	//======== access ========
 	//network dimensions
 		unsigned int nlayer()const{return nlayer_;};
 		unsigned int nhidden()const{return nlayer_-1;};
@@ -192,15 +194,15 @@ public:
 		std::function<double(double)>& tfd(unsigned int l){return tfd_[l];};
 		const std::function<double(double)>& tfd(unsigned int l)const{return tfd_[l];};
 	//conditioning
-		bool& preCond(){return preCond_;};
-		const bool& preCond()const{return preCond_;};
-		bool& postCond(){return postCond_;};
-		const bool& postCond()const{return postCond_;};
+		//bool& preCond(){return preCond_;};
+		//const bool& preCond()const{return preCond_;};
+		//bool& postCond(){return postCond_;};
+		//const bool& postCond()const{return postCond_;};
 	//regularization
 		double& lambda(){return lambda_;};
 		const double& lambda()const{return lambda_;};
 		
-	/* member functions */
+	//======== member functions ========
 	//clearing/initialization
 		void defaults();
 		void clear();
@@ -219,16 +221,35 @@ public:
 		const Eigen::VectorXd& execute();
 		const Eigen::VectorXd& execute(const Eigen::VectorXd& input);
 		
-	//static functions
+	//======== static functions ========
 	static void write(FILE* writer, const Network& nn);
 	static void write(const char*, const Network& nn);
 	static void read(FILE* writer, Network& nn);
 	static void read(const char*, Network& nn);
-	static double* pack(const Network& nn, double* arr, unsigned int o=0);
-	static const Network& unpack(Network& nn, const double* arr, unsigned int o=0);
-	static unsigned int store(const Network& nn);
 };
 
+}
+
+namespace serialize{
+	
+	//**********************************************
+	// byte measures
+	//**********************************************
+	
+	template <> unsigned int nbytes(const NN::Network& obj);
+	
+	//**********************************************
+	// packing
+	//**********************************************
+	
+	template <> void pack(const NN::Network& obj, char* arr);
+	
+	//**********************************************
+	// unpacking
+	//**********************************************
+	
+	template <> void unpack(NN::Network& obj, const char* arr);
+	
 }
 
 #endif
