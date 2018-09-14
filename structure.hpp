@@ -384,7 +384,6 @@ std::ostream& operator<<(std::ostream& out, const StructureS<AtomT>& sim){
 template <class AtomT>
 void StructureS<AtomT>::clear(){
 	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::clear():\n";
-	StructureI::clear();
 	//clear property arrays
 	atom_name_.clear();
 	atom_an_.clear();
@@ -663,7 +662,7 @@ void Structure<AtomT>::resize(const std::vector<unsigned int>& nAtoms, const std
 	for(unsigned int n=0; n<nSpecies_; ++n){
 		for(unsigned int m=0; m<nAtoms_[n]; ++m){
 			this->atom_name_[count]=this->atomNames_[n];
-			this->atom_an_[count]=PTable::atomicNumber(this->atomNames_[n].c_str());
+			this->atom_an_[count]=PTable::an(this->atomNames_[n].c_str());
 			this->atom_specie_[count]=n;
 			this->atom_index_[count]=m;
 			++count;
