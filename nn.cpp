@@ -157,7 +157,7 @@ void Network::resize(unsigned int nInput, const std::vector<unsigned int>& nNode
 }
 
 void Network::resize(unsigned int nInput, const std::vector<unsigned int>& nNodes){
-	if(NN_PRINT_FUNC) std::cout<<"Network::resize(unsigned int,const std::vector<unsigned int>&):\n";
+	if(NN_PRINT_FUNC>0) std::cout<<"Network::resize(unsigned int,const std::vector<unsigned int>&):\n";
 	//initialize the random number generator
 		std::srand(std::time(NULL));
 	//clear the network
@@ -352,12 +352,16 @@ const Eigen::VectorXd& Network::execute(){
 	node_.front().noalias()+=edge_.front()*sinput_;
 	for(unsigned int n=0; n<node_.front().size(); ++n) dndz_.front()[n]=tfd_.front()(node_.front()[n]);
 	for(unsigned int n=0; n<node_.front().size(); ++n) node_.front()[n]=tf_.front()(node_.front()[n]);
+	//for(unsigned int n=0; n<node_.front().size(); ++n) dndz_.front()[n]=(*tfd_.front())(node_.front()[n]);
+	//for(unsigned int n=0; n<node_.front().size(); ++n) node_.front()[n]=(*tf_.front())(node_.front()[n]);
 	//subsequent layers
 	for(unsigned int l=1; l<node_.size(); ++l){
 		node_[l]=bias_[l];
 		node_[l].noalias()+=edge_[l]*node_[l-1];
 		for(unsigned int n=0; n<node_[l].size(); ++n) dndz_[l][n]=tfd_[l](node_[l][n]);
 		for(unsigned int n=0; n<node_[l].size(); ++n) node_[l][n]=tf_[l](node_[l][n]);
+		//for(unsigned int n=0; n<node_[l].size(); ++n) dndz_[l][n]=(*tfd_[l])(node_[l][n]);
+		//for(unsigned int n=0; n<node_[l].size(); ++n) node_[l][n]=(*tf_[l])(node_[l][n]);
 	}
 	//scale the output
 	output_=postBias_;
@@ -367,7 +371,7 @@ const Eigen::VectorXd& Network::execute(){
 }
 
 const Eigen::VectorXd& Network::execute(const Eigen::VectorXd& input){
-	input_.noalias()=input;
+	input_=input;
 	return execute();
 }
 

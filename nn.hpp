@@ -3,6 +3,7 @@
 
 // c libraries
 #include <cstdlib>
+#include <cstdio>
 #include <cmath>
 #include <ctime>
 // c++ libraries
@@ -11,7 +12,6 @@
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
 // ann library - math 
-#include "math_const.hpp"
 #include "math_special.hpp"
 // ann library - string
 #include "string.hpp"
@@ -86,6 +86,8 @@ struct TransferFD{
 
 class Network{
 private:
+	//typedefs
+		typedef double (*FuncP)(double);
 	//network dimensions
 		unsigned int nlayer_;//number of layers of the network (hidden + output)
 	//initialize
@@ -109,9 +111,8 @@ private:
 		TransferN::type tfType_;//transfer function type
 		std::vector<std::function<double(double)> > tf_;//transfer function - input for indexed layer (nlayer_)
 		std::vector<std::function<double(double)> > tfd_;//transfer derivative - input for indexed layer (nlayer_)
-	//conditioning
-		//bool preCond_;//precondition input
-		//bool postCond_;//precondition output
+		//std::vector<FuncP> tf_;//transfer function - input for indexed layer (nlayer_)
+		//std::vector<FuncP> tfd_;//transfer derivative - input for indexed layer (nlayer_)
 	//regularization
 		double lambda_;//regularization weight
 public:
@@ -193,11 +194,10 @@ public:
 		const std::function<double(double)>& tf(unsigned int l)const{return tf_[l];};
 		std::function<double(double)>& tfd(unsigned int l){return tfd_[l];};
 		const std::function<double(double)>& tfd(unsigned int l)const{return tfd_[l];};
-	//conditioning
-		//bool& preCond(){return preCond_;};
-		//const bool& preCond()const{return preCond_;};
-		//bool& postCond(){return postCond_;};
-		//const bool& postCond()const{return postCond_;};
+		//FuncP tf(unsigned int l){return tf_[l];};
+		//const FuncP tf(unsigned int l)const{return tf_[l];};
+		//FuncP tfd(unsigned int l){return tfd_[l];};
+		//const FuncP tfd(unsigned int l)const{return tfd_[l];};
 	//regularization
 		double& lambda(){return lambda_;};
 		const double& lambda()const{return lambda_;};
