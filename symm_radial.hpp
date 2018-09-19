@@ -30,8 +30,6 @@ struct PhiR{
 	virtual ~PhiR(){};
 	virtual double operator()(double r)const noexcept=0;
 	virtual double val(double r)const noexcept=0;
-	virtual double amp(double r)const noexcept=0;
-	virtual double cut(double r)const noexcept=0;
 	virtual double grad(double r)const noexcept=0;
 };
 std::ostream& operator<<(std::ostream& out, const PhiR& f);
