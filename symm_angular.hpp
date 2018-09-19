@@ -5,7 +5,9 @@
 #include <cstring>
 // c++ libraries
 #include <iostream>
-// local libraries
+// local libraries - numerical constants
+#include "math_const.hpp"
+// local libraries - cutoff
 #include "cutoff.hpp"
 // local libraries - serialization
 #include "serialize.hpp"
@@ -33,7 +35,9 @@ struct PhiA{
 	virtual double angle(double cos)const noexcept=0;
 	virtual double dist(double ri, double rj, double rij)const noexcept=0;
 	virtual double grad_angle(double cos)const noexcept=0;
-	virtual double grad_dist(double rij, double rik, double rjk, unsigned int gindex)const=0;
+	virtual double grad_dist_0(double rij, double rik, double rjk)const noexcept=0;
+	virtual double grad_dist_1(double rij, double rik, double rjk)const noexcept=0;
+	virtual double grad_dist_2(double rij, double rik, double rjk)const noexcept=0;
 };
 std::ostream& operator<<(std::ostream& out, const PhiA& f);
 
