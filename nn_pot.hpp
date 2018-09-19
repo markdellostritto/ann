@@ -23,6 +23,8 @@
 #include "optimize.hpp"
 // map
 #include "map.hpp"
+// math
+#include "math_const.hpp"
 // basis functions
 #include "cutoff.hpp"
 #include "basis_radial.hpp"

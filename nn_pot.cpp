@@ -135,13 +135,13 @@ void NNPot::init(const NNPot::Init& init_){
 		if(init_.phiRN==PhiRN::G1){
 			for(unsigned int n=0; n<speciesMap_.size(); ++n){
 				for(unsigned int i=0; i<speciesMap_.size(); ++i){
-					BasisR::init_G1(basisR_[n][i],init_.tcut,init_.rm,init_.rc);
+					basisR_[n][i].init_G1(init_.tcut,init_.rm,init_.rc);
 				}
 			}
 		} else if(init_.phiRN==PhiRN::G2){
 			for(unsigned int n=0; n<speciesMap_.size(); ++n){
 				for(unsigned int i=0; i<speciesMap_.size(); ++i){
-					BasisR::init_G2(basisR_[n][i],init_.nR,init_.tcut,init_.rm,init_.rc);
+					basisR_[n][i].init_G2(init_.nR,init_.tcut,init_.rm,init_.rc);
 				}
 			}
 		} else throw std::invalid_argument("Invalid radial basis type");
@@ -152,7 +152,7 @@ void NNPot::init(const NNPot::Init& init_){
 			for(unsigned int n=0; n<speciesMap_.size(); ++n){
 				for(unsigned int i=0; i<basisA_[n].n(); ++i){
 					for(unsigned int j=i; j<basisA_[n].n(); ++j){
-						BasisA::init_G3(basisA_[n](j,i),init_.nA,init_.tcut,init_.rc);
+						basisA_[n](j,i).init_G3(init_.nA,init_.tcut,init_.rc);
 					}
 				}
 			}
@@ -160,7 +160,7 @@ void NNPot::init(const NNPot::Init& init_){
 			for(unsigned int n=0; n<speciesMap_.size(); ++n){
 				for(unsigned int i=0; i<speciesMap_.size(); ++i){
 					for(unsigned int j=i; j<speciesMap_.size(); ++j){
-						BasisA::init_G4(basisA_[n](j,i),init_.nA,init_.tcut,init_.rc);
+						basisA_[n](j,i).init_G4(init_.nA,init_.tcut,init_.rc);
 					}
 				}
 			}
@@ -174,24 +174,24 @@ void NNPot::init(const NNPot::Init& init_){
 		offsetA_.resize(speciesMap_.size(),LMat<unsigned int>(speciesMap_.size()));
 		for(unsigned int n=0; n<speciesMap_.size(); ++n){
 			for(unsigned int i=0; i<speciesMap_.size(); ++i){
-				nInputR_[n]+=basisR_[n][i].fR.size();
+				nInputR_[n]+=basisR_[n][i].nfR();
 			}
 		}
 		for(unsigned int n=0; n<speciesMap_.size(); ++n){
 			for(unsigned int i=1; i<speciesMap_.size(); ++i){
-				offsetR_[n][i]=offsetR_[n][i-1]+basisR_[n][i-1].fR.size();
+				offsetR_[n][i]=offsetR_[n][i-1]+basisR_[n][i-1].nfR();
 			}
 		}
 		for(unsigned int n=0; n<speciesMap_.size(); ++n){
 			for(unsigned int i=0; i<speciesMap_.size(); ++i){
 				for(unsigned int j=i; j<speciesMap_.size(); ++j){
-					nInputA_[n]+=basisA_[n](j,i).fA.size();
+					nInputA_[n]+=basisA_[n](j,i).nfA();
 				}
 			}
 		}
 		for(unsigned int n=0; n<speciesMap_.size(); ++n){
 			for(unsigned int i=1; i<basisA_.size(); ++i){
-				offsetA_[n][i]=offsetA_[n][i-1]+basisA_[n][i-1].fA.size();
+				offsetA_[n][i]=offsetA_[n][i-1]+basisA_[n][i-1].nfA();
 			}
 		}
 		for(unsigned int n=0; n<speciesMap_.size(); ++n) nInput_[n]=nInputR_[n]+nInputA_[n];
@@ -357,7 +357,6 @@ void NNPot::inputs_symm(Structure<AtomT>& struc){
 	//loop over all atoms
 	if(NN_POT_PRINT_STATUS>0) std::cout<<"calculating symmetry functions...\n";
 	for(unsigned int i=0; i<struc.nAtoms(); ++i){
-		double dIJ,dIK,dJK;
 		//find the index of the species of atom j
 		unsigned int II=speciesMap_[struc.atom(i).name()];
 		//reset the inputs
@@ -375,12 +374,12 @@ void NNPot::inputs_symm(Structure<AtomT>& struc){
 			Cell::diff(struc.atom(i).posn(),struc.atom(j).posn(),rIJ_,struc.cell().R(),struc.cell().RInv());
 			//loop over lattice vector shifts
 			for(unsigned short idIJ=0; idIJ<R_.size(); ++idIJ){
-				rIJt_.noalias()=rIJ_; rIJt_.noalias()+=R_[idIJ]; dIJ=rIJt_.norm();
+				rIJt_.noalias()=rIJ_; rIJt_.noalias()+=R_[idIJ]; double dIJ=rIJt_.norm();
 				if(dIJ<rc_){
 					if(NN_POT_PRINT_STATUS>2) std::cout<<"Setting radial symmetry functions...\n";
 					//compute the IJ contribution to all radial basis functions
-					for(unsigned int nr=0; nr<basisR_[II][JJ].fR.size(); ++nr){
-						struc.atom(i).symm()[offsetR_[II][JJ]+nr]+=basisR_[II][JJ].fR[nr]->val(dIJ);
+					for(unsigned int nr=0; nr<basisR_[II][JJ].nfR(); ++nr){
+						struc.atom(i).symm()[offsetR_[II][JJ]+nr]+=basisR_[II][JJ].fR(nr).val(dIJ);
 					}
 					//loop over all triplets
 					for(unsigned int k=0; k<struc.nAtoms(); ++k){
@@ -393,14 +392,14 @@ void NNPot::inputs_symm(Structure<AtomT>& struc){
 						Cell::diff(struc.atom(j).posn(),struc.atom(k).posn(),rJK_,struc.cell().R(),struc.cell().RInv());
 						//loop over all cell shifts
 						for(unsigned short idIK=0; idIK<R_.size(); ++idIK){
-							rIKt_=rIK_; rIKt_.noalias()+=R_[idIK]; dIK=rIKt_.norm();
+							rIKt_=rIK_; rIKt_.noalias()+=R_[idIK]; double dIK=rIKt_.norm();
 							for(unsigned short idJK=0; idJK<R_.size(); ++idJK){
-								rJKt_=rJK_; rJKt_.noalias()+=R_[idJK]; dJK=rJKt_.norm();
+								rJKt_=rJK_; rJKt_.noalias()+=R_[idJK]; double dJK=rJKt_.norm();
 								if(dIK<rc_ && dJK<rc_){
 									//compute the IJ,IK,JK contribution to all angular basis functions
 									double cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
-									for(unsigned int na=0; na<basisA_[II](JJ,KK).fA.size(); ++na){
-										struc.atom(i).symm()[nInputR_[II]+offsetA_[II](JJ,KK)+na]+=basisA_[II](JJ,KK).fA[na]->val(cosIJK,dIJ,dIK,dJK);
+									for(unsigned int na=0; na<basisA_[II](JJ,KK).nfA(); ++na){
+										struc.atom(i).symm()[nInputR_[II]+offsetA_[II](JJ,KK)+na]+=basisA_[II](JJ,KK).fA(na).val(cosIJK,dIJ,dIK,dJK);
 									}
 								}
 							}
@@ -436,8 +435,6 @@ void NNPot::forces(Structure<AtomT>& struc){
 	inputs_symm(struc);
 	//loop over all atoms
 	for(unsigned int i=0; i<struc.nAtoms(); ++i){
-		//local loop variables
-		double dIJ,dIK,dJK;
 		//find the index of the species of atom i
 		unsigned int II=speciesMap_[struc.atom(i).name()];
 		//execute the appropriate network
@@ -455,15 +452,16 @@ void NNPot::forces(Structure<AtomT>& struc){
 			Cell::diff(struc.atom(i).posn(),struc.atom(j).posn(),rIJ_,struc.cell().R(),struc.cell().RInv());
 			//loop over lattice vector shifts
 			for(unsigned short idIJ=0; idIJ<R_.size(); ++idIJ){
-				rIJt_=rIJ_; rIJt_.noalias()+=R_[idIJ]; dIJ=rIJt_.norm();
+				rIJt_=rIJ_; rIJt_.noalias()+=R_[idIJ]; double dIJ=rIJt_.norm();
 				if(dIJ<rc_){
+					rIJt_/=dIJ;
 					//compute the IJ contribution to the radial force
-					Eigen::Vector3d ftemp=Eigen::Vector3d::Zero();
-					for(unsigned int nr=0; nr<basisR_[II][JJ].fR.size(); ++nr){
-						ftemp+=-1*rIJt_/dIJ*dEdG[offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR[nr]->grad(dIJ);
+					double ftemp=0;
+					for(unsigned int nr=0; nr<basisR_[II][JJ].nfR(); ++nr){
+						ftemp-=dEdG[offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR(nr).grad(dIJ);
 					}
-					struc.atom(i).force().noalias()+=ftemp;
-					struc.atom(j).force().noalias()-=ftemp;
+					struc.atom(i).force().noalias()+=ftemp*rIJt_;
+					struc.atom(j).force().noalias()-=ftemp*rIJt_;
 					//loop over all triplets
 					for(unsigned int k=0; k<struc.nAtoms(); ++k){
 						if(k==i || k==j) continue;
@@ -475,12 +473,11 @@ void NNPot::forces(Structure<AtomT>& struc){
 						Cell::diff(struc.atom(j).posn(),struc.atom(k).posn(),rJK_,struc.cell().R(),struc.cell().RInv());
 						//loop over all cell shifts
 						for(unsigned short idIK=0; idIK<R_.size(); ++idIK){
-							rIKt_=rIK_; rIKt_.noalias()+=R_[idIK]; dIK=rIKt_.norm();
+							rIKt_=rIK_; rIKt_.noalias()+=R_[idIK]; double dIK=rIKt_.norm();
 							for(unsigned short idJK=0; idJK<R_.size(); ++idJK){
-								rJKt_=rJK_; rJKt_.noalias()+=R_[idJK]; dJK=rJKt_.norm();
+								rJKt_=rJK_; rJKt_.noalias()+=R_[idJK]; double dJK=rJKt_.norm();
 								if(dIK<rc_ && dJK<rc_){
 									//compute the IJ,IK,JK contribution to the angular force
-									double cosIJK,amp;
 									//==== first version - mathematically more transparent, but less efficient, have to skip around memory a lot ====
 									/*
 									for(unsigned int na=0; na<basisA_[II](JJ,KK).fA.size(); ++na){
@@ -519,29 +516,24 @@ void NNPot::forces(Structure<AtomT>& struc){
 									*/
 									//==== second version - mathematically more obtuse, but more efficient, better memory locality ====
 									///*
-									Eigen::Vector3d fij1=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fij2=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fik1=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fik2=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fij=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fik=Eigen::Vector3d::Zero();
-									for(unsigned int na=0; na<basisA_[II](JJ,KK).fA.size(); ++na){
+									double fij1=0,fij2=0,fik1=0,fik2=0;
+									rIKt_/=dIK;
+									double amp,cosIJK=rIJt_.dot(rIKt_);
+									for(unsigned int na=0; na<basisA_[II](JJ,KK).nfA(); ++na){
 										//gradient - cosine - central atom
-										cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
-										amp=-0.5*basisA_[II](JJ,KK).fA[na]->grad_angle(cosIJK)*basisA_[II](JJ,KK).fA[na]->dist(dIJ,dIK,dJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
-										fij1.noalias()+=amp*(-cosIJK/dIJ)*rIJt_/dIJ;
-										fij2.noalias()+=amp*(1.0/dIK)*rIJt_/dIJ;
-										fik1.noalias()+=amp*(-cosIJK/dIK)*rIKt_/dIK;
-										fik2.noalias()+=amp*(1.0/dIJ)*rIKt_/dIK;
+										amp=-0.5*basisA_[II](JJ,KK).fA(na).grad_angle(cosIJK)*basisA_[II](JJ,KK).fA(na).dist(dIJ,dIK,dJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
+										fij1+=amp*(-cosIJK/dIJ);
+										fij2+=amp*(1.0/dIK);
+										fik1+=amp*(-cosIJK/dIK);
+										fik2+=amp*(1.0/dIJ);
 										//gradient distance - central atom
-										amp=-0.5*basisA_[II](JJ,KK).fA[na]->angle(cosIJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
-										fij.noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
-										fik.noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
+										amp=-0.5*basisA_[II](JJ,KK).fA(na).angle(cosIJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
+										fij1+=amp*basisA_[II](JJ,KK).fA(na).grad_dist_0(dIJ,dIK,dJK);
+										fik1+=amp*basisA_[II](JJ,KK).fA(na).grad_dist_1(dIJ,dIK,dJK);
 									}
-									struc.atom(i).force().noalias()+=fij1+fij2+fij;
-									struc.atom(i).force().noalias()+=fik1+fik2+fik;
-									struc.atom(j).force().noalias()-=fij1+fik2+fij;
-									struc.atom(k).force().noalias()-=fik1+fij2+fik;
+									struc.atom(i).force().noalias()+=(fij1+fij2)*rIJt_+(fik1+fik2)*rIKt_;
+									struc.atom(j).force().noalias()-=fij1*rIJt_+fik2*rIKt_;
+									struc.atom(k).force().noalias()-=fik1*rIKt_+fij2*rIJt_;
 									//*/
 								}
 							}
@@ -598,6 +590,7 @@ void NNPot::forces_radial(Structure<AtomT>& struc){
 			for(unsigned short idIJ=0; idIJ<R_.size(); ++idIJ){
 				rIJt_=rIJ_; rIJt_.noalias()+=R_[idIJ]; double dIJ=rIJt_.norm();
 				if(dIJ<rc_){
+					//first version - mathematically simpler, less efficient
 					//compute the IJ contribution to all radial basis functions
 					/*for(unsigned int nr=0; nr<basisR_[II][JJ].fR.size(); ++nr){
 						struc.atom(i).force().noalias()+=-1*rIJt_/dIJ*(
@@ -605,9 +598,11 @@ void NNPot::forces_radial(Structure<AtomT>& struc){
 							+dEdG_[j][offsetR_[JJ][II]+nr]*basisR_[JJ][II].fR[nr]->grad(dIJ)
 						);
 					}*/
+					//second version - mathematically more obtuse, more efficient
+					rIJt_/=dIJ;
 					Eigen::Vector3d ftemp=Eigen::Vector3d::Zero();
-					for(unsigned int nr=0; nr<basisR_[II][JJ].fR.size(); ++nr){
-						ftemp+=-1*rIJt_/dIJ*dEdG[offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR[nr]->grad(dIJ);
+					for(unsigned int nr=0; nr<basisR_[II][JJ].nfR(); ++nr){
+						ftemp.noalias()+=-1*rIJt_*dEdG[offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR(nr).grad(dIJ);
 					}
 					struc.atom(i).force().noalias()+=ftemp;
 					struc.atom(j).force().noalias()-=ftemp;
@@ -678,7 +673,6 @@ void NNPot::forces_angular(Structure<AtomT>& struc){
 								rJKt_=rJK_; rJKt_.noalias()+=R_[idJK]; dJK=rJKt_.norm();
 								if(dIK<rc_ && dJK<rc_){
 									//compute the IJ,IK,JK contribution to the angular force
-									double cosIJK,amp;
 									//==== first version - mathematically more transparent, but less efficient, have to skip around memory a lot ====
 									/*
 									for(unsigned int na=0; na<basisA_[II](JJ,KK).fA.size(); ++na){
@@ -721,25 +715,26 @@ void NNPot::forces_angular(Structure<AtomT>& struc){
 									Eigen::Vector3d fij2=Eigen::Vector3d::Zero();
 									Eigen::Vector3d fik1=Eigen::Vector3d::Zero();
 									Eigen::Vector3d fik2=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fij=Eigen::Vector3d::Zero();
-									Eigen::Vector3d fik=Eigen::Vector3d::Zero();
-									for(unsigned int na=0; na<basisA_[II](JJ,KK).fA.size(); ++na){
+									//Eigen::Vector3d fij=Eigen::Vector3d::Zero();
+									//Eigen::Vector3d fik=Eigen::Vector3d::Zero();
+									rIJt_/=dIJ; rIKt_/=dIK;
+									double amp,cosIJK=rIJt_.dot(rIKt_);
+									for(unsigned int na=0; na<basisA_[II](JJ,KK).nfA(); ++na){
 										//gradient - cosine - central atom
-										cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
-										amp=-0.5*basisA_[II](JJ,KK).fA[na]->grad_angle(cosIJK)*basisA_[II](JJ,KK).fA[na]->dist(dIJ,dIK,dJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
-										fij1.noalias()+=amp*(-cosIJK/dIJ)*rIJt_/dIJ;
-										fij2.noalias()+=amp*(1.0/dIK)*rIJt_/dIJ;
-										fik1.noalias()+=amp*(-cosIJK/dIK)*rIKt_/dIK;
-										fik2.noalias()+=amp*(1.0/dIJ)*rIKt_/dIK;
+										amp=-0.5*basisA_[II](JJ,KK).fA(na).grad_angle(cosIJK)*basisA_[II](JJ,KK).fA(na).dist(dIJ,dIK,dJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
+										fij1.noalias()+=amp*(-cosIJK/dIJ)*rIJt_;
+										fij2.noalias()+=amp*(1.0/dIK)*rIJt_;
+										fik1.noalias()+=amp*(-cosIJK/dIK)*rIKt_;
+										fik2.noalias()+=amp*(1.0/dIJ)*rIKt_;
 										//gradient distance - central atom
-										amp=-0.5*basisA_[II](JJ,KK).fA[na]->angle(cosIJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
-										fij.noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
-										fik.noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
+										amp=-0.5*basisA_[II](JJ,KK).fA(na).angle(cosIJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
+										fij1.noalias()+=amp*basisA_[II](JJ,KK).fA(na).grad_dist_0(dIJ,dIK,dJK)*rIJt_;
+										fik1.noalias()+=amp*basisA_[II](JJ,KK).fA(na).grad_dist_1(dIJ,dIK,dJK)*rIKt_;
 									}
-									struc.atom(i).force().noalias()+=fij1+fij2+fij;
-									struc.atom(i).force().noalias()+=fik1+fik2+fik;
-									struc.atom(j).force().noalias()-=fij1+fik2+fij;
-									struc.atom(k).force().noalias()-=fik1+fij2+fik;
+									struc.atom(i).force().noalias()+=fij1+fij2;
+									struc.atom(i).force().noalias()+=fik1+fik2;
+									struc.atom(j).force().noalias()-=fij1+fik2;
+									struc.atom(k).force().noalias()-=fik1+fij2;
 									//*/
 								}
 							}
@@ -806,24 +801,24 @@ void NNPot::read(){
 	//======== set the number of inputs and offsets ========
 	for(unsigned int n=0; n<nSpecies(); ++n){
 		for(unsigned int i=0; i<nSpecies(); ++i){
-			nInputR_[n]+=basisR_[n][i].fR.size();
+			nInputR_[n]+=basisR_[n][i].nfR();
 		}
 	}
 	for(unsigned int n=0; n<nSpecies(); ++n){
 		for(unsigned int i=1; i<nSpecies(); ++i){
-			offsetR_[n][i]=offsetR_[n][i-1]+basisR_[n][i-1].fR.size();
+			offsetR_[n][i]=offsetR_[n][i-1]+basisR_[n][i-1].nfR();
 		}
 	}
 	for(unsigned int n=0; n<nSpecies(); ++n){
 		for(unsigned int i=0; i<nSpecies(); ++i){
 			for(unsigned int j=i; j<nSpecies(); ++j){
-				nInputA_[n]+=basisA_[n](j,i).fA.size();
+				nInputA_[n]+=basisA_[n](j,i).nfA();
 			}
 		}
 	}
 	for(unsigned int n=0; n<nSpecies(); ++n){
 		for(unsigned int i=1; i<basisA_[n].size(); ++i){
-			offsetA_[n][i]=offsetA_[n][i-1]+basisA_[n][i-1].fA.size();
+			offsetA_[n][i]=offsetA_[n][i-1]+basisA_[n][i-1].nfA();
 		}
 	}
 	for(unsigned int n=0; n<speciesMap_.size(); ++n) nInput_[n]=nInputR_[n]+nInputA_[n];
