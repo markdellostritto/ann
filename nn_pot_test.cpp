@@ -2,32 +2,37 @@
 #include <cstdlib>
 // c++ libraries
 #include <iostream>
+#include <chrono>
+// local libaries
 #include "nn_pot.hpp"
 #include "vasp.hpp"
 
 int main(int argc, char* argv[]){
 
 	//======== cutoff ========
-	bool test_cut=false;
+	bool test_cut=true;
 	//======== symmetry functions ========
-	bool test_phir_g2=false;
-	bool test_phia_g4=false;
+	bool test_phir_g2=true;
+	bool test_phia_g4=true;
 	//======== basis ========
-	bool test_basisR_g2=false;
-	bool test_basisA_g4=false;
+	bool test_basisR_g2=true;
+	bool test_basisA_g4=true;
 	//======== unit test ========
-	bool test_unit=false;
+	bool test_unit=true;
 	//======== serialization ========
-	bool test_symm_radial_serialize=false;
-	bool test_symm_angular_serialize=false;
-	bool test_basis_radial_serialize=false;
-	bool test_basis_angular_serialize=false;
+	bool test_symm_radial_serialize=true;
+	bool test_symm_angular_serialize=true;
+	bool test_basis_radial_serialize=true;
+	bool test_basis_angular_serialize=true;
 	//======== i/o ========
-	bool test_io=false;
+	bool test_io=true;
 	//======== forces ========
-	bool test_force_radial=true;
-	bool test_force_angular=true;
-	bool test_force=false;
+	bool test_force_radial=false;
+	bool test_force_angular=false;
+	bool test_force=true;
+	//======== symm time ========
+	bool test_symm_time=true;
+	bool test_force_time=true;
 	
 	if(test_cut){
 	std::cout<<"************************************************************\n";
@@ -360,26 +365,26 @@ int main(int argc, char* argv[]){
 		
 		//initialize basis
 		std::cout<<"Initializing basis...\n";
-		BasisR::init_G2(basis,nR,CutoffN::COS,rmin,rcut);
+		basis.init_G2(nR,CutoffN::COS,rmin,rcut);
 		
 		//print basis
 		std::cout<<"Printing basis...\n";
 		std::cout<<basis<<"\n";
 		
 		//print the basis functions to file
-		std::cout<<"Printing basis functions to file...\n";
+		std::cout<<"Printing basis function data to file...\n";
 		FILE* writer=std::fopen("nn_pot_test_basisr_g2.dat","w");
 		if(writer!=NULL){
 			unsigned int N=500;
 			double rmax=rcut*1.2;
 			fprintf(writer,"R ");
-			for(unsigned int i=0; i<basis.fR.size(); ++i) fprintf(writer,"f%i ",i);
+			for(unsigned int i=0; i<basis.nfR(); ++i) fprintf(writer,"f%i ",i);
 			fprintf(writer,"\n");
 			for(unsigned int n=0; n<N; ++n){
 				double r=rmax*n/N;
 				fprintf(writer, "%f ",r);
-				for(unsigned int i=0; i<basis.fR.size(); ++i){
-					fprintf(writer,"%f ",(*basis.fR[i])(r));
+				for(unsigned int i=0; i<basis.nfR(); ++i){
+					fprintf(writer,"%f ",basis.fR(i).val(r));
 				}
 				fprintf(writer,"\n");
 			}
@@ -428,7 +433,7 @@ int main(int argc, char* argv[]){
 		
 		//initialize basis
 		std::cout<<"Initializing basis...\n";
-		BasisA::init_G4(basis,nA,CutoffN::COS,rcut);
+		basis.init_G4(nA,CutoffN::COS,rcut);
 		
 		//print basis
 		std::cout<<"Printing basis...\n";
@@ -439,13 +444,13 @@ int main(int argc, char* argv[]){
 			unsigned int N=500;
 			double thetaMax=3.14159;
 			fprintf(writer,"THETA ");
-			for(unsigned int i=0; i<basis.fA.size(); ++i) fprintf(writer,"f%i ",i);
+			for(unsigned int i=0; i<basis.nfA(); ++i) fprintf(writer,"f%i ",i);
 			fprintf(writer,"\n");
 			for(unsigned int n=0; n<N; ++n){
 				double theta=thetaMax*n/N;
 				fprintf(writer, "%f ",theta);
-				for(unsigned int i=0; i<basis.fA.size(); ++i){
-					fprintf(writer,"%f ",(*basis.fA[i])(theta,1.0,1.0,1.0));
+				for(unsigned int i=0; i<basis.nfA(); ++i){
+					fprintf(writer,"%f ",basis.fA(i).val(std::cos(theta),1.0,1.0,1.0));
 				}
 				fprintf(writer,"\n");
 			}
@@ -638,8 +643,8 @@ int main(int argc, char* argv[]){
 	std::cout<<"************ TEST - BASIS - RADIAL - SERIALIZE ************\n";
 	try{
 		BasisR basisR1,basisR2;
-		BasisR::init_G2(basisR1,6,CutoffN::COS,0.5,6.0);
-		BasisR::init_G2(basisR2,1,CutoffN::COS,0.5,2.0);
+		basisR1.init_G2(6,CutoffN::COS,0.5,6.0);
+		basisR2.init_G2(1,CutoffN::COS,0.5,2.0);
 		char* arr=NULL;
 		unsigned int nBytes=0;
 		std::cout<<"basis = "<<basisR1<<"\n";
@@ -657,10 +662,10 @@ int main(int argc, char* argv[]){
 		std::cout<<"basis = "<<basisR2<<"\n";
 		
 		std::cout<<"Calculating error...\n";
-		double error=std::fabs(basisR1.phiRN-basisR2.phiRN);
-		for(unsigned int i=0; i<basisR1.fR.size(); ++i){
-			PhiR_G2& phirG21=static_cast<PhiR_G2&>(*basisR1.fR[i]);
-			PhiR_G2& phirG22=static_cast<PhiR_G2&>(*basisR2.fR[i]);
+		double error=std::fabs(basisR1.phiRN()-basisR2.phiRN());
+		for(unsigned int i=0; i<basisR1.nfR(); ++i){
+			const PhiR_G2& phirG21=static_cast<const PhiR_G2&>(basisR1.fR(i));
+			const PhiR_G2& phirG22=static_cast<const PhiR_G2&>(basisR2.fR(i));
 			error+=std::fabs(phirG21.rc-phirG22.rc);
 			error+=std::fabs(phirG21.tcut-phirG22.tcut);
 			error+=std::fabs(phirG21.eta-phirG22.eta);
@@ -682,8 +687,8 @@ int main(int argc, char* argv[]){
 	std::cout<<"************ TEST - BASIS - ANGULAR - SERIALIZE ************\n";
 	try{
 		BasisA basisA1,basisA2;
-		BasisA::init_G4(basisA1,6,CutoffN::COS,6.0);
-		BasisA::init_G4(basisA2,1,CutoffN::COS,2.0);
+		basisA1.init_G4(6,CutoffN::COS,6.0);
+		basisA2.init_G4(1,CutoffN::COS,2.0);
 		char* arr=NULL;
 		unsigned int nBytes=0;
 		std::cout<<"basis = "<<basisA1<<"\n";
@@ -701,10 +706,10 @@ int main(int argc, char* argv[]){
 		std::cout<<"basis = "<<basisA2<<"\n";
 		
 		std::cout<<"Calculating error...\n";
-		double error=std::fabs(basisA1.phiAN-basisA2.phiAN);
-		for(unsigned int i=0; i<basisA1.fA.size(); ++i){
-			PhiA_G4& phirG41=static_cast<PhiA_G4&>(*basisA1.fA[i]);
-			PhiA_G4& phirG42=static_cast<PhiA_G4&>(*basisA2.fA[i]);
+		double error=std::fabs(basisA1.phiAN()-basisA2.phiAN());
+		for(unsigned int i=0; i<basisA1.nfA(); ++i){
+			const PhiA_G4& phirG41=static_cast<const PhiA_G4&>(basisA1.fA(i));
+			const PhiA_G4& phirG42=static_cast<const PhiA_G4&>(basisA2.fA(i));
 			error+=std::fabs(phirG41.rc-phirG42.rc);
 			error+=std::fabs(phirG41.tcut-phirG42.tcut);
 			error+=std::fabs(phirG41.eta-phirG42.eta);
@@ -1021,6 +1026,114 @@ int main(int argc, char* argv[]){
 		std::cout<<e.what()<<"\n";
 	}
 	std::cout<<"*********************** TEST - FORCE ***********************\n";
+	std::cout<<"************************************************************\n";
+	}
+	
+	if(test_symm_time){
+	std::cout<<"************************************************************\n";
+	std::cout<<"*********************** TEST - SYMM - TIME ***********************\n";
+	try{
+		// local variables
+		Structure<AtomT> struc;
+		NNPot nnpot;
+		Eigen::Vector3d ftot=Eigen::Vector3d::Zero();
+		unsigned int N=10;
+		std::chrono::high_resolution_clock::time_point start;
+		std::chrono::high_resolution_clock::time_point stop;
+		std::chrono::duration<double> time;
+		
+		NNPot::Init nnPotInit;
+		nnPotInit.nR=6;
+		nnPotInit.nA=6;
+		nnPotInit.phiRN=PhiRN::G2;
+		nnPotInit.phiAN=PhiAN::G4;
+		nnPotInit.rm=0.5;
+		nnPotInit.rc=6;
+		nnPotInit.tcut=CutoffN::COS;
+		nnPotInit.lambda=0.0;
+		nnPotInit.tfType=NN::TransferN::TANH;
+		nnPotInit.nh.resize(1,15);
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si.poscar",struc);
+		std::cout<<struc<<"\n";
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.init(nnPotInit);
+		nnpot.initSymm(struc);
+		
+		//calculate symmetry functions for each atom
+		std::cout<<"Calculating symmetry functions...\n";
+		start=std::chrono::high_resolution_clock::now();
+		for(unsigned int i=0; i<N; ++i){
+			std::cout<<"iteration "<<i<<"\n";
+			nnpot.inputs_symm(struc);
+		}
+		stop=std::chrono::high_resolution_clock::now();
+		time=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
+		std::cout<<"N "<<N<<" time - execution = "<<time.count()<<"\n";
+	}catch(std::exception& e){
+		std::cout<<"ERROR in TEST - SYMM - TIME:\n";
+		std::cout<<e.what()<<"\n";
+	}
+	std::cout<<"*********************** TEST - SYMM - TIME ***********************\n";
+	std::cout<<"************************************************************\n";
+	}
+	
+	if(test_force_time){
+	std::cout<<"************************************************************\n";
+	std::cout<<"*********************** TEST - FORCE - TIME ***********************\n";
+	try{
+		// local variables
+		Structure<AtomT> struc;
+		NNPot nnpot;
+		Eigen::Vector3d ftot=Eigen::Vector3d::Zero();
+		unsigned int N=10;
+		std::chrono::high_resolution_clock::time_point start;
+		std::chrono::high_resolution_clock::time_point stop;
+		std::chrono::duration<double> time;
+		
+		NNPot::Init nnPotInit;
+		nnPotInit.nR=6;
+		nnPotInit.nA=6;
+		nnPotInit.phiRN=PhiRN::G2;
+		nnPotInit.phiAN=PhiAN::G4;
+		nnPotInit.rm=0.5;
+		nnPotInit.rc=6;
+		nnPotInit.tcut=CutoffN::COS;
+		nnPotInit.lambda=0.0;
+		nnPotInit.tfType=NN::TransferN::TANH;
+		nnPotInit.nh.resize(1,15);
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si.poscar",struc);
+		std::cout<<struc<<"\n";
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.init(nnPotInit);
+		nnpot.initSymm(struc);
+		
+		//calculate symmetry functions for each atom
+		std::cout<<"Calculating symmetry functions...\n";
+		start=std::chrono::high_resolution_clock::now();
+		for(unsigned int i=0; i<N; ++i){
+			std::cout<<"iteration "<<i<<"\n";
+			nnpot.forces(struc);
+		}
+		stop=std::chrono::high_resolution_clock::now();
+		time=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
+		std::cout<<"N "<<N<<" time - execution = "<<time.count()<<"\n";
+	}catch(std::exception& e){
+		std::cout<<"ERROR in TEST - FORCE - TIME:\n";
+		std::cout<<e.what()<<"\n";
+	}
+	std::cout<<"*********************** TEST - FORCE - TIME ***********************\n";
 	std::cout<<"************************************************************\n";
 	}
 }
