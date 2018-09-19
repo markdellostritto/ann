@@ -1,0 +1,8 @@
+The Makefile.lammps file in this dir contains the settings to build
+and link LAMMPS with support for neural network potentials through
+the ANN library.
+
+The only setting one should change is setting of the location of the
+Eigen matrix library.
+
+See the top of Makefile.lammps for more details.
