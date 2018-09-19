@@ -10,9 +10,9 @@
 
 //Behler G3
 struct PhiA_G3: public PhiA{
+	int lambda;//sign of cosine window
 	double eta;//radial exponential width
 	double zeta;//angular exponential width
-	int lambda;//sign of cosine window
 	PhiA_G3():PhiA(),eta(0.0),zeta(0.0),lambda(0.0){};
 	PhiA_G3(CutoffN::type tcut_, double rc_, double eta_, double zeta_, int lambda_):PhiA(tcut_,rc_),eta(eta_),zeta(zeta_),lambda(lambda_){};
 	double operator()(double cos, double ri, double rj, double rij)const noexcept;
@@ -20,7 +20,9 @@ struct PhiA_G3: public PhiA{
 	double angle(double cos)const noexcept;
 	double dist(double ri, double rj, double rij)const noexcept;
 	double grad_angle(double cos)const noexcept;
-	double grad_dist(double rij, double rik, double rjk, unsigned int gindex)const;
+	double grad_dist_0(double rij, double rik, double rjk)const noexcept;
+	double grad_dist_1(double rij, double rik, double rjk)const noexcept;
+	double grad_dist_2(double rij, double rik, double rjk)const noexcept;
 };
 std::ostream& operator<<(std::ostream& out, const PhiA_G3& f);
 
@@ -45,5 +47,9 @@ namespace serialize{
 	template <> void unpack(PhiA_G3& obj, const char* arr);
 	
 }
+
+/* References:
+Behler, J. Constructing High-Dimensional Neural Network Potentials: A Tutorial Review. Int. J. Quantum Chem. 2015, 115 (16), 1032–1050.
+*/
 
 #endif

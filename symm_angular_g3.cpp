@@ -11,8 +11,7 @@ double PhiA_G3::val(double cos, double rij, double rik, double rjk)const noexcep
 }
 
 double PhiA_G3::angle(double cos)const noexcept{
-	if(std::fabs(cos+1)<num_const::ZERO) return 0;
-	else return 2.0*std::pow(0.5*(1.0+lambda*cos),zeta);
+	return (std::fabs(cos+1)<num_const::ZERO)?0:2.0*std::pow(0.5*(1.0+lambda*cos),zeta);
 }
 
 double PhiA_G3::dist(double rij, double rik, double rjk)const noexcept{
@@ -21,20 +20,22 @@ double PhiA_G3::dist(double rij, double rik, double rjk)const noexcept{
 }
 
 double PhiA_G3::grad_angle(double cos)const noexcept{
-	if(std::fabs(cos+1)<num_const::ZERO) return 0;
-	else return zeta*std::pow(0.5*(1.0+lambda*cos),zeta-1.0);
+	return (std::fabs(cos+1)<num_const::ZERO)?0:zeta*std::pow(0.5*(1.0+lambda*cos),zeta-1.0);
 }
 
-double PhiA_G3::grad_dist(double rij, double rik, double rjk, unsigned int gindex)const{
-	switch(gindex){
-		case 0: return (-2.0*eta*rij*CutoffF::funcs[tcut](rij,rc)+CutoffFD::funcs[tcut](rij,rc))
-			*CutoffF::funcs[tcut](rik,rc)*CutoffF::funcs[tcut](rjk,rc)*std::exp(-eta*(rij*rij+rik*rik+rjk*rjk));
-		case 1: return (-2.0*eta*rik*CutoffF::funcs[tcut](rik,rc)+CutoffFD::funcs[tcut](rik,rc))
-			*CutoffF::funcs[tcut](rij,rc)*CutoffF::funcs[tcut](rjk,rc)*std::exp(-eta*(rij*rij+rik*rik+rjk*rjk));
-		case 2: return (-2.0*eta*rjk*CutoffF::funcs[tcut](rjk,rc)+CutoffFD::funcs[tcut](rjk,rc))
-			*CutoffF::funcs[tcut](rij,rc)*CutoffF::funcs[tcut](rik,rc)*std::exp(-eta*(rij*rij+rik*rik+rjk*rjk));
-		default: throw std::invalid_argument("Invalid gradient index.");
-	}
+double PhiA_G3::grad_dist_0(double rij, double rik, double rjk)const noexcept{
+	return (-2.0*eta*rij*CutoffF::funcs[tcut](rij,rc)+CutoffFD::funcs[tcut](rij,rc))
+		*CutoffF::funcs[tcut](rik,rc)*CutoffF::funcs[tcut](rjk,rc)*std::exp(-eta*(rij*rij+rik*rik+rjk*rjk));
+}
+
+double PhiA_G3::grad_dist_1(double rij, double rik, double rjk)const noexcept{
+	return (-2.0*eta*rik*CutoffF::funcs[tcut](rik,rc)+CutoffFD::funcs[tcut](rik,rc))
+		*CutoffF::funcs[tcut](rij,rc)*CutoffF::funcs[tcut](rjk,rc)*std::exp(-eta*(rij*rij+rik*rik+rjk*rjk));
+}
+
+double PhiA_G3::grad_dist_2(double rij, double rik, double rjk)const noexcept{
+	return (-2.0*eta*rjk*CutoffF::funcs[tcut](rjk,rc)+CutoffFD::funcs[tcut](rjk,rc))
+		*CutoffF::funcs[tcut](rij,rc)*CutoffF::funcs[tcut](rik,rc)*std::exp(-eta*(rij*rij+rik*rik+rjk*rjk));
 }
 
 std::ostream& operator<<(std::ostream& out, const PhiA_G3& f){
