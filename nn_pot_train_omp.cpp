@@ -1151,6 +1151,7 @@ int main(int argc, char* argv[]){
 			#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
 			for(unsigned int nt=0; nt<nnPotOpt.nThreads_; ++nt){
 				for(unsigned int i=nnPotOpt.toTest_[nt]; i<nnPotOpt.toTest_[nt]+nnPotOpt.tdTest_[nt]; ++i){
+					std::cout<<"system-test["<<i<<"]\n";
 					forces_exact_test[i].resize(struc_test[i].nAtoms());
 					forces_nn_test[i].resize(struc_test[i].nAtoms());
 					for(unsigned int j=0; j<struc_test[i].nAtoms(); ++j) forces_exact_test[i][j]=struc_test[i].atom(j).force();
@@ -1165,6 +1166,26 @@ int main(int argc, char* argv[]){
 				}
 				error_force_test[i]=std::sqrt(error_force_test[i])/struc_test[i].nAtoms();
 				error_force_p_test[i]=std::sqrt(error_force_p_test[i])/struc_test[i].nAtoms();
+			}
+			stop=std::chrono::high_resolution_clock::now();
+			time_force_test=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
+		}
+		
+		//======== calculate the symmetry functions - test set ========
+		if(struc_test.size()>0){
+			std::cout<<"Calculating symmetry functions - test set...\n";
+			start=std::chrono::high_resolution_clock::now();
+			#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
+			for(unsigned int nt=0; nt<nnPotOpt.nThreads_; ++nt){
+				for(unsigned int i=nnPotOpt.toTest_[nt]; i<nnPotOpt.toTest_[nt]+nnPotOpt.tdTest_[nt]; ++i){
+					std::cout<<"system-test["<<i<<"]\n";
+					nnPotOpt.nnpot_[nt].inputs_symm(struc_test[i]);
+				}
+			}
+			for(unsigned int i=0; i<struc_test.size(); ++i){
+				for(unsigned int j=0; j<struc_test[i].nAtoms(); ++j){
+					std::cout<<files_test[i]<<" "<<struc_test[i].atom(j).name()<<struc_test[i].atom(j).index()<<" "<<struc_test[i].atom(j).symm().transpose()<<"\n";
+				}
 			}
 			stop=std::chrono::high_resolution_clock::now();
 			time_force_test=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
@@ -1285,6 +1306,7 @@ int main(int argc, char* argv[]){
 		}
 		
 		//======== print the energies - training set ========
+		if(mode==MODE::TRAIN){
 		std::cout<<"Printing the energies - training set...\n";
 		writer=fopen("nn_pot_energy_train.dat","w");
 		if(writer!=NULL){
@@ -1292,9 +1314,10 @@ int main(int argc, char* argv[]){
 			for(unsigned int i=0; i<struc_train.size(); ++i) fprintf(writer,"%s %f %f\n",files_train[i].c_str(),energy_exact_train[i],energy_nn_train[i]);
 			fclose(writer); writer=NULL;
 		} else std::cout<<"WARNING: Could not open: \"nn_pot_energy_train.dat\"\n";
+		}
 		
 		//======== print the energies - validation set ========
-		if(struc_val.size()>0){
+		if(struc_val.size()>0 && mode==MODE::TRAIN){
 			std::cout<<"Printing the energies - validation set...\n";
 			writer=fopen("nn_pot_energy_val.dat","w");
 			if(writer!=NULL){
@@ -1302,6 +1325,17 @@ int main(int argc, char* argv[]){
 				for(unsigned int i=0; i<struc_val.size(); ++i) fprintf(writer,"%s %f %f\n",files_val[i].c_str(),energy_exact_val[i],energy_nn_val[i]);
 				fclose(writer); writer=NULL;
 			} else std::cout<<"WARNING: Could not open: \"nn_pot_energy_val.dat\"\n";
+		}
+		
+		//======== print the energies - test set ========
+		if(struc_test.size()>0){
+			std::cout<<"Printing the energies - test set...\n";
+			writer=fopen("nn_pot_energy_test.dat","w");
+			if(writer!=NULL){
+				fprintf(writer,"sim energy_exact energy_nn\n");
+				for(unsigned int i=0; i<struc_val.size(); ++i) fprintf(writer,"%s %f %f\n",files_test[i].c_str(),energy_exact_test[i],energy_nn_test[i]);
+				fclose(writer); writer=NULL;
+			} else std::cout<<"WARNING: Could not open: \"nn_pot_energy_test.dat\"\n";
 		}
 		
 		//======== print the forces - training set ========
@@ -1339,7 +1373,7 @@ int main(int argc, char* argv[]){
 		}
 		
 		//======== print the forces - test set ========
-		if(struc_test.size()>0 && mode==MODE::TEST){
+		if(struc_test.size()>0){
 			std::cout<<"Printing the forces - test set...\n";
 			writer=fopen("nn_pot_force_test.dat","w");
 			if(writer!=NULL){

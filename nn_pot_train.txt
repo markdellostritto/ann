@@ -1,7 +1,7 @@
 # GENERAL PARAMETERS
 	seed		0 # seed for random number generator
-	mode		train # training mode
-	#mode		validate # validation mode
+	#mode		train # training mode
+	mode		test # test mode
 # training data
 	#data_train		data_super.txt
 	#data_train		data_cubic.txt
@@ -9,12 +9,14 @@
 	data_train		data_md_nvt.txt
 # validation data
 	data_val		data_md_nve_test.txt
+# test data
+	data_test		data_md_nvt_test.txt
 
 # ATOM DATA
 	energy		Si -10.6286687998 # wB97xD - Aug-cc-pVTZ - Gaussian16
 	
 # READ/WRITE
-	#read		Si ann_Si
+	read		Si ann_Si
 
 # OPTIMIZATION
 	#algo		sdg			# steepest-descent - gradient only
@@ -29,7 +31,7 @@
 	opt_val		ftol_abs	# type of break condition
 	tol			1e-14		# break condition - training data
 	tol_val		1e-4		# break condition - validation data
-	max_iter	7500		# max number of iterations
+	max_iter	10000		# max number of iterations
 	n_print		100			# print n optimization steps
 	n_write		1000		# write n optimization steps
 	gamma		0.001		# step size for gradient descent
