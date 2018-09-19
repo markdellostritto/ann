@@ -3,9 +3,9 @@
 
 // c libraries
 #include <cstring>
+#include <cstdio>
 // c++ libraries
 #include <iostream>
-#include <memory>
 #include <vector>
 // symmetry functions
 #include "cutoff.hpp"
@@ -21,16 +21,33 @@
 #endif
 
 struct BasisR{
-	//member variables
+private:
 	static const double V_CUT;//value cutoff
-	PhiRN::type phiRN;//type of radial functions
-	std::vector<std::shared_ptr<PhiR> > fR;//radial functions
+	unsigned int nfR_;//number of radial functions
+	PhiRN::type phiRN_;//type of radial functions
+	PhiR** fR_;//radial functions
+public:
+	//constructors/destructors
+	BasisR():nfR_(0),phiRN_(PhiRN::UNKNOWN),fR_(NULL){};
+	BasisR(const BasisR& basisR);
+	~BasisR();
+	//operators
+	BasisR& operator=(const BasisR& basis);
+	friend std::ostream& operator<<(std::ostream& out, const BasisR& basisR);
 	//initialization
-	static void init_G1(BasisR& basis, CutoffN::type tcut, double rcut, double rmin);
-	static void init_G2(BasisR& basis, unsigned int nR, CutoffN::type tcut, double rcut, double rmin);
+	void init_G1(CutoffN::type tcut, double rcut, double rmin);
+	void init_G2(unsigned int nR, CutoffN::type tcut, double rcut, double rmin);
 	//loading/printing
 	static void write(FILE* writer,const BasisR& basis);
 	static void read(FILE* writer, BasisR& basis);
+	//member access
+	const unsigned int& nfR()const{return nfR_;};
+	PhiRN::type& phiRN(){return phiRN_;};
+	const PhiRN::type& phiRN()const{return phiRN_;};
+	PhiR& fR(unsigned int i){return *fR_[i];};
+	const PhiR& fR(unsigned int i)const{return *fR_[i];};
+	//member functions
+	void clear();
 };
 std::ostream& operator<<(std::ostream& out, const BasisR& basisR);
 

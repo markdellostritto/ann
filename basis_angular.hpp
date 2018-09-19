@@ -3,9 +3,9 @@
 
 // c libraries
 #include <cstring>
+#include <cstdio>
 // c++ libraries
 #include <iostream>
-#include <memory>
 #include <vector>
 // symmetry functions
 #include "cutoff.hpp"
@@ -19,19 +19,34 @@
 #endif
 
 struct BasisA{
-public:
-	//member variables
+private:
 	static const double V_CUT;//value cutoff
-	PhiAN::type phiAN;//type of angular functions
-	std::vector<std::shared_ptr<PhiA> > fA;//angular functions
+	PhiAN::type phiAN_;//type of angular functions
+	unsigned int nfA_;
+	PhiA** fA_;//angular functions
+public:
+	//constructors/destructors
+	BasisA():nfA_(0),phiAN_(PhiAN::UNKNOWN),fA_(NULL){};
+	BasisA(const BasisA& basisA);
+	~BasisA();
+	//operators
+	BasisA& operator=(const BasisA& basisA);
+	friend std::ostream& operator<<(std::ostream& out, const BasisA& basisA);
 	//initialization
-	static void init_G3(BasisA& basis, unsigned int nA, CutoffN::type tcut, double rcut);
-	static void init_G4(BasisA& basis, unsigned int nA, CutoffN::type tcut, double rcut);
+	void init_G3(unsigned int nA, CutoffN::type tcut, double rcut);
+	void init_G4(unsigned int nA, CutoffN::type tcut, double rcut);
 	//loading/printing
 	static void write(FILE* writer,const BasisA& basis);
 	static void read(FILE* writer, BasisA& basis);
+	//member access
+	const unsigned int& nfA()const{return nfA_;};
+	PhiAN::type& phiAN(){return phiAN_;};
+	const PhiAN::type& phiAN()const{return phiAN_;};
+	PhiA& fA(unsigned int i){return *fA_[i];};
+	const PhiA& fA(unsigned int i)const{return *fA_[i];};
+	//member functions
+	void clear();
 };
-std::ostream& operator<<(std::ostream& out, const BasisA& basisA);
 
 namespace serialize{
 	
