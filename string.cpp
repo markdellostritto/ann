@@ -8,13 +8,19 @@ namespace string{
 
 char* to_upper(char* str){
 	char* s=str;
-	while(*s){*s=std::toupper(*s); ++s;}
+	while(*s){
+		*s=std::toupper(*s);
+		++s;
+	}
 	return str;
 }
 
 char* to_lower(char* str){
 	char* s=str;
-	while(*s){*s=std::tolower(*s); ++s;}
+	while(*s){
+		*s=std::tolower(*s);
+		++s;
+	}
 	return str;
 }
 
