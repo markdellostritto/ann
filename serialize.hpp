@@ -3,6 +3,7 @@
 
 #include <cstring>
 #include <stdexcept>
+#include <string>
 
 namespace serialize{
 
@@ -24,6 +25,7 @@ template <> unsigned int nbytes(const int& obj);
 template <> unsigned int nbytes(const unsigned int& obj);
 template <> unsigned int nbytes(const float& obj);
 template <> unsigned int nbytes(const double& obj);
+template <> unsigned int nbytes(const std::string& str);
 
 //**********************************************
 // packing
@@ -43,6 +45,7 @@ template <> void pack(const int& obj, char* arr);
 template <> void pack(const unsigned int& obj, char* arr);
 template <> void pack(const float& obj, char* arr);
 template <> void pack(const double& obj, char* arr);
+template <> void pack(const std::string& str, char* arr);
 
 //**********************************************
 // unpacking
@@ -62,6 +65,7 @@ template <> void unpack(int& obj, const char* arr);
 template <> void unpack(unsigned int& obj, const char* arr);
 template <> void unpack(float& obj, const char* arr);
 template <> void unpack(double& obj, const char* arr);
+template <> void unpack(std::string& str, const char* arr);
 
 }
 
