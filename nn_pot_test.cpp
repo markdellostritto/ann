@@ -2,7 +2,7 @@
 #include <cstdlib>
 // c++ libraries
 #include <iostream>
-#include <chrono>
+#include <ctime>
 // local libaries
 #include "nn_pot.hpp"
 #include "vasp.hpp"
@@ -10,29 +10,31 @@
 int main(int argc, char* argv[]){
 
 	//======== cutoff ========
-	bool test_cut=true;
+	bool test_cut=false;
 	//======== symmetry functions ========
-	bool test_phir_g2=true;
-	bool test_phia_g4=true;
+	bool test_phir_g2=false;
+	bool test_phia_g4=false;
 	//======== basis ========
-	bool test_basisR_g2=true;
-	bool test_basisA_g4=true;
+	bool test_basisR_g2=false;
+	bool test_basisA_g4=false;
 	//======== unit test ========
-	bool test_unit=true;
+	bool test_unit=false;
 	//======== serialization ========
-	bool test_symm_radial_serialize=true;
-	bool test_symm_angular_serialize=true;
-	bool test_basis_radial_serialize=true;
-	bool test_basis_angular_serialize=true;
+	bool test_symm_radial_serialize=false;
+	bool test_symm_angular_serialize=false;
+	bool test_basis_radial_serialize=false;
+	bool test_basis_angular_serialize=false;
 	//======== i/o ========
-	bool test_io=true;
+	bool test_io=false;
 	//======== forces ========
 	bool test_force_radial=false;
 	bool test_force_angular=false;
-	bool test_force=true;
-	//======== symm time ========
+	bool test_force=false;
+	//======== time ========
 	bool test_symm_time=true;
-	bool test_force_time=true;
+	bool test_force_time=false;
+	//======== serialization ========
+	bool test_serial=false;
 	
 	if(test_cut){
 	std::cout<<"************************************************************\n";
@@ -90,7 +92,7 @@ int main(int argc, char* argv[]){
 		double rMax=1.5*rCut;//max radius
 		unsigned int N=500;//number of radial points
 		unsigned int nEta=6,nRS=5;//number of parameters to test
-		double etaMin=0.5,etaMax=2.5;
+		double etaMin=0.1,etaMax=2;
 		double rsMin=0.0,rsMax=6.0;
 		std::vector<double> r(N);//radial points
 		std::vector<std::vector<double> > phir_g2_eta(nEta);//g2 functions - different eta
@@ -119,7 +121,7 @@ int main(int argc, char* argv[]){
 		//calculate the radial functions - function of eta
 		std::cout<<"Calculating the radial functions as a function of eta...\n";
 		for(unsigned int i=0; i<nEta; ++i){
-			PhiR_G2 gr=PhiR_G2(CutoffN::COS,rCut,etaMin+(etaMax-etaMin)*((double)i/(nEta-1)),0.0);
+			PhiR_G2 gr=PhiR_G2(CutoffN::COS,rCut,0.0,etaMin+(etaMax-etaMin)*((double)i/(nEta-1)));
 			for(unsigned int n=0; n<N; ++n) phir_g2_eta[i][n]=gr(r[n]);
 		}
 		
@@ -185,6 +187,9 @@ int main(int argc, char* argv[]){
 			fclose(writer);
 			writer=NULL;
 		}
+		
+		std::cout<<"phir_g2[0]==phir_g2[0] -> "<<(phir_g2[0]==phir_g2[0])<<"\n";
+		std::cout<<"phir_g2[0]==phir_g2[1] -> "<<(phir_g2[0]==phir_g2[1])<<"\n";
 	}catch(std::exception& e){
 		std::cout<<"ERROR in TEST - GR:\n";
 		std::cout<<e.what()<<"\n";
@@ -199,39 +204,43 @@ int main(int argc, char* argv[]){
 	try{
 		//local variables
 		double rCut=5;//cutoff
+		unsigned int N=500;//number of angular points
 		static const double pi=3.14159;
-		double thetaMin=0.0,thetaMax=pi;
-		unsigned int nTheta=100;
-		double eta=1.0;
-		double zetaMin=5,zetaMax=20;
+		double etaMin=0.1,etaMax=1;
+		unsigned int nEta=5;
+		double zetaMin=1,zetaMax=15;
 		unsigned int nZeta=5;
 		short lambda=1;
-		double theta0Min=0.0,theta0Max=pi;
-		unsigned int nTheta0=5;
-		std::vector<double> theta(nTheta);
 		std::vector<std::vector<double> > phia_g4_zeta(nZeta);//ga functions - different zeta
+		std::vector<double> phia_g4(N);
+		std::vector<double> phia_g4d(N);
 		FILE* writer=NULL;
 		
 		//print the parameters
 		std::cout<<"PARAMETERS:\n";
 		std::cout<<"\tR_CUT = "<<rCut<<"\n";
-		std::cout<<"\tTHETA = ("<<thetaMin<<","<<thetaMax<<")\n";
 		std::cout<<"\tZETA = ("<<zetaMin<<","<<zetaMax<<")\n";
-		std::cout<<"\tTHETA0 = ("<<theta0Min<<","<<theta0Max<<")\n";
+		std::cout<<"\tZETA = ("<<etaMin<<","<<etaMax<<")\n";
 		
 		//resize the vectors storing the functions
 		std::cout<<"Resizing vectors...\n";
-		for(unsigned n=0; n<nZeta; ++n) phia_g4_zeta[n].resize(nTheta);
-		
-		//set the theta points
-		std::cout<<"Setting the theta points...\n";
-		for(unsigned int n=0; n<nTheta; ++n) theta[n]=thetaMin+((double)n)/nTheta*(thetaMax-thetaMin);
+		std::vector<double> zeta(nZeta);
+		for(unsigned int n=0; n<nZeta; ++n) zeta[n]=zetaMin+(zetaMax-zetaMin)*((double)n/(nZeta-1.0));
+		for(unsigned int n=0; n<nZeta; ++n) phia_g4_zeta[n].resize(N);
 		
 		//calculate the angular functions - function of zeta
 		std::cout<<"Calculating the angular functions as a function of zeta...\n";
 		for(unsigned int i=0; i<nZeta; ++i){
-			PhiA_G4 g4=PhiA_G4(CutoffN::COS,rCut,eta,zetaMin+(zetaMax-zetaMin)*((double)i/(nZeta-1)),0.0);
-			for(unsigned int n=0; n<nTheta; ++n) phia_g4_zeta[i][n]=g4(theta[n],1.0,1.0,1.0);
+			PhiA_G4 g4=PhiA_G4(CutoffN::COS,rCut,1.0,zeta[i],1);
+			for(unsigned int n=0; n<N; ++n) phia_g4_zeta[i][n]=g4(std::cos(1.0*n/N*pi),0.1,0.1,0.1);
+		}
+		
+		//calculate the angular functions - shape
+		std::cout<<"Calculating the angular functions - shape...\n";
+		PhiA_G4 ga=PhiA_G4(CutoffN::COS,rCut,1.0,5.0,1);
+		for(unsigned int n=0; n<N; ++n){
+			phia_g4[n]=ga.val(std::cos(1.0*n/N*pi),0.1,0.1,0.1);
+			phia_g4d[n]=ga.grad_angle(std::cos(1.0*n/N*pi))*ga.dist(0.1,0.1,0.1);
 		}
 		
 		//print the angular functions - function of zeta
@@ -239,10 +248,10 @@ int main(int argc, char* argv[]){
 		writer=fopen("nn_pot_test_phia_g4_zeta.dat","w");
 		if(writer!=NULL){
 			fprintf(writer,"THETA ");
-			for(unsigned int i=0; i<nZeta; ++i) fprintf(writer,"ZETA%f ",zetaMin+(zetaMax-zetaMin)*((double)i/(nZeta-1)));
+			for(unsigned int i=0; i<nZeta; ++i) fprintf(writer,"ZETA%f ",zeta[i]);
 			fprintf(writer,"\n");
-			for(unsigned int n=0; n<nTheta; ++n){
-				fprintf(writer,"%f ",theta[n]);
+			for(unsigned int n=0; n<N; ++n){
+				fprintf(writer,"%f ",1.0*n/N*pi);
 				for(unsigned int i=0; i<nZeta; ++i){
 					fprintf(writer,"%f ",phia_g4_zeta[i][n]);
 				}
@@ -252,99 +261,20 @@ int main(int argc, char* argv[]){
 			writer=NULL;
 		}
 		
-	}catch(std::exception& e){
-		std::cout<<"ERROR in TEST - PHIA - G4:\n";
-		std::cout<<e.what()<<"\n";
-	}
-	std::cout<<"********************* TEST - PHIA - G4 *********************\n";
-	std::cout<<"************************************************************\n";
-	}
-	
-	if(test_phia_g4){
-	std::cout<<"************************************************************\n";
-	std::cout<<"********************* TEST - PHIA - G4 *********************\n";
-	try{
-		//local variables
-		double rCut=5;//cutoff
-		static const double pi=3.14159;
-		double thetaMin=0.0,thetaMax=pi;
-		unsigned int nTheta=100;
-		double eta=1.0;
-		double zetaMin=5,zetaMax=20;
-		unsigned int nZeta=5;
-		short lambda=1;
-		double theta0Min=0.0,theta0Max=pi;
-		unsigned int nTheta0=5;
-		std::vector<double> theta(nTheta);
-		std::vector<std::vector<double> > phia_g4_zeta(nZeta);//ga functions - different zeta
-		std::vector<std::vector<double> > phia_g4_theta(nTheta0);//ga functions - different theta0
-		FILE* writer=NULL;
-		
-		//print the parameters
-		std::cout<<"PARAMETERS:\n";
-		std::cout<<"\tR_CUT = "<<rCut<<"\n";
-		std::cout<<"\tTHETA = ("<<thetaMin<<","<<thetaMax<<")\n";
-		std::cout<<"\tZETA = ("<<zetaMin<<","<<zetaMax<<")\n";
-		std::cout<<"\tTHETA0 = ("<<theta0Min<<","<<theta0Max<<")\n";
-		
-		//resize the vectors storing the functions
-		std::cout<<"Resizing vectors...\n";
-		for(unsigned n=0; n<nZeta; ++n) phia_g4_zeta[n].resize(nTheta);
-		for(unsigned n=0; n<nTheta0; ++n) phia_g4_theta[n].resize(nTheta);
-		
-		//set the theta points
-		std::cout<<"Setting the theta points...\n";
-		for(unsigned int n=0; n<nTheta; ++n) theta[n]=thetaMin+((double)n)/nTheta*(thetaMax-thetaMin);
-		
-		//calculate the angular functions - function of zeta
-		std::cout<<"Calculating the angular functions as a function of zeta...\n";
-		for(unsigned int i=0; i<nZeta; ++i){
-			PhiA_G4 g4=PhiA_G4(CutoffN::COS,rCut,eta,zetaMin+(zetaMax-zetaMin)*((double)i/(nZeta-1)),0.0);
-			for(unsigned int n=0; n<nTheta; ++n) phia_g4_zeta[i][n]=g4(theta[n],1.0,1.0,1.0);
-		}
-		
-		//calculate the radial functions - function of eta
-		std::cout<<"Calculating the angular functions as a function of theta0...\n";
-		for(unsigned int i=0; i<nTheta0; ++i){
-			PhiA_G4 g4=PhiA_G4(CutoffN::COS,rCut,eta,20.0,theta0Min+(theta0Max-theta0Min)*((double)i/(nTheta0-1)));
-			for(unsigned int n=0; n<nTheta; ++n) phia_g4_theta[i][n]=g4(theta[n],1.0,1.0,1.0);
-		}
-		
-		//print the angular functions - function of zeta
-		std::cout<<"Printing the angular functions as a function of zeta...\n";
-		writer=fopen("nn_pot_test_phia_g4p_zeta.dat","w");
+		//print the angular functions - shape
+		std::cout<<"Printing the angular functions - shape...\n";
+		writer=fopen("nn_pot_test_ga.dat","w");
 		if(writer!=NULL){
-			fprintf(writer,"THETA ");
-			for(unsigned int i=0; i<nZeta; ++i) fprintf(writer,"ZETA%f ",zetaMin+(zetaMax-zetaMin)*((double)i/(nZeta-1)));
-			fprintf(writer,"\n");
-			for(unsigned int n=0; n<nTheta; ++n){
-				fprintf(writer,"%f ",theta[n]);
-				for(unsigned int i=0; i<nZeta; ++i){
-					fprintf(writer,"%f ",phia_g4_zeta[i][n]);
-				}
-				fprintf(writer,"\n");
+			fprintf(writer,"R G4 G4D\n");
+			for(unsigned int n=0; n<N; ++n){
+				fprintf(writer,"%f %f %f\n",1.0*n/N*pi,phia_g4[n],phia_g4d[n]);
 			}
 			fclose(writer);
 			writer=NULL;
 		}
 		
-		//print the angular functions - function of theta0
-		std::cout<<"Printing the angular functions as a function of theta0...\n";
-		writer=fopen("nn_pot_test_phia_g4p_theta0.dat","w");
-		if(writer!=NULL){
-			fprintf(writer,"THETA0 ");
-			for(unsigned int i=0; i<nTheta0; ++i) fprintf(writer,"rs%f ",theta0Min+(theta0Max-theta0Min)*((double)i/(nTheta0-1)));
-			fprintf(writer,"\n");
-			for(unsigned int n=0; n<nTheta; ++n){
-				fprintf(writer,"%f ",theta[n]);
-				for(unsigned int i=0; i<nTheta0; ++i){
-					fprintf(writer,"%f ",phia_g4_theta[i][n]);
-				}
-				fprintf(writer,"\n");
-			}
-			fclose(writer);
-			writer=NULL;
-		}
+		std::cout<<"phia_g4_zeta[0]==phia_g4_zeta[0] ->"<<(phia_g4_zeta[0]==phia_g4_zeta[0])<<"\n";
+		std::cout<<"phia_g4_zeta[0]==phia_g4_zeta[1] ->"<<(phia_g4_zeta[0]==phia_g4_zeta[1])<<"\n";
 	}catch(std::exception& e){
 		std::cout<<"ERROR in TEST - PHIA - G4:\n";
 		std::cout<<e.what()<<"\n";
@@ -359,8 +289,8 @@ int main(int argc, char* argv[]){
 	try{
 		//local variables
 		BasisR basis;
-		unsigned int nR=5;
-		double rcut=5.0;
+		unsigned int nR=6;
+		double rcut=6.0;
 		double rmin=0.5;
 		
 		//initialize basis
@@ -413,6 +343,12 @@ int main(int argc, char* argv[]){
 		//print basis
 		std::cout<<"Printing basis...\n";
 		std::cout<<basis<<"\n";
+		
+		std::cout<<"Equality:\n";
+		BasisR basis_new=basis;
+		std::cout<<"basis==basis_new -> "<<(basis==basis_new)<<"\n";
+		static_cast<PhiR_G2&>(basis.fR(0)).eta++;
+		std::cout<<"basis==basis_new -> "<<(basis==basis_new)<<"\n";
 	}catch(std::exception& e){
 		std::cout<<"ERROR in TEST - BASIS - R - G2:\n";
 		std::cout<<e.what()<<"\n";
@@ -479,6 +415,12 @@ int main(int argc, char* argv[]){
 		//print basis
 		std::cout<<"Printing basis...\n";
 		std::cout<<basis<<"\n";
+		
+		std::cout<<"Equality:\n";
+		BasisA basis_new=basis;
+		std::cout<<"basis==basis_new -> "<<(basis==basis_new)<<"\n";
+		static_cast<PhiA_G4&>(basis.fA(0)).eta++;
+		std::cout<<"basis==basis_new -> "<<(basis==basis_new)<<"\n";
 	}catch(std::exception& e){
 		std::cout<<"ERROR in TEST - BASIS - A - G4:\n";
 		std::cout<<e.what()<<"\n";
@@ -1031,16 +973,14 @@ int main(int argc, char* argv[]){
 	
 	if(test_symm_time){
 	std::cout<<"************************************************************\n";
-	std::cout<<"*********************** TEST - SYMM - TIME ***********************\n";
+	std::cout<<"******************** TEST - SYMM - TIME ********************\n";
 	try{
 		// local variables
 		Structure<AtomT> struc;
 		NNPot nnpot;
 		Eigen::Vector3d ftot=Eigen::Vector3d::Zero();
 		unsigned int N=10;
-		std::chrono::high_resolution_clock::time_point start;
-		std::chrono::high_resolution_clock::time_point stop;
-		std::chrono::duration<double> time;
+		clock_t start,stop;
 		
 		NNPot::Init nnPotInit;
 		nnPotInit.nR=6;
@@ -1067,34 +1007,31 @@ int main(int argc, char* argv[]){
 		
 		//calculate symmetry functions for each atom
 		std::cout<<"Calculating symmetry functions...\n";
-		start=std::chrono::high_resolution_clock::now();
+		start=std::clock();
 		for(unsigned int i=0; i<N; ++i){
 			std::cout<<"iteration "<<i<<"\n";
 			nnpot.inputs_symm(struc);
 		}
-		stop=std::chrono::high_resolution_clock::now();
-		time=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
-		std::cout<<"N "<<N<<" time - execution = "<<time.count()<<"\n";
+		stop=std::clock();
+		std::cout<<"N "<<N<<" time - execution = "<<(stop-start)<<" cycles "<<((double)(stop-start))/CLOCKS_PER_SEC<<" s\n";
 	}catch(std::exception& e){
 		std::cout<<"ERROR in TEST - SYMM - TIME:\n";
 		std::cout<<e.what()<<"\n";
 	}
-	std::cout<<"*********************** TEST - SYMM - TIME ***********************\n";
+	std::cout<<"******************** TEST - SYMM - TIME ********************\n";
 	std::cout<<"************************************************************\n";
 	}
 	
 	if(test_force_time){
 	std::cout<<"************************************************************\n";
-	std::cout<<"*********************** TEST - FORCE - TIME ***********************\n";
+	std::cout<<"******************* TEST - FORCE - TIME *******************\n";
 	try{
 		// local variables
 		Structure<AtomT> struc;
 		NNPot nnpot;
 		Eigen::Vector3d ftot=Eigen::Vector3d::Zero();
 		unsigned int N=10;
-		std::chrono::high_resolution_clock::time_point start;
-		std::chrono::high_resolution_clock::time_point stop;
-		std::chrono::duration<double> time;
+		clock_t start,stop;
 		
 		NNPot::Init nnPotInit;
 		nnPotInit.nR=6;
@@ -1120,20 +1057,76 @@ int main(int argc, char* argv[]){
 		nnpot.initSymm(struc);
 		
 		//calculate symmetry functions for each atom
-		std::cout<<"Calculating symmetry functions...\n";
-		start=std::chrono::high_resolution_clock::now();
+		std::cout<<"Calculating forces...\n";
+		start=std::clock();
 		for(unsigned int i=0; i<N; ++i){
 			std::cout<<"iteration "<<i<<"\n";
 			nnpot.forces(struc);
 		}
-		stop=std::chrono::high_resolution_clock::now();
-		time=std::chrono::duration_cast<std::chrono::duration<double> >(stop-start);
-		std::cout<<"N "<<N<<" time - execution = "<<time.count()<<"\n";
+		stop=std::clock();
+		std::cout<<"N "<<N<<" time - execution = "<<(stop-start)<<" cycles "<<((double)(stop-start))/CLOCKS_PER_SEC<<" s\n";
 	}catch(std::exception& e){
 		std::cout<<"ERROR in TEST - FORCE - TIME:\n";
 		std::cout<<e.what()<<"\n";
 	}
-	std::cout<<"*********************** TEST - FORCE - TIME ***********************\n";
+	std::cout<<"******************* TEST - FORCE - TIME *******************\n";
+	std::cout<<"************************************************************\n";
+	}
+	
+	if(test_serial){
+	std::cout<<"************************************************************\n";
+	std::cout<<"******************* TEST - SERIAL *******************\n";
+	try{
+		// local variables
+		Structure<AtomT> struc;
+		NNPot nnpot;
+		Eigen::Vector3d ftot=Eigen::Vector3d::Zero();
+		unsigned int N=10;
+		
+		NNPot::Init nnPotInit;
+		nnPotInit.nR=6;
+		nnPotInit.nA=6;
+		nnPotInit.phiRN=PhiRN::G2;
+		nnPotInit.phiAN=PhiAN::G4;
+		nnPotInit.rm=0.5;
+		nnPotInit.rc=6;
+		nnPotInit.tcut=CutoffN::COS;
+		nnPotInit.lambda=0.0;
+		nnPotInit.tfType=NN::TransferN::TANH;
+		nnPotInit.nh.resize(1,15);
+		
+		//load poscar file
+		std::cout<<"Loading POSCAR file...\n";
+		VASP::POSCAR::load("Si.poscar",struc);
+		
+		//initialize the nn potential
+		std::cout<<"Initializing the nn potential...\n";
+		nnpot.resize(struc);
+		nnpot.init(nnPotInit);
+		nnpot.initSymm(struc);
+		std::cout<<"nnpot = "<<nnpot<<"\n";
+		
+		//pack the potential
+		std::cout<<"Packing the potential...\n";
+		unsigned int nbytes=serialize::nbytes(nnpot);
+		std::cout<<"nbytes = "<<nbytes<<"\n";
+		char* arr=new char[nbytes];
+		serialize::pack(nnpot,arr);
+		
+		//unpack the potential
+		std::cout<<"Unpacking the potential...\n";
+		NNPot nnpot_new;
+		serialize::unpack(nnpot_new,arr);
+		std::cout<<"nnpot_new = "<<nnpot_new<<"\n";
+		std::cout<<"nnpot == nnpot_new -> "<<(nnpot==nnpot_new)<<"\n";
+		static_cast<PhiR_G2&>(nnpot_new.basisR(0,0).fR(0)).eta++;
+		std::cout<<"nnpot == nnpot_new -> "<<(nnpot==nnpot_new)<<"\n";
+		
+	}catch(std::exception& e){
+		std::cout<<"ERROR in TEST - SERIAL:\n";
+		std::cout<<e.what()<<"\n";
+	}
+	std::cout<<"******************* TEST - SERIAL *******************\n";
 	std::cout<<"************************************************************\n";
 	}
 }
