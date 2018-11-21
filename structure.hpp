@@ -1,25 +1,55 @@
 #ifndef STRUCTURE_HPP
 #define STRUCTURE_HPP
 
-// c libraries
+//c libraries
 #include <cstdlib>
-// c++ libraries
-#include <iostream>
 #include <stdexcept>
+//c++ libraries
+#include <iostream>
 #include <string>
-// eigen libraries
+#include <type_traits>
+//Eigen
 #include <Eigen/Dense>
-// string
-#include "string.hpp"
-// cell
+//#include "label.hpp"
 #include "cell.hpp"
-// atom properties
-#include "property.hpp"
+#include "string.hpp"
 #include "ptable.hpp"
 
 #ifndef DEBUG_STRUCTURE
 #define DEBUG_STRUCTURE 0
 #endif
+
+//**********************************************************************************************
+//AtomType
+//**********************************************************************************************
+
+struct AtomType{
+	//data
+	bool name;
+	bool an;
+	bool specie;
+	bool index;
+	bool mass;
+	bool charge;
+	bool posn;
+	bool velocity;
+	bool force;
+	bool dipole;
+	bool alpha;
+	bool jzero;
+	bool symm;
+	bool neighlist;
+	bool frac;
+	//constructors/destructors
+	AtomType(){defaults();};
+	~AtomType(){};
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const AtomType& atomT);
+	//member functions
+	void defaults();
+	void clear(){defaults();};
+	unsigned int nbytes()const;
+};
 
 //**********************************************************************************************
 //FILE_FORMAT struct
@@ -40,12 +70,26 @@ struct FILE_FORMAT{
 		GROMACS,//GROMACS trajectory files
 		QE,//quantum espresso output files
 		PROPHET,//PROPhet xml file
-		XSF//xcrysden format
+		XSF,//xcrysden format
+		AME//ame format
 	};
-	static FILE_FORMAT::type load(const std::string& str);
+	static FILE_FORMAT::type read(const std::string& str);
 };
 
 std::ostream& operator<<(std::ostream& out, FILE_FORMAT::type& format);
+
+//**********************************************************************************************
+//Interval
+//**********************************************************************************************
+
+struct Interval{
+	int beg,end,stride;
+	Interval(int b,int e,int s):beg(b),end(e),stride(s){};
+	Interval():beg(0),end(0),stride(1){};
+	~Interval(){};
+	friend std::ostream& operator<<(std::ostream& out, const Interval& i);
+	static Interval read(const char* str);
+};
 
 //**********************************************************************************************
 //List Atomic
@@ -73,8 +117,8 @@ public:
 	//primitives
 		unsigned int N()const{return N_;};
 	//list access - operators
-		T& operator[](unsigned int i){return list_[i];};
-		const T& operator[](unsigned int i)const{return list_[i];};
+		inline T& operator[](unsigned int i){return list_[i];};
+		inline const T& operator[](unsigned int i)const{return list_[i];};
 	//list access - stored array
 		const T* list()const{return list_;};
 	
@@ -94,7 +138,8 @@ public:
 template <class T>
 ListData<T>::ListData(const ListData<T>& l){
 	if(DEBUG_STRUCTURE>0) std::cout<<"ListData<T>::ListData(const ListData<T>&):\n";
-	init(); resize(l.N());
+	init();
+	resize(l.N());
 	for(unsigned int i=0; i<size(); ++i) list_[i]=l[i];
 }
 
@@ -109,9 +154,10 @@ ListData<T>::~ListData(){
 template <class T>
 ListData<T>& ListData<T>::operator=(const ListData<T>& l){
 	if(DEBUG_STRUCTURE>0) std::cout<<"ListData<T>::operator=(const ListData<T>&):\n";
-	ListData<T> templist(l);
-	resize(templist.N());
-	for(unsigned int i=0; i<size(); ++i) list_[i]=templist[i];
+	if(&l!=this){
+		resize(l.N());
+		for(unsigned int i=0; i<size(); ++i) list_[i]=l[i];
+	}
 	return *this;
 }
 
@@ -127,22 +173,16 @@ void ListData<T>::init(){
 template <class T>
 void ListData<T>::clear(){
 	if(DEBUG_STRUCTURE>0) std::cout<<"ListData<T>::clear():\n";
-	if(list_!=NULL) delete[] list_;
-	list_=NULL;
+	if(list_!=NULL){delete[] list_; list_=NULL;}
 	N_=0;
 }
 
 template <class T>
 void ListData<T>::resize(unsigned int N){
 	if(DEBUG_STRUCTURE>0) std::cout<<"ListData<T>::resize(unsigned int):\n";
-	try{
-		if(list_!=NULL) delete[] list_;
-		N_=N;
-		list_=new T[N_];
-	}catch(std::exception& e){
-		clear();
-		throw e;
-	}
+	if(list_!=NULL){delete[] list_; list_=NULL;}
+	N_=N;
+	if(N_>0) list_=new T[N_];
 }
 
 //operators
@@ -158,7 +198,7 @@ bool operator!=(const ListData<T>& l1, const ListData<T>& l2){
 }
 
 //**********************************************************************************************
-// Structure Interface
+//Structure Interface
 //**********************************************************************************************
 
 class StructureI{
@@ -167,11 +207,7 @@ public:
 protected:
 	//cell data
 	Cell cell_;//unit cell
-	bool cellFixed_;//whether the cell is static
 	//simulation data
-	std::string system_;//the name of the simulation
-	bool periodic_;//whether the simulation is periodic or not
-	double timestep_;//the length in picoseconds of each timestep
 	double energy_;//energy
 	double temp_;//temperature
 	//atomic data
@@ -189,23 +225,12 @@ public:
 	
 	//operators
 	StructureI& operator=(const StructureI& arg);
-	friend std::ostream& operator<<(std::ostream& out, const StructureI& sim);
+	friend std::ostream& operator<<(std::ostream& out, const StructureI& struc);
 	
 	//access
-	//name
-		std::string& system(){return system_;};
-		const std::string& system()const{return system_;};
-	//timestep
-		double& timestep(){return timestep_;};
-		const double& timestep()const{return timestep_;};
-	//periodicity
-		bool& periodic(){return periodic_;};
-		const bool& periodic()const{return periodic_;};
 	//cells
 		Cell& cell(){return cell_;};
 		const Cell& cell()const{return cell_;};
-		bool& cellFixed(){return cellFixed_;};
-		const bool& cellFixed()const{return cellFixed_;};
 	//energy
 		double& energy(){return energy_;};
 		const double& energy()const{return energy_;};
@@ -221,6 +246,9 @@ public:
 		const std::string& atomNames(unsigned int i)const{return atomNames_[i];};
 		const std::vector<std::string>& atomNames()const{return atomNames_;};
 	
+	//template functions
+	template <class AtomT> unsigned int index(const AtomT& atom){return atom.index()+offsets_[atom.species()];};
+	
 	//member functions
 	void defaults();
 	void clear(){defaults();};
@@ -234,442 +262,214 @@ public:
 };
 
 //**********************************************************************************************
-// Structure Storage
+//Sim Atomic Storage
 //**********************************************************************************************
 
-template <class AtomT>
 class StructureS{
 protected:
-	//the atoms of the simulation
-	ListData<AtomT> atoms_;
-	
 	//atom properties
-	ListData<std::string> atom_name_;//names
-	ListData<unsigned int> atom_an_;//atomic numbers
-	ListData<double> atom_mass_;//masses
-	ListData<unsigned int> atom_specie_;//species 
-	ListData<unsigned int> atom_index_;//indices
-	ListData<Eigen::Vector3d> atom_posn_;//positions
-	ListData<Eigen::Vector3d> atom_force_;//forces
-	ListData<Eigen::Vector3d> atom_velocity_;//velocities
-	ListData<double> atom_charge_;//charges
-	ListData<Eigen::VectorXd> atom_symm_;//symmetry functions
+	ListData<std::string>		name_;		//name
+	ListData<unsigned int> 		an_;		//atomic_number
+	ListData<unsigned int> 		specie_;	//specie
+	ListData<unsigned int> 		index_;	//index
+	ListData<double> 			mass_;		//mass
+	ListData<double> 			charge_;	//charge
+	ListData<Eigen::Vector3d>	posn_;		//position
+	ListData<Eigen::Vector3d>	velocity_;	//velocity
+	ListData<Eigen::Vector3d>	force_;	//force
+	ListData<Eigen::Vector3d>	dipole_;	//dipole
+	ListData<Eigen::Matrix3d>	alpha_;	//polarizability
+	ListData<double> 			jzero_;	//idempotential
+	ListData<Eigen::VectorXd>	symm_;		//symmetry_function
+	ListData<std::vector<unsigned int> >	neighlist_;		//neighborlist
 	
 	//resizing functions
-	void resizeAtomArrays(unsigned int nAtomsT);
-	void resizeAtomName(std::true_type, unsigned int nAtomsT); void resizeAtomName(std::false_type, unsigned int nAtomsT){};//names
-	void resizeAtomAN(std::true_type, unsigned int nAtomsT); void resizeAtomAN(std::false_type, unsigned int nAtomsT){};//atomic numbers
-	void resizeAtomMass(std::true_type, unsigned int nAtomsT); void resizeAtomMass(std::false_type, unsigned int nAtomsT){};//masses
-	void resizeAtomSpecie(std::true_type, unsigned int nAtomsT); void resizeAtomSpecie(std::false_type, unsigned int nAtomsT){};//species
-	void resizeAtomIndex(std::true_type, unsigned int nAtomsT); void resizeAtomIndex(std::false_type, unsigned int nAtomsT){};//indices
-	void resizeAtomPosn(std::true_type, unsigned int nAtomsT); void resizeAtomPosn(std::false_type, unsigned int nAtomsT){};//positions
-	void resizeAtomForce(std::true_type, unsigned int nAtomsT); void resizeAtomForce(std::false_type, unsigned int nAtomsT){};//forces
-	void resizeAtomVelocity(std::true_type, unsigned int nAtomsT); void resizeAtomVelocity(std::false_type, unsigned int nAtomsT){};//forces
-	void resizeAtomCharge(std::true_type, unsigned int nAtomsT); void resizeAtomCharge(std::false_type, unsigned int nAtomsT){};//charges
-	void resizeAtomSymm(std::true_type, unsigned int nAtomsT); void resizeAtomSymm(std::false_type, unsigned int nAtomsT){};//symmetry functions
+	void resizeAtomArrays(unsigned int nAtomsT, const AtomType& atomT);
 	
-	//assigment functions
-	void assignAtomArrays();
-	void assignAtomName(std::true_type); void assignAtomName(std::false_type){};//names
-	void assignAtomAN(std::true_type); void assignAtomAN(std::false_type){};//atomic numbers
-	void assignAtomMass(std::true_type); void assignAtomMass(std::false_type){};//masses
-	void assignAtomSpecie(std::true_type); void assignAtomSpecie(std::false_type){};//species
-	void assignAtomPosn(std::true_type); void assignAtomPosn(std::false_type){};//indices
-	void assignAtomForce(std::true_type); void assignAtomForce(std::false_type){};//indices
-	void assignAtomVelocity(std::true_type); void assignAtomVelocity(std::false_type){};//indices
-	void assignAtomIndex(std::true_type); void assignAtomIndex(std::false_type){};//positions
-	void assignAtomCharge(std::true_type); void assignAtomCharge(std::false_type){};//charges
-	void assignAtomSymm(std::true_type); void assignAtomSymm(std::false_type){};//symmetry functions
 public:
 	//constructors/destructors
 	StructureS(){};
-	StructureS(const StructureS<AtomT>& sim);
+	StructureS(const StructureS& struc);
 	~StructureS(){};
 	
 	//operators
-	StructureS<AtomT>& operator=(const StructureS<AtomT>& sim);
-	template <class AtomT_> friend std::ostream& operator<<(std::ostream& out, const StructureS<AtomT_>& sim);
+	StructureS& operator=(const StructureS& struc);
+	friend std::ostream& operator<<(std::ostream& out, const StructureS& struc){};
 	
 	//access - properties
-	//names
-		ListData<std::string>& atom_name(){return atom_name_;};
-		const ListData<std::string>& atom_name()const{return atom_name_;};
-	//atomic numbers
-		ListData<unsigned int>& atom_an(){return atom_an_;};
-		const ListData<unsigned int>& atom_an()const{return atom_an_;};
-	//masses
-		ListData<double>& atom_mass(){return atom_mass_;};
-		const ListData<double>& atom_mass()const{return atom_mass_;};
-	//species
-		ListData<unsigned int>& atom_specie(){return atom_specie_;};
-		const ListData<unsigned int>& atom_specie()const{return atom_specie_;};
-	//species
-		ListData<unsigned int>& atom_index(){return atom_index_;};
-		const ListData<unsigned int>& atom_index()const{return atom_index_;};
-	//positions
-		ListData<Eigen::Vector3d>& atom_posn(){return atom_posn_;};
-		const ListData<Eigen::Vector3d>& atom_posn()const{return atom_posn_;};
-	//forces
-		ListData<Eigen::Vector3d>& atom_force(){return atom_force_;};
-		const ListData<Eigen::Vector3d>& atom_force()const{return atom_force_;};
-	//velocities
-		ListData<Eigen::Vector3d>& atom_velocity(){return atom_velocity_;};
-		const ListData<Eigen::Vector3d>& atom_velocity()const{return atom_velocity_;};
-	//charges
-		ListData<double>& atom_charge(){return atom_charge_;};
-		const ListData<double>& atom_charge()const{return atom_charge_;};
-	//symmetry functions
-		ListData<Eigen::VectorXd>& atom_symm(){return atom_symm_;};
-		const ListData<Eigen::VectorXd>& atom_symm()const{return atom_symm_;};
-	
-	//access - atoms
-	const ListData<AtomT>& atoms()const{return atoms_;};
+	//name
+		const ListData<std::string>& name()const{return name_;};
+	//atomic_number
+		const ListData<unsigned int>& an()const{return an_;};
+	//specie
+		const ListData<unsigned int>& specie()const{return specie_;};
+	//index
+		const ListData<unsigned int>& index()const{return index_;};
+	//mass
+		const ListData<double>& mass()const{return mass_;};
+	//charge
+		const ListData<double>& charge()const{return charge_;};
+	//position
+		const ListData<Eigen::Vector3d>& posn()const{return posn_;};
+	//velocity
+		const ListData<Eigen::Vector3d>& velocity()const{return velocity_;};
+	//force
+		const ListData<Eigen::Vector3d>& force()const{return force_;};
+	//dipole
+		const ListData<Eigen::Vector3d>& dipole()const{return dipole_;};
+	//polarizability
+		const ListData<Eigen::Matrix3d>& alpha()const{return alpha_;};
+	//idempotential
+		const ListData<double>& jzero()const{return jzero_;};
+	//symmetry_function
+		const ListData<Eigen::VectorXd>& symm()const{return symm_;};
+	//neighbor list
+		const ListData<std::vector<unsigned int> >& neighlist()const{return neighlist_;};
 	
 	//member functions
 	void clear();
-	void resize(const std::vector<unsigned int>& nAtoms, const std::vector<std::string>& speciesNames);
+	void resize(const std::vector<unsigned int>& nAtoms, const std::vector<std::string>& speciesNames, const AtomType& atomT);
 };
 
-//constructors/destructors
-
-template <class AtomT>
-StructureS<AtomT>::StructureS(const StructureS<AtomT>& sim){
-	//set the property arrays
-	atom_name_=sim.atom_name();
-	atom_an_=sim.atom_an();
-	atom_mass_=sim.atom_mass();
-	atom_specie_=sim.atom_specie();
-	atom_index_=sim.atom_index();
-	atom_posn_=sim.atom_posn();
-	atom_force_=sim.atom_force();
-	atom_velocity_=sim.atom_velocity();
-	atom_charge_=sim.atom_charge();
-	atom_symm_=sim.atom_symm();
-	//resize the atom array
-	atoms_.resize(sim.atoms_.size());
-	//assign the atom arrays
-	assignAtomArrays();
-};
-
-//operators
-
-template <class AtomT>
-StructureS<AtomT>& StructureS<AtomT>::operator=(const StructureS<AtomT>& sim){
-	StructureI::operator=(sim);
-	//set the property arrays
-	atom_name_=sim.atom_name();
-	atom_an_=sim.atom_an();
-	atom_mass_=sim.atom_mass();
-	atom_specie_=sim.atom_specie();
-	atom_index_=sim.atom_index();
-	atom_posn_=sim.atom_posn();
-	atom_force_=sim.atom_force();
-	atom_velocity_=sim.atom_velocity();
-	atom_charge_=sim.atom_charge();
-	atom_symm_=sim.atom_symm();
-	//resize the atom array
-	atoms_.resize(sim.atoms().nAtoms());
-	//assign the atom arrays
-	assignAtomArrays();
-	return *this;
-}
-
-template <class AtomT>
-std::ostream& operator<<(std::ostream& out, const StructureS<AtomT>& sim){
-	return out<<static_cast<const StructureI&>(sim);
-}
-
-//member functions
-
-template <class AtomT>
-void StructureS<AtomT>::clear(){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::clear():\n";
-	//clear property arrays
-	atom_name_.clear();
-	atom_an_.clear();
-	atom_mass_.clear();
-	atom_specie_.clear();
-	atom_index_.clear();
-	atom_posn_.clear();
-	atom_force_.clear();
-	atom_velocity_.clear();
-	atom_charge_.clear();
-	atom_symm_.clear();
-	//clear the atoms
-	atoms_.clear();
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resize(const std::vector<unsigned int>& nAtoms, const std::vector<std::string>& speciesNames){
-	//find the total number of atoms
-	unsigned int nAtomsT=0;
-	for(unsigned int i=0; i<nAtoms.size(); ++i) nAtomsT+=nAtoms[i];
-	//resize the atom/molecule arrays
-	atoms_.resize(nAtomsT);
-	//resize the property arrays
-	resizeAtomArrays(nAtomsT);
-	//assign atom arrays
-	assignAtomArrays();
-}
-
-//resizing atom properties
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomArrays(unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeArrays():\n";
-	resizeAtomName(std::is_base_of<Name,AtomT>(),nAtomsT);
-	resizeAtomAN(std::is_base_of<AN,AtomT>(),nAtomsT);
-	resizeAtomMass(std::is_base_of<Mass,AtomT>(),nAtomsT);
-	resizeAtomSpecie(std::is_base_of<Species,AtomT>(),nAtomsT);
-	resizeAtomIndex(std::is_base_of<Index,AtomT>(),nAtomsT);
-	resizeAtomPosn(std::is_base_of<Position,AtomT>(),nAtomsT);
-	resizeAtomForce(std::is_base_of<Force,AtomT>(),nAtomsT);
-	resizeAtomVelocity(std::is_base_of<Velocity,AtomT>(),nAtomsT);
-	resizeAtomCharge(std::is_base_of<Charge,AtomT>(),nAtomsT);
-	resizeAtomSymm(std::is_base_of<Symm,AtomT>(),nAtomsT);
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomName(std::true_type, unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeAtomName(std::true_type, unsigned int nAtomsT):\n";
-	atom_name_.resize(nAtomsT);
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomAN(std::true_type, unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeAtomAN(std::true_type, unsigned int nAtomsT):\n";
-	atom_an_.resize(nAtomsT);
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomMass(std::true_type, unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeAtomMass(std::true_type, unsigned int nAtomsT):\n";
-	atom_mass_.resize(nAtomsT);
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomSpecie(std::true_type, unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeAtomSpecie(std::true_type, unsigned int nAtomsT):\n";
-	atom_specie_.resize(nAtomsT);
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomIndex(std::true_type, unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeAtomIndex(std::true_type, unsigned int nAtomsT):\n";
-	atom_index_.resize(nAtomsT);
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomPosn(std::true_type, unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeAtomPosn(std::true_type, unsigned int nAtomsT):\n";
-	atom_posn_.resize(nAtomsT);
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomForce(std::true_type, unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeAtomForce(std::true_type, unsigned int nAtomsT):\n";
-	atom_force_.resize(nAtomsT);
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomVelocity(std::true_type, unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeAtomVelocity(std::true_type, unsigned int nAtomsT):\n";
-	atom_velocity_.resize(nAtomsT);
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomCharge(std::true_type, unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeAtomCharge(std::true_type, unsigned int nAtomsT):\n";
-	atom_charge_.resize(nAtomsT);
-}
-
-template <class AtomT>
-void StructureS<AtomT>::resizeAtomSymm(std::true_type, unsigned int nAtomsT){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::resizeAtomSymm(std::true_type, unsigned int nAtomsT):\n";
-	atom_symm_.resize(nAtomsT);
-}
-
-//assigning atom properties
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomArrays(){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomArrays():\n";
-	assignAtomName(std::is_base_of<Name,AtomT>());
-	assignAtomAN(std::is_base_of<AN,AtomT>());
-	assignAtomMass(std::is_base_of<Mass,AtomT>());
-	assignAtomSpecie(std::is_base_of<Species,AtomT>());
-	assignAtomIndex(std::is_base_of<Index,AtomT>());
-	assignAtomPosn(std::is_base_of<Position,AtomT>());
-	assignAtomForce(std::is_base_of<Force,AtomT>());
-	assignAtomVelocity(std::is_base_of<Velocity,AtomT>());
-	assignAtomCharge(std::is_base_of<Charge,AtomT>());
-	assignAtomSymm(std::is_base_of<Symm,AtomT>());
-}
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomName(std::true_type){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomName(std::true_type):\n";
-	for(unsigned int i=0; i<atoms_.size(); ++i){
-		static_cast<Name&>(atoms_[i]).set(&atom_name_[i]);
-	}
-}
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomAN(std::true_type){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomAN(std::true_type):\n";
-	for(unsigned int i=0; i<atoms_.size(); ++i){
-		static_cast<AN&>(atoms_[i]).set(&atom_an_[i]);
-	}
-}
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomMass(std::true_type){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomMass(std::true_type):\n";
-	for(unsigned int i=0; i<atoms_.size(); ++i){
-		static_cast<Mass&>(atoms_[i]).set(&atom_mass_[i]);
-	}
-}
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomSpecie(std::true_type){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomSpecie(std::true_type):\n";
-	for(unsigned int i=0; i<atoms_.size(); ++i){
-		static_cast<Species&>(atoms_[i]).set(&atom_specie_[i]);
-	}
-}
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomIndex(std::true_type){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomIndex(std::true_type):\n";
-	for(unsigned int i=0; i<atoms_.size(); ++i){
-		static_cast<Index&>(atoms_[i]).set(&atom_index_[i]);
-	}
-}
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomPosn(std::true_type){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomPosn(std::true_type):\n";
-	for(unsigned int i=0; i<atoms_.size(); ++i){
-		static_cast<Position&>(atoms_[i]).set(&atom_posn_[i]);
-	}
-}
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomForce(std::true_type){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomForce(std::true_type):\n";
-	for(unsigned int i=0; i<atoms_.size(); ++i){
-		static_cast<Force&>(atoms_[i]).set(&atom_force_[i]);
-	}
-}
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomVelocity(std::true_type){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomVelocity(std::true_type):\n";
-	for(unsigned int i=0; i<atoms_.size(); ++i){
-		static_cast<Velocity&>(atoms_[i]).set(&atom_velocity_[i]);
-	}
-}
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomCharge(std::true_type){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomCharge(std::true_type):\n";
-	for(unsigned int i=0; i<atoms_.size(); ++i){
-		static_cast<Charge&>(atoms_[i]).set(&atom_charge_[i]);
-	}
-}
-
-template <class AtomT>
-void StructureS<AtomT>::assignAtomSymm(std::true_type){
-	if(DEBUG_STRUCTURE>0) std::cout<<"StructureS<AtomT>::assignAtomSymm(std::true_type):\n";
-	for(unsigned int i=0; i<atoms_.size(); ++i){
-		static_cast<Symm&>(atoms_[i]).set(&atom_symm_[i]);
-	}
-}
-
 //**********************************************************************************************
-// Structure - Atomic
+//Structure Atomic
 //**********************************************************************************************
 
-template <class AtomT>
-class Structure: public StructureI, public StructureS<AtomT>{
+class Structure: public StructureI, public StructureS{
 public:
 	//constructors/destructors
 	Structure(){};
-	Structure(const Structure<AtomT>& sim):StructureI(sim),StructureS<AtomT>(sim){};
+	Structure(const Structure& sim):StructureI(sim),StructureS(sim){};
+	Structure(const std::vector<unsigned int>& nAtoms, const std::vector<std::string>& atomNames, const AtomType& atomT){resize(nAtoms,atomNames,atomT);};
 	~Structure(){};
 	
 	//operators
-	Structure<AtomT>& operator=(const Structure<AtomT>& sim);
-	template <class AtomT_> friend std::ostream& operator<<(std::ostream& out, const Structure<AtomT_>& sim);
+	Structure& operator=(const Structure& sim);
+	friend std::ostream& operator<<(std::ostream& out, const Structure& sim);
 	
 	//member functions
 	void clear();
-	void resize(const std::vector<unsigned int>& nAtoms, const std::vector<std::string>& speciesNames);
+	void resize(const std::vector<unsigned int>& nAtoms, const std::vector<std::string>& atomNames, const AtomType& atomT);
 	
-	//access - atoms
-	AtomT& atom(unsigned int n){return this->atoms_[n];};
-	const AtomT& atom(unsigned int n)const{return this->atoms_[n];};
-	AtomT& atom(unsigned int n, unsigned int m);
-	const AtomT& atom(unsigned int n, unsigned int m)const;
+	//access - properties
+	//name
+		std::string& name(unsigned int i){return name_[i];};
+		const std::string& name(unsigned int i)const{return name_[i];};
+		std::string& name(unsigned int i, unsigned int j){return name_[offsets_[i]+j];};
+		const std::string& name(unsigned int i, unsigned int j)const{return name_[offsets_[i]+j];};
+	//atomic_number
+		unsigned int& an(unsigned int i){return an_[i];};
+		const unsigned int& an(unsigned int i)const{return an_[i];};
+		unsigned int& an(unsigned int i, unsigned int j){return an_[offsets_[i]+j];};
+		const unsigned int& an(unsigned int i, unsigned int j)const{return an_[offsets_[i]+j];};
+	//specie
+		unsigned int& specie(unsigned int i){return specie_[i];};
+		const unsigned int& specie(unsigned int i)const{return specie_[i];};
+		unsigned int& specie(unsigned int i, unsigned int j){return specie_[offsets_[i]+j];};
+		const unsigned int& specie(unsigned int i, unsigned int j)const{return specie_[offsets_[i]+j];};
+	//index
+		unsigned int& index(unsigned int i){return index_[i];};
+		const unsigned int& index(unsigned int i)const{return index_[i];};
+		unsigned int& index(unsigned int i, unsigned int j){return index_[offsets_[i]+j];};
+		const unsigned int& index(unsigned int i, unsigned int j)const{return index_[offsets_[i]+j];};
+	//mass
+		double& mass(unsigned int i){return mass_[i];};
+		const double& mass(unsigned int i)const{return mass_[i];};
+		double& mass(unsigned int i, unsigned int j){return mass_[offsets_[i]+j];};
+		const double& mass(unsigned int i, unsigned int j)const{return mass_[offsets_[i]+j];};
+	//charge
+		double& charge(unsigned int i){return charge_[i];};
+		const double& charge(unsigned int i)const{return charge_[i];};
+		double& charge(unsigned int i, unsigned int j){return charge_[offsets_[i]+j];};
+		const double& charge(unsigned int i, unsigned int j)const{return charge_[offsets_[i]+j];};
+	//position
+		Eigen::Vector3d& posn(unsigned int i){return posn_[i];};
+		const Eigen::Vector3d& posn(unsigned int i)const{return posn_[i];};
+		Eigen::Vector3d& posn(unsigned int i, unsigned int j){return posn_[offsets_[i]+j];};
+		const Eigen::Vector3d& posn(unsigned int i, unsigned int j)const{return posn_[offsets_[i]+j];};
+	//velocity
+		Eigen::Vector3d& velocity(unsigned int i){return velocity_[i];};
+		const Eigen::Vector3d& velocity(unsigned int i)const{return velocity_[i];};
+		Eigen::Vector3d& velocity(unsigned int i, unsigned int j){return velocity_[offsets_[i]+j];};
+		const Eigen::Vector3d& velocity(unsigned int i, unsigned int j)const{return velocity_[offsets_[i]+j];};
+	//force
+		Eigen::Vector3d& force(unsigned int i){return force_[i];};
+		const Eigen::Vector3d& force(unsigned int i)const{return force_[i];};
+		Eigen::Vector3d& force(unsigned int i, unsigned int j){return force_[offsets_[i]+j];};
+		const Eigen::Vector3d& force(unsigned int i, unsigned int j)const{return force_[offsets_[i]+j];};
+	//dipole
+		Eigen::Vector3d& dipole(unsigned int i){return dipole_[i];};
+		const Eigen::Vector3d& dipole(unsigned int i)const{return dipole_[i];};
+		Eigen::Vector3d& dipole(unsigned int i, unsigned int j){return dipole_[offsets_[i]+j];};
+		const Eigen::Vector3d& dipole(unsigned int i, unsigned int j)const{return dipole_[offsets_[i]+j];};
+	//polarizability
+		Eigen::Matrix3d& alpha(unsigned int i){return alpha_[i];};
+		const Eigen::Matrix3d& alpha(unsigned int i)const{return alpha_[i];};
+		Eigen::Matrix3d& alpha(unsigned int i, unsigned int j){return alpha_[offsets_[i]+j];};
+		const Eigen::Matrix3d& alpha(unsigned int i, unsigned int j)const{return alpha_[offsets_[i]+j];};
+	//idempotential
+		double& jzero(unsigned int i){return jzero_[i];};
+		const double& jzero(unsigned int i)const{return jzero_[i];};
+		double& jzero(unsigned int i, unsigned int j){return jzero_[offsets_[i]+j];};
+		const double& jzero(unsigned int i, unsigned int j)const{return jzero_[offsets_[i]+j];};
+	//symmetry_function
+		Eigen::VectorXd& symm(unsigned int i){return symm_[i];};
+		const Eigen::VectorXd& symm(unsigned int i)const{return symm_[i];};
+		Eigen::VectorXd& symm(unsigned int i, unsigned int j){return symm_[offsets_[i]+j];};
+		const Eigen::VectorXd& symm(unsigned int i, unsigned int j)const{return symm_[offsets_[i]+j];};
+	//neighbor_list
+		std::vector<unsigned int>& neighlist(unsigned int i){return neighlist_[i];};
+		const std::vector<unsigned int>& neighlist(unsigned int i)const{return neighlist_[i];};
+		std::vector<unsigned int>& neighlist(unsigned int i, unsigned int j){return neighlist_[offsets_[i]+j];};
+		const std::vector<unsigned int>& neighlist(unsigned int i, unsigned int j)const{return neighlist_[offsets_[i]+j];};
 };
 
-//access - atoms
+//**********************************************
+// Simulation
+//**********************************************
 
-template <class AtomT>
-AtomT& Structure<AtomT>::atom(unsigned int n, unsigned int m){
-	return this->atoms_[offsets_[n]+m];
-}
-
-template <class AtomT>
-const AtomT& Structure<AtomT>::atom(unsigned int n, unsigned int m)const{
-	return this->atoms_[offsets_[n]+m];
-}
-
-//operators
-
-template <class AtomT>
-Structure<AtomT>& Structure<AtomT>::operator=(const Structure<AtomT>& sim){
-	if(DEBUG_STRUCTURE>0) std::cout<<"Structure<AtomT>::operator=(const Structure<AtomT>&):\n";
-	StructureI::operator=(sim);
-	StructureS<AtomT>::operator=(sim);
-	return *this;
-}
-
-template <class AtomT>
-std::ostream& operator<<(std::ostream& out, const Structure<AtomT>& sim){
-	out<<static_cast<const StructureI&>(sim);
-	return out;
-}
-
-//member functions
-
-template <class AtomT>
-void Structure<AtomT>::clear(){
-	if(DEBUG_STRUCTURE>0) std::cout<<"Structure<AtomT>::clear():\n";
-	StructureI::clear();
-	StructureS<AtomT>::clear();
-}
-
-template <class AtomT>
-void Structure<AtomT>::resize(const std::vector<unsigned int>& nAtoms, const std::vector<std::string>& speciesNames){
-	if(DEBUG_STRUCTURE>0) std::cout<<"Structure<AtomT>::resize(const std::vector<unsigned int>&,const std::vector<std::string>&):\n";
-	//resize StructureI
-	StructureI::resize(nAtoms,speciesNames);
-	//resize StructureS
-	StructureS<AtomT>::resize(nAtoms,speciesNames);
-	//set the names, species, and indices
-	unsigned int count=0;
-	for(unsigned int n=0; n<nSpecies_; ++n){
-		for(unsigned int m=0; m<nAtoms_[n]; ++m){
-			this->atom_name_[count]=this->atomNames_[n];
-			this->atom_an_[count]=PTable::an(this->atomNames_[n].c_str());
-			this->atom_specie_[count]=n;
-			this->atom_index_[count]=m;
-			++count;
-		}
-	}
+class Simulation{
+private:
+	std::string name_;
+	unsigned int timestep_;
+	unsigned int timesteps_;
+	unsigned int beg_,end_,stride_;
+	bool cell_fixed_;
+	AtomType atomT_;
+	std::vector<Structure> frames_;
+public:
+	//constructors/destructors
+	Simulation(){defaults();};
+	~Simulation(){};
 	
-}
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const Simulation& sim);
+	
+	//access
+	std::string& name(){return name_;};
+	const std::string& name()const{return name_;};
+	unsigned int& timestep(){return timestep_;};
+	const unsigned int& timestep()const{return timestep_;};
+	unsigned int& timesteps(){return timesteps_;};
+	const unsigned int& timesteps()const{return timesteps_;};
+	unsigned int& beg(){return beg_;};
+	const unsigned int& beg()const{return beg_;};
+	unsigned int& end(){return end_;};
+	const unsigned int& end()const{return end_;};
+	unsigned int& stride(){return stride_;};
+	const unsigned int& stride()const{return stride_;};
+	bool& cell_fixed(){return cell_fixed_;};
+	const bool& cell_fixed()const{return cell_fixed_;};
+	AtomType& atomT(){return atomT_;};
+	const AtomType& atomT()const{return atomT_;};
+	Structure& frame(unsigned int i){return frames_[i];};
+	const Structure& frame(unsigned int i)const{return frames_[i];};
+	
+	//member functions
+	void defaults();
+	void clear();
+	void resize(unsigned int ts, const std::vector<unsigned int>& nAtoms, const std::vector<std::string>& names, const AtomType& atomT);
+};
 
 namespace serialize{
 	
@@ -677,56 +477,31 @@ namespace serialize{
 	// byte measures
 	//**********************************************
 	
-	//ListData
-	
-	template <> unsigned int nbytes(const ListData<Name>& obj);
-	template <> unsigned int nbytes(const ListData<AN>& obj);
-	template <> unsigned int nbytes(const ListData<Species>& obj);
-	template <> unsigned int nbytes(const ListData<Index>& obj);
-	template <> unsigned int nbytes(const ListData<Mass>& obj);
-	template <> unsigned int nbytes(const ListData<Charge>& obj);
-	template <> unsigned int nbytes(const ListData<Position>& obj);
-	template <> unsigned int nbytes(const ListData<Velocity>& obj);
-	template <> unsigned int nbytes(const ListData<Force>& obj);
-	template <> unsigned int nbytes(const ListData<Symm>& obj);
-	
-	//StructureI
-	
-	template <> unsigned int nbytes(const StructureI& obj);
+	template <> unsigned int nbytes(const ListData<unsigned int>& obj);
+	template <> unsigned int nbytes(const ListData<double>& obj);
+	template <> unsigned int nbytes(const ListData<std::string>& obj);
+	template <> unsigned int nbytes(const ListData<Eigen::Vector3d>& obj);
+	template <> unsigned int nbytes(const ListData<Eigen::VectorXd>& obj);
 	
 	//**********************************************
 	// packing
 	//**********************************************
 	
-	//ListData
-	
-	template <> void pack(const ListData<Name>& obj, char* arr);
-	template <> void pack(const ListData<AN>& obj, char* arr);
-	template <> void pack(const ListData<Species>& obj, char* arr);
-	template <> void pack(const ListData<Index>& obj, char* arr);
-	template <> void pack(const ListData<Mass>& obj, char* arr);
-	template <> void pack(const ListData<Charge>& obj, char* arr);
-	template <> void pack(const ListData<Position>& obj, char* arr);
-	template <> void pack(const ListData<Velocity>& obj, char* arr);
-	template <> void pack(const ListData<Force>& obj, char* arr);
-	template <> void pack(const ListData<Symm>& obj, char* arr);
+	template <> void pack(const ListData<unsigned int>& obj, char* arr);
+	template <> void pack(const ListData<double>& obj, char* arr);
+	template <> void pack(const ListData<std::string>& obj, char* arr);
+	template <> void pack(const ListData<Eigen::Vector3d>& obj, char* arr);
+	template <> void pack(const ListData<Eigen::VectorXd>& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	//ListData
-	
-	template <> void unpack(ListData<Name>& obj, const char* arr);
-	template <> void unpack(ListData<AN>& obj, const char* arr);
-	template <> void unpack(ListData<Species>& obj, const char* arr);
-	template <> void unpack(ListData<Index>& obj, const char* arr);
-	template <> void unpack(ListData<Mass>& obj, const char* arr);
-	template <> void unpack(ListData<Charge>& obj, const char* arr);
-	template <> void unpack(ListData<Position>& obj, const char* arr);
-	template <> void unpack(ListData<Velocity>& obj, const char* arr);
-	template <> void unpack(ListData<Force>& obj, const char* arr);
-	template <> void unpack(ListData<Symm>& obj, const char* arr);
+	template <> void unpack(ListData<unsigned int>& obj, const char* arr);
+	template <> void unpack(ListData<double>& obj, const char* arr);
+	template <> void unpack(ListData<std::string>& obj, const char* arr);
+	template <> void unpack(ListData<Eigen::Vector3d>& obj, const char* arr);
+	template <> void unpack(ListData<Eigen::VectorXd>& obj, const char* arr);
 	
 }
 
