@@ -1,6 +1,11 @@
 #ifndef MAP_HPP
 #define MAP_HPP
 
+#include <string>
+#include <vector>
+#include <iostream>
+#include "serialize.hpp"
+
 template <class T1, class T2>
 class Map{
 private:
@@ -21,7 +26,7 @@ public:
 	unsigned int size()const{return key_.size();};
 	void add(const T1& k, const T2& v);
 	void remove(const T1& k);
-	bool find(const T1& k);
+	bool find(const T1& k)const;
 	void clear();
 	
 	//operators
@@ -47,7 +52,7 @@ void Map<T1,T2>::remove(const T1& k){
 }
 
 template <class T1, class T2>
-bool Map<T1,T2>::find(const T1& k){
+bool Map<T1,T2>::find(const T1& k)const{
 	int index=-1;
 	for(unsigned int i=0; i<key_.size(); ++i){
 		if(k==key_[i]){index=i;break;}
@@ -70,6 +75,42 @@ const T2& Map<T1,T2>::operator[](const T1& k)const{
 	}
 	if(index<0) throw std::runtime_error("No match for key in map");
 	return val_[index];
+}
+
+template <class T1, class T2>
+bool operator==(const Map<T1,T2>& map1, const Map<T1,T2>& map2){
+	if(map1.size()!=map2.size()) return false;
+	for(unsigned int i=0; i<map1.size(); ++i){
+		if(map1.val(i)!=map2[map1.key(i)]) return false;
+	}
+	return true;
+}
+
+template <class T1, class T2>
+bool operator!=(const Map<T1,T2>& map1, const Map<T1,T2>& map2){
+	return !(map1==map2);
+}
+
+namespace serialize{
+	
+	//**********************************************
+	// byte measures
+	//**********************************************
+	
+	template <> unsigned int nbytes(const Map<std::string,unsigned int>& obj);
+	
+	//**********************************************
+	// packing
+	//**********************************************
+	
+	template <> void pack(const Map<std::string,unsigned int>& obj, char* arr);
+	
+	//**********************************************
+	// unpacking
+	//**********************************************
+	
+	template <> void unpack(Map<std::string,unsigned int>& obj, const char* arr);
+	
 }
 
 #endif
