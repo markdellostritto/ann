@@ -9,8 +9,6 @@
 // lower triangular matrix
 #include "lmat.hpp"
 // simulation libraries
-#include "atom.hpp"
-#include "property.hpp"
 #include "cell.hpp"
 #include "structure.hpp"
 // neural networks
@@ -58,7 +56,7 @@
 // TYPEDEFS
 //************************************************************
 
-typedef Atom<Name,AN,Species,Index,Position,Symm,Force> AtomT;
+//typedef Atom<Name,AN,Species,Index,Position,Symm,Force> AtomT;
 typedef std::vector<Eigen::VectorXd,Eigen::aligned_allocator<Eigen::VectorXd> > VecList;
 
 //************************************************************
@@ -124,6 +122,7 @@ public:
 		~Init(){};
 		//member functions
 		void defaults();
+		void init_basis(unsigned int nSpecies);
 	};
 public:
 	//constructors/destructors
@@ -140,26 +139,32 @@ public:
 		unsigned int speciesIndex(const std::string& name)const{return speciesMap_[name];};
 		Map<std::string,unsigned int>& speciesMap(){return speciesMap_;};
 		const Map<std::string,unsigned int>& speciesMap()const{return speciesMap_;};
+		const std::vector<double>& energyAtom()const{return energyAtom_;};
 		double& energyAtom(unsigned int i){return energyAtom_[i];};
 		const double& energyAtom(unsigned int i)const{return energyAtom_[i];};
 	//global cutoff
 		double& rc(){return rc_;};
 		const double& rc()const{return rc_;};
 	//basis
-		std::vector<std::vector<BasisR> >& basisR(){return basisR_;};
 		const std::vector<std::vector<BasisR> >& basisR()const{return basisR_;};
 		BasisR& basisR(unsigned int i, unsigned int j){return basisR_[i][j];};
 		const BasisR& basisR(unsigned int i, unsigned int j)const{return basisR_[i][j];};
-		std::vector<LMat<BasisA> >& basisA(){return basisA_;};
+		const unsigned int& offsetR(unsigned int i, unsigned int j)const{return offsetR_[i][j];};
 		const std::vector<LMat<BasisA> >& basisA()const{return basisA_;};
 		BasisA& basisA(unsigned int n, unsigned int i, unsigned int j){return basisA_[n](i,j);};
 		const BasisA& basisA(unsigned int n, unsigned int i, unsigned int j)const{return basisA_[n](i,j);};
+		const unsigned int& offsetA(unsigned int n, unsigned int i, unsigned int j)const{return offsetA_[n](i,j);};
 		std::vector<NN::Network>& nn(){return nn_;};
 		const std::vector<NN::Network>& nn()const{return nn_;};
 		NN::Network& nn(unsigned int i){return nn_[i];};
 		const NN::Network& nn(unsigned int i)const{return nn_[i];};
-	//hidden nodes
+	//nodes
 		const unsigned int& nInput(unsigned int i)const{return nInput_[i];};
+		const unsigned int& nInputR(unsigned int i)const{return nInputR_[i];};
+		const unsigned int& nInputA(unsigned int i)const{return nInputR_[i];};
+		const std::vector<unsigned int>& nInput()const{return nInput_;};
+		const std::vector<unsigned int>& nInputR()const{return nInputR_;};
+		const std::vector<unsigned int>& nInputA()const{return nInputA_;};
 	//input/output
 		std::string& header(){return header_;};
 		const std::string& header()const{return header_;};
@@ -173,22 +178,50 @@ public:
 		void clear(){defaults();};//clear the potential
 		void init(const Init& init_);//initialize the basis functions and element networks
 	//resizing
-		void resize(const Structure<AtomT>& struc);//assign vector of all species in the simulations
-		void resize(const std::vector<Structure<AtomT> >& simv);//assign vector of all species in the simulations
+		void resize(const Structure& struc);//assign vector of all species in the simulations
+		void resize(const std::vector<Structure >& simv);//assign vector of all species in the simulations
 		void resize(const std::vector<std::string>& speciesNames);//set the number of species and species names to the total number of species in the simulations
 	//nn-struc
-		void initSymm(Structure<AtomT>& struc);//assign vector of all species in the simulations
-		void initSymm(std::vector<Structure<AtomT> >& simv);//assign vector of all species in the simulations
-		void inputs_symm(Structure<AtomT>& struc);//calculate inputs - symmetry functions
-		void forces(Structure<AtomT>& struc);//calculate forces
-		double energy(Structure<AtomT>& struc);//sum over atomic energyies and return total energy
-		void forces_radial(Structure<AtomT>& struc);
-		void forces_angular(Structure<AtomT>& struc);
+		void initSymm(Structure& struc);//assign vector of all species in the simulations
+		void initSymm(std::vector<Structure >& simv);//assign vector of all species in the simulations
+		void inputs_symm(Structure& struc);//calculate inputs - symmetry functions
+		void inputs_symm_v2(Structure& struc);//calculate inputs - symmetry functions
+		void init_inputs();
+		void forces(Structure& struc, bool calc_symm=true);//calculate forces
+		void forces_v2(Structure& struc, bool calc_symm=true);//calculate forces
+		double energy(Structure& struc, bool calc_symm=true);//sum over atomic energyies and return total energy
+		void forces_radial(Structure& struc);
+		void forces_angular(Structure& struc);
 	//static functions
-		void write()const;
+		void write(unsigned int step=0)const;
 		void read();
 		void write(unsigned int index, const std::string& filename)const;
 		void read(unsigned int index, const std::string& filename);
 };
+
+bool operator==(const NNPot& nnPot1, const NNPot& nnPot2);
+inline bool operator!=(const NNPot& nnPot1, const NNPot& nnPot2){return !(nnPot1==nnPot2);};
+
+namespace serialize{
+	
+	//**********************************************
+	// byte measures
+	//**********************************************
+	
+	template <> unsigned int nbytes(const NNPot& obj);
+	
+	//**********************************************
+	// packing
+	//**********************************************
+	
+	template <> void pack(const NNPot& obj, char* arr);
+	
+	//**********************************************
+	// unpacking
+	//**********************************************
+	
+	template <> void unpack(NNPot& obj, const char* arr);
+	
+}
 
 #endif

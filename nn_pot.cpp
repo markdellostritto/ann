@@ -1,5 +1,126 @@
 #include "nn_pot.hpp"
 
+namespace serialize{
+	
+//**********************************************
+// byte measures
+//**********************************************
+
+template <> unsigned int nbytes(const NNPot& obj){
+	unsigned int size=0;
+	//species
+	size+=sizeof(unsigned int);//nspecies
+	size+=nbytes(obj.speciesMap());
+	//cutoff
+	size+=sizeof(double);//rc_
+	//basis for pair/triple interactions
+	for(unsigned int i=0; i<obj.nSpecies(); ++i){
+		for(unsigned int j=0; j<obj.nSpecies(); ++j){
+			size+=nbytes(obj.basisR(i,j));
+		}
+	}
+	for(unsigned int i=0; i<obj.nSpecies(); ++i){
+		for(unsigned int j=0; j<obj.nSpecies(); ++j){
+			for(unsigned int k=j; k<obj.nSpecies(); ++k){
+				size+=nbytes(obj.basisA(i,j,k));
+			}
+		}
+	}
+	//element nn's
+	size+=nbytes(obj.speciesMap());
+	for(unsigned int i=0; i<obj.nSpecies(); ++i) size+=nbytes(obj.nn(i));
+	//pre-/post-conditioning
+	size+=obj.nSpecies()*sizeof(double);//energy of isolated atom
+	//input/output
+	size+=nbytes(obj.header());
+	//return the size
+	return size;
+}
+
+//**********************************************
+// packing
+//**********************************************
+
+template <> void pack(const NNPot& obj, char* arr){
+	unsigned int pos=0;
+	//species
+	unsigned int nSpecies=obj.nSpecies();
+	std::memcpy(arr+pos,&nSpecies,sizeof(unsigned int)); pos+=sizeof(unsigned int);
+	pack(obj.speciesMap(),arr+pos); pos+=nbytes(obj.speciesMap());
+	//cutoff
+	std::memcpy(arr+pos,&obj.rc(),sizeof(double)); pos+=sizeof(double);
+	//basis for pair/triple interactions
+	for(unsigned int i=0; i<obj.nSpecies(); ++i){
+		for(unsigned int j=0; j<obj.nSpecies(); ++j){
+			pack(obj.basisR(i,j),arr+pos); pos+=nbytes(obj.basisR(i,j));
+		}
+	}
+	for(unsigned int i=0; i<obj.nSpecies(); ++i){
+		for(unsigned int j=0; j<obj.nSpecies(); ++j){
+			for(unsigned int k=j; k<obj.nSpecies(); ++k){
+				pack(obj.basisA(i,j,k),arr+pos); pos+=nbytes(obj.basisA(i,j,k));
+			}
+		}
+	}
+	//element nn's
+	for(unsigned int i=0; i<obj.nSpecies(); ++i){
+		pack(obj.nn(i),arr+pos); pos+=nbytes(obj.nn(i));
+	}
+	//pre-/post-conditioning
+	for(unsigned int i=0; i<obj.nSpecies(); ++i){
+		std::memcpy(arr+pos,&obj.energyAtom(i),sizeof(double)); pos+=sizeof(double);
+	}
+	//input/output
+	pack(obj.header(),arr+pos); pos+=nbytes(obj.header());
+}
+
+//**********************************************
+// unpacking
+//**********************************************
+
+template <> void unpack(NNPot& obj, const char* arr){
+	unsigned int pos=0;
+	//species
+	unsigned int nSpecies=0;
+	std::memcpy(&nSpecies,arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
+	Map<std::string,unsigned int> map;
+	unpack(map,arr+pos); pos+=nbytes(map);
+	std::vector<std::string> names(map.size());
+	for(unsigned int i=0; i<map.size(); ++i) names[i]=map.key(i);
+	obj.resize(names);
+	//cutoff
+	double rc=0;
+	std::memcpy(&rc,arr+pos,sizeof(double)); pos+=sizeof(double);
+	obj.rc()=rc;
+	//basis for pair/triple interactions
+	for(unsigned int i=0; i<obj.nSpecies(); ++i){
+		for(unsigned int j=0; j<obj.nSpecies(); ++j){
+			unpack(obj.basisR(i,j),arr+pos); pos+=nbytes(obj.basisR(i,j));
+		}
+	}
+	for(unsigned int i=0; i<obj.nSpecies(); ++i){
+		for(unsigned int j=0; j<obj.nSpecies(); ++j){
+			for(unsigned int k=j; k<obj.nSpecies(); ++k){
+				unpack(obj.basisA(i,j,k),arr+pos); pos+=nbytes(obj.basisA(i,j,k));
+			}
+		}
+	}
+	//element nn's
+	for(unsigned int i=0; i<obj.nSpecies(); ++i){
+		unpack(obj.nn(i),arr+pos); pos+=nbytes(obj.nn(i));
+	}
+	//pre-/post-conditioning
+	for(unsigned int i=0; i<obj.nSpecies(); ++i){
+		std::memcpy(&obj.energyAtom(i),arr+pos,sizeof(double)); pos+=sizeof(double);
+	}
+	//input/output
+	unpack(obj.header(),arr+pos); pos+=nbytes(obj.header());
+	//intialize the inputs and offsets
+	obj.init_inputs();
+}
+
+}
+
 //************************************************************
 // NNPot::Init - Neural Network Potential - Initialization from Scratch
 //************************************************************
@@ -107,7 +228,7 @@ void NNPot::defaults(){
 
 //initialize the basis functions with reasonable first guess, resize neural networks
 void NNPot::init(const NNPot::Init& init_){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::init():\n";
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::init(const NNPot::Init&):\n";
 	//check the parameters
 		if(init_.tfType==NN::TransferN::UNKNOWN) throw std::invalid_argument("Invalid transfer function.");
 		if(init_.rm<0) throw std::invalid_argument("Invalid minimum radius.");
@@ -211,8 +332,8 @@ void NNPot::init(const NNPot::Init& init_){
 //resizing
 
 //set the number of species and species names to the total number of species in the simulations
-void NNPot::resize(const Structure<AtomT>& struc){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::resize(const Structure<AtomT>&):\n";
+void NNPot::resize(const Structure& struc){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::resize(const Structure&):\n";
 	//set the species
 		unsigned int nSpecies=0;
 		speciesMap_.clear();
@@ -249,8 +370,8 @@ void NNPot::resize(const Structure<AtomT>& struc){
 }
 
 //set the number of species and species names to the total number of species in the simulations
-void NNPot::resize(const std::vector<Structure<AtomT> >& strucv){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::resize(const std::vector<Structure<AtomT> >&):\n";
+void NNPot::resize(const std::vector<Structure >& strucv){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::resize(const std::vector<Structure >&):\n";
 	//set the species
 		unsigned int nSpecies=0;
 		speciesMap_.clear();
@@ -317,35 +438,67 @@ void NNPot::resize(const std::vector<std::string>& speciesNames){
 //nn-struc
 
 //resize the symmetry function vectors to store the inputs
-void NNPot::initSymm(Structure<AtomT>& struc){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::initSymm(const Structure<AtomT>&):\n";
+void NNPot::initSymm(Structure& struc){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::initSymm(const Structure&):\n";
 	for(unsigned int n=0; n<struc.nSpecies(); ++n){
 		for(unsigned int m=0; m<struc.nAtoms(n); ++m){
-			struc.atom(n,m).symm().resize(nInput_[n]);
+			struc.symm(n,m).resize(nInput_[n]);
 		}
 	}
 }
 
 //resize the symmetry function vectors to store the inputs
-void NNPot::initSymm(std::vector<Structure<AtomT> >& strucv){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::initSymm(const std::vector<Structure<AtomT> >&):\n";
+void NNPot::initSymm(std::vector<Structure >& strucv){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::initSymm(const std::vector<Structure >&):\n";
 	for(unsigned int i=0; i<strucv.size(); ++i){
 		for(unsigned int n=0; n<strucv[i].nSpecies(); ++n){
 			for(unsigned int m=0; m<strucv[i].nAtoms(n); ++m){
-				strucv[i].atom(n,m).symm().resize(nInput_[n]);
+				strucv[i].symm(n,m).resize(nInput_[n]);
 			}
 		}
 	}
 }
 
+void NNPot::init_inputs(){
+	for(unsigned int n=0; n<nSpecies(); ++n){
+		for(unsigned int i=0; i<nSpecies(); ++i){
+			nInputR_[n]+=basisR_[n][i].nfR();
+		}
+	}
+	for(unsigned int n=0; n<nSpecies(); ++n){
+		for(unsigned int i=1; i<nSpecies(); ++i){
+			offsetR_[n][i]=offsetR_[n][i-1]+basisR_[n][i-1].nfR();
+		}
+	}
+	for(unsigned int n=0; n<nSpecies(); ++n){
+		for(unsigned int i=0; i<nSpecies(); ++i){
+			for(unsigned int j=i; j<nSpecies(); ++j){
+				nInputA_[n]+=basisA_[n](j,i).nfA();
+			}
+		}
+	}
+	for(unsigned int n=0; n<nSpecies(); ++n){
+		for(unsigned int i=1; i<basisA_[n].size(); ++i){
+			offsetA_[n][i]=offsetA_[n][i-1]+basisA_[n][i-1].nfA();
+		}
+	}
+	for(unsigned int n=0; n<speciesMap_.size(); ++n) nInput_[n]=nInputR_[n]+nInputA_[n];
+}
+
 //calculate inputs - symmetry functions 
-void NNPot::inputs_symm(Structure<AtomT>& struc){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::inputs_symm(Structure<AtomT>&,unsigned int):\n";
+void NNPot::inputs_symm(Structure& struc){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::inputs_symm(Structure&,unsigned int):\n";
 	//lattice vector shifts
+	short shellx=std::floor(2.0*rc_/struc.cell().R().col(0).norm());
+	short shelly=std::floor(2.0*rc_/struc.cell().R().col(1).norm());
+	short shellz=std::floor(2.0*rc_/struc.cell().R().col(2).norm());
+	if(NN_POT_PRINT_DATA>0) std::cout<<"R = "<<struc.cell().R()<<"\n";
+	if(NN_POT_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<")\n";
+	R_.resize((2*shellx+1)*(2*shelly+1)*(2*shellz+1),Eigen::Vector3d::Zero());
 	unsigned short count=0;
-	for(short ix=-1; ix<=1; ++ix){
-		for(short iy=-1; iy<=1; ++iy){
-			for(short iz=-1; iz<=1; ++iz){
+	for(short ix=-shellx; ix<=shellx; ++ix){
+		for(short iy=-shelly; iy<=shelly; ++iy){
+			for(short iz=-shellz; iz<=shellz; ++iz){
 				R_[count].setZero();
 				R_[count].noalias()+=ix*struc.cell().R().col(0);
 				R_[count].noalias()+=iy*struc.cell().R().col(1);
@@ -358,48 +511,52 @@ void NNPot::inputs_symm(Structure<AtomT>& struc){
 	if(NN_POT_PRINT_STATUS>0) std::cout<<"calculating symmetry functions...\n";
 	for(unsigned int i=0; i<struc.nAtoms(); ++i){
 		//find the index of the species of atom j
-		unsigned int II=speciesMap_[struc.atom(i).name()];
+		const unsigned int II=speciesMap_[struc.name(i)];
 		//reset the inputs
 		if(NN_POT_PRINT_STATUS>2) std::cout<<"resetting inputs...\n";
-		struc.atom(i).symm().setZero();
+		struc.symm(i).setZero();
 		//loop over pairs
 		for(unsigned int j=0; j<struc.nAtoms(); ++j){
 			if(i==j) continue;
 			//find the index of the species of atom j
-			unsigned int JJ=speciesMap_[struc.atom(j).name()];
+			const unsigned int JJ=speciesMap_[struc.name(j)];
 			//calc rIJ
 			if(NN_POT_PRINT_STATUS>2) std::cout<<"symm r("<<i<<","<<j<<")\n";
 			//calc radial contribution - loop over all radial functions
 			if(NN_POT_PRINT_STATUS>2) std::cout<<"Computing radial functions...\n";
-			Cell::diff(struc.atom(i).posn(),struc.atom(j).posn(),rIJ_,struc.cell().R(),struc.cell().RInv());
+			Cell::diff(struc.posn(i),struc.posn(j),rIJ_,struc.cell().R(),struc.cell().RInv());
 			//loop over lattice vector shifts
 			for(unsigned short idIJ=0; idIJ<R_.size(); ++idIJ){
-				rIJt_.noalias()=rIJ_; rIJt_.noalias()+=R_[idIJ]; double dIJ=rIJt_.norm();
+				rIJt_.noalias()=rIJ_; rIJt_.noalias()+=R_[idIJ]; const double dIJ=rIJt_.norm();
 				if(dIJ<rc_){
 					if(NN_POT_PRINT_STATUS>2) std::cout<<"Setting radial symmetry functions...\n";
 					//compute the IJ contribution to all radial basis functions
-					for(unsigned int nr=0; nr<basisR_[II][JJ].nfR(); ++nr){
-						struc.atom(i).symm()[offsetR_[II][JJ]+nr]+=basisR_[II][JJ].fR(nr).val(dIJ);
+					unsigned int offset_=offsetR_[II][JJ];
+					const BasisR& basisRij_=basisR_[II][JJ];
+					for(unsigned int nr=0; nr<basisRij_.nfR(); ++nr){
+						struc.symm(i)[offset_+nr]+=basisRij_.fR(nr).val(dIJ);
 					}
 					//loop over all triplets
 					for(unsigned int k=0; k<struc.nAtoms(); ++k){
 						if(k==i || k==j) continue;
 						//find the index of the species of atom i
-						unsigned int KK=speciesMap_[struc.atom(k).name()];
+						const unsigned int KK=speciesMap_[struc.name(k)];
 						//calculate rIK and rJK
 						if(NN_POT_PRINT_STATUS>2) std::cout<<"calculating theta("<<i<<","<<j<<","<<k<<")\n";
-						Cell::diff(struc.atom(i).posn(),struc.atom(k).posn(),rIK_,struc.cell().R(),struc.cell().RInv());
-						Cell::diff(struc.atom(j).posn(),struc.atom(k).posn(),rJK_,struc.cell().R(),struc.cell().RInv());
+						Cell::diff(struc.posn(i),struc.posn(k),rIK_,struc.cell().R(),struc.cell().RInv());
+						Cell::diff(struc.posn(j),struc.posn(k),rJK_,struc.cell().R(),struc.cell().RInv());
 						//loop over all cell shifts
 						for(unsigned short idIK=0; idIK<R_.size(); ++idIK){
-							rIKt_=rIK_; rIKt_.noalias()+=R_[idIK]; double dIK=rIKt_.norm();
+							rIKt_=rIK_; rIKt_.noalias()+=R_[idIK]; const double dIK=rIKt_.norm();
 							for(unsigned short idJK=0; idJK<R_.size(); ++idJK){
-								rJKt_=rJK_; rJKt_.noalias()+=R_[idJK]; double dJK=rJKt_.norm();
+								rJKt_=rJK_; rJKt_.noalias()+=R_[idJK]; const double dJK=rJKt_.norm();
 								if(dIK<rc_ && dJK<rc_){
 									//compute the IJ,IK,JK contribution to all angular basis functions
-									double cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
-									for(unsigned int na=0; na<basisA_[II](JJ,KK).nfA(); ++na){
-										struc.atom(i).symm()[nInputR_[II]+offsetA_[II](JJ,KK)+na]+=basisA_[II](JJ,KK).fA(na).val(cosIJK,dIJ,dIK,dJK);
+									offset_=nInputR_[II]+offsetA_[II](JJ,KK);
+									const BasisA& basisAijk_=basisA_[II](JJ,KK);
+									const double cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
+									for(unsigned int na=0; na<basisAijk_.nfA(); ++na){
+										struc.symm(i)[offset_+na]+=basisAijk_.fA(na).val(cosIJK,dIJ,dIK,dJK);
 									}
 								}
 							}
@@ -412,17 +569,23 @@ void NNPot::inputs_symm(Structure<AtomT>& struc){
 }
 
 //calculate forces
-void NNPot::forces(Structure<AtomT>& struc){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::forces(Structure<AtomT>&):\n";
+void NNPot::forces(Structure& struc, bool calc_symm){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::forces(Structure&):\n";
 	//local variables
 	Eigen::VectorXd dEdG;
 	//reset the force
-	for(unsigned int i=0; i<struc.nAtoms(); ++i) struc.atom(i).force().setZero();
+	for(unsigned int i=0; i<struc.nAtoms(); ++i) struc.force(i).setZero();
 	//lattice vector shifts
+	short shellx=std::floor(2.0*rc_/struc.cell().R().col(0).norm());
+	short shelly=std::floor(2.0*rc_/struc.cell().R().col(1).norm());
+	short shellz=std::floor(2.0*rc_/struc.cell().R().col(2).norm());
+	if(NN_POT_PRINT_DATA>0) std::cout<<"R = "<<struc.cell().R()<<"\n";
+	if(NN_POT_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<")\n";
+	R_.resize((2*shellx+1)*(2*shelly+1)*(2*shellz+1),Eigen::Vector3d::Zero());
 	unsigned short count=0;
-	for(short ix=-1; ix<=1; ++ix){
-		for(short iy=-1; iy<=1; ++iy){
-			for(short iz=-1; iz<=1; ++iz){
+	for(short ix=-shellx; ix<=shellx; ++ix){
+		for(short iy=-shelly; iy<=shelly; ++iy){
+			for(short iz=-shellz; iz<=shellz; ++iz){
 				R_[count].setZero();
 				R_[count].noalias()+=ix*struc.cell().R().col(0);
 				R_[count].noalias()+=iy*struc.cell().R().col(1);
@@ -432,13 +595,13 @@ void NNPot::forces(Structure<AtomT>& struc){
 		}
 	}
 	//set the inputs for the atoms
-	inputs_symm(struc);
+	if(calc_symm) inputs_symm(struc);
 	//loop over all atoms
 	for(unsigned int i=0; i<struc.nAtoms(); ++i){
 		//find the index of the species of atom i
-		unsigned int II=speciesMap_[struc.atom(i).name()];
+		const unsigned int II=speciesMap_[struc.name(i)];
 		//execute the appropriate network
-		nn_[II].execute(struc.atom(i).symm());
+		nn_[II].execute(struc.symm(i));
 		//calculate the network gradient
 		nn_[II].grad_out();
 		//set the gradient
@@ -447,35 +610,37 @@ void NNPot::forces(Structure<AtomT>& struc){
 		for(unsigned int j=0; j<struc.nAtoms(); ++j){
 			if(i==j) continue;
 			//find the index of the species of atom j
-			unsigned int JJ=speciesMap_[struc.atom(j).name()];
+			const unsigned int JJ=speciesMap_[struc.name(j)];
 			//calc rIJ
-			Cell::diff(struc.atom(i).posn(),struc.atom(j).posn(),rIJ_,struc.cell().R(),struc.cell().RInv());
+			Cell::diff(struc.posn(i),struc.posn(j),rIJ_,struc.cell().R(),struc.cell().RInv());
 			//loop over lattice vector shifts
 			for(unsigned short idIJ=0; idIJ<R_.size(); ++idIJ){
-				rIJt_=rIJ_; rIJt_.noalias()+=R_[idIJ]; double dIJ=rIJt_.norm();
+				rIJt_=rIJ_; rIJt_.noalias()+=R_[idIJ]; const double dIJ=rIJt_.norm();
 				if(dIJ<rc_){
 					rIJt_/=dIJ;
 					//compute the IJ contribution to the radial force
+					unsigned int offset_=offsetR_[II][JJ];
+					const BasisR& basisRij_=basisR_[II][JJ];
 					double ftemp=0;
-					for(unsigned int nr=0; nr<basisR_[II][JJ].nfR(); ++nr){
-						ftemp-=dEdG[offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR(nr).grad(dIJ);
+					for(unsigned int nr=0; nr<basisRij_.nfR(); ++nr){
+						ftemp-=dEdG[offset_+nr]*basisRij_.fR(nr).grad(dIJ);
 					}
-					struc.atom(i).force().noalias()+=ftemp*rIJt_;
-					struc.atom(j).force().noalias()-=ftemp*rIJt_;
+					struc.force(i).noalias()+=ftemp*rIJt_;
+					struc.force(j).noalias()-=ftemp*rIJt_;
 					//loop over all triplets
 					for(unsigned int k=0; k<struc.nAtoms(); ++k){
 						if(k==i || k==j) continue;
 						//find the index of the species of atom k
-						unsigned int KK=speciesMap_[struc.atom(k).name()];
+						const unsigned int KK=speciesMap_[struc.name(k)];
 						//calculate rIK and rJK
 						if(NN_POT_PRINT_STATUS>2) std::cout<<"calculating theta("<<i<<","<<j<<","<<k<<")\n";
-						Cell::diff(struc.atom(i).posn(),struc.atom(k).posn(),rIK_,struc.cell().R(),struc.cell().RInv());
-						Cell::diff(struc.atom(j).posn(),struc.atom(k).posn(),rJK_,struc.cell().R(),struc.cell().RInv());
+						Cell::diff(struc.posn(i),struc.posn(k),rIK_,struc.cell().R(),struc.cell().RInv());
+						Cell::diff(struc.posn(j),struc.posn(k),rJK_,struc.cell().R(),struc.cell().RInv());
 						//loop over all cell shifts
 						for(unsigned short idIK=0; idIK<R_.size(); ++idIK){
-							rIKt_=rIK_; rIKt_.noalias()+=R_[idIK]; double dIK=rIKt_.norm();
+							rIKt_=rIK_; rIKt_.noalias()+=R_[idIK]; const double dIK=rIKt_.norm();
 							for(unsigned short idJK=0; idJK<R_.size(); ++idJK){
-								rJKt_=rJK_; rJKt_.noalias()+=R_[idJK]; double dJK=rJKt_.norm();
+								rJKt_=rJK_; rJKt_.noalias()+=R_[idJK]; const double dJK=rJKt_.norm();
 								if(dIK<rc_ && dJK<rc_){
 									//compute the IJ,IK,JK contribution to the angular force
 									//==== first version - mathematically more transparent, but less efficient, have to skip around memory a lot ====
@@ -484,56 +649,59 @@ void NNPot::forces(Structure<AtomT>& struc){
 										//gradient - cosine - central atom
 										cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
 										amp=-0.5*basisA_[II](JJ,KK).fA[na]->grad_angle(cosIJK)*basisA_[II](JJ,KK).fA[na]->dist(dIJ,dIK,dJK)*dEdG_[i][nInputR_[II]+offsetA_[II][JJ]+na];
-										struc.atom(i).force().noalias()+=amp*(1.0/dIK-cosIJK/dIJ)*rIJt_/dIJ;
-										struc.atom(i).force().noalias()+=amp*(1.0/dIJ-cosIJK/dIK)*rIKt_/dIK;
+										struc.force(i).noalias()+=amp*(1.0/dIK-cosIJK/dIJ)*rIJt_/dIJ;
+										struc.force(i).noalias()+=amp*(1.0/dIJ-cosIJK/dIK)*rIKt_/dIK;
 										//gradient distance - central atom
 										amp=-0.5*basisA_[II](JJ,KK).fA[na]->angle(cosIJK)*dEdG_[i][nInputR_[II]+offsetA_[II][JJ]+na];
-										struc.atom(i).force().noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
-										struc.atom(i).force().noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
+										struc.force(i).noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
+										struc.force(i).noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
 									}
 									for(unsigned int na=0; na<basisA_[JJ](II,KK).fA.size(); ++na){
 										//gradient - cosine - first neighbor
 										cosIJK=-rIJt_.dot(rJKt_)/(dIJ*dJK);
 										amp=-0.5*basisA_[JJ](II,KK).fA[na]->grad_angle(cosIJK)*basisA_[JJ](II,KK).fA[na]->dist(dIJ,dJK,dIK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][II]+na];
-										struc.atom(i).force().noalias()-=amp*cosIJK/dIJ*rIJt_/dIJ;
-										struc.atom(i).force().noalias()-=amp*1.0/(dIJ)*rJKt_/dJK;
+										struc.force(i).noalias()-=amp*cosIJK/dIJ*rIJt_/dIJ;
+										struc.force(i).noalias()-=amp*1.0/(dIJ)*rJKt_/dJK;
 										//gradient - cosine - first neighbor
 										amp=-0.5*basisA_[JJ](II,KK).fA[na]->angle(cosIJK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][II]+na];
-										struc.atom(i).force().noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,0)*rIJt_/dIJ;
-										struc.atom(i).force().noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,2)*rIKt_/dIK;
+										struc.force(i).noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,0)*rIJt_/dIJ;
+										struc.force(i).noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,2)*rIKt_/dIK;
 									}
 									for(unsigned int na=0; na<basisA_[JJ](KK,II).fA.size(); ++na){
 										//gradient - cosine - second neighbor
 										cosIJK=-rJKt_.dot(rIJt_)/(dJK*dIJ);
 										amp=-0.5*basisA_[JJ](KK,II).fA[na]->grad_angle(cosIJK)*basisA_[JJ](KK,II).fA[na]->dist(dJK,dIJ,dIK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][KK]+na];
-										struc.atom(i).force().noalias()-=amp*cosIJK/dIJ*rIJt_/dIJ;
-										struc.atom(i).force().noalias()-=amp*1.0/(dIJ)*rJKt_/dJK;
+										struc.force(i).noalias()-=amp*cosIJK/dIJ*rIJt_/dIJ;
+										struc.force(i).noalias()-=amp*1.0/(dIJ)*rJKt_/dJK;
 										//gradient - cosine - second neighbor
 										amp=-0.5*basisA_[JJ](KK,II).fA[na]->angle(cosIJK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][KK]+na];
-										struc.atom(i).force().noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,1)*rIJt_/dIJ;
-										struc.atom(i).force().noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,2)*rIKt_/dIK;
+										struc.force(i).noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,1)*rIJt_/dIJ;
+										struc.force(i).noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,2)*rIKt_/dIK;
 									}
 									*/
 									//==== second version - mathematically more obtuse, but more efficient, better memory locality ====
 									///*
-									double fij1=0,fij2=0,fik1=0,fik2=0;
 									rIKt_/=dIK;
-									double amp,cosIJK=rIJt_.dot(rIKt_);
-									for(unsigned int na=0; na<basisA_[II](JJ,KK).nfA(); ++na){
+									offset_=nInputR_[II]+offsetA_[II][JJ];
+									const BasisA& basisAijk_=basisA_[II](JJ,KK);
+									const double cosIJK=rIJt_.dot(rIKt_);
+									double fij1=0,fij2=0,fik1=0,fik2=0;
+									double amp;
+									for(unsigned int na=0; na<basisAijk_.nfA(); ++na){
 										//gradient - cosine - central atom
-										amp=-0.5*basisA_[II](JJ,KK).fA(na).grad_angle(cosIJK)*basisA_[II](JJ,KK).fA(na).dist(dIJ,dIK,dJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
-										fij1+=amp*(-cosIJK/dIJ);
-										fij2+=amp*(1.0/dIK);
-										fik1+=amp*(-cosIJK/dIK);
-										fik2+=amp*(1.0/dIJ);
+										amp=-0.5*basisAijk_.fA(na).grad_angle(cosIJK)*basisAijk_.fA(na).dist(dIJ,dIK,dJK)*dEdG[offset_+na];
+										fij1+=amp/dIJ*(-cosIJK);
+										fij2+=amp/dIK;
+										fik1+=amp/dIK*(-cosIJK);
+										fik2+=amp/dIJ;
 										//gradient distance - central atom
-										amp=-0.5*basisA_[II](JJ,KK).fA(na).angle(cosIJK)*dEdG[nInputR_[II]+offsetA_[II][JJ]+na];
-										fij1+=amp*basisA_[II](JJ,KK).fA(na).grad_dist_0(dIJ,dIK,dJK);
-										fik1+=amp*basisA_[II](JJ,KK).fA(na).grad_dist_1(dIJ,dIK,dJK);
+										amp=-0.5*basisAijk_.fA(na).angle(cosIJK)*dEdG[offset_+na];
+										fij1+=amp*basisAijk_.fA(na).grad_dist_0(dIJ,dIK,dJK);
+										fik1+=amp*basisAijk_.fA(na).grad_dist_1(dIJ,dIK,dJK);
 									}
-									struc.atom(i).force().noalias()+=(fij1+fij2)*rIJt_+(fik1+fik2)*rIKt_;
-									struc.atom(j).force().noalias()-=fij1*rIJt_+fik2*rIKt_;
-									struc.atom(k).force().noalias()-=fik1*rIKt_+fij2*rIJt_;
+									struc.force(i).noalias()+=(fij1+fij2)*rIJt_+(fik1+fik2)*rIKt_;
+									struc.force(j).noalias()-=fij1*rIJt_+fik2*rIKt_;
+									struc.force(k).noalias()-=fik1*rIKt_+fij2*rIJt_;
 									//*/
 								}
 							}
@@ -546,12 +714,12 @@ void NNPot::forces(Structure<AtomT>& struc){
 }
 
 //calculate forces
-void NNPot::forces_radial(Structure<AtomT>& struc){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::force_radial(Structure<AtomT>&,unsigned int):\n";
+void NNPot::forces_radial(Structure& struc){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::force_radial(Structure&,unsigned int):\n";
 	//local variables
 	Eigen::VectorXd dEdG;
 	//reset the force
-	for(unsigned int i=0; i<struc.nAtoms(); ++i) struc.atom(i).force().setZero();
+	for(unsigned int i=0; i<struc.nAtoms(); ++i) struc.force(i).setZero();
 	//lattice vector shifts
 	unsigned short count=0;
 	for(short ix=-1; ix<=1; ++ix){
@@ -573,9 +741,9 @@ void NNPot::forces_radial(Structure<AtomT>& struc){
 	if(NN_POT_PRINT_STATUS>0) std::cout<<"Calculating radial force...\n";
 	for(unsigned int i=0; i<struc.nAtoms(); ++i){
 		//find the index of the species of atom i
-		unsigned int II=speciesMap_[struc.atom(i).name()];
+		unsigned int II=speciesMap_[struc.name(i)];
 		//execute the appropriate network
-		nn_[II].execute(struc.atom(i).symm());
+		nn_[II].execute(struc.symm(i));
 		//calculate the network gradient
 		nn_[II].grad_out();
 		//set the gradient
@@ -583,9 +751,9 @@ void NNPot::forces_radial(Structure<AtomT>& struc){
 		for(unsigned int j=0; j<struc.nAtoms(); ++j){
 			if(i==j) continue;
 			//find the index of the species of atom j
-			unsigned int JJ=speciesMap_[struc.atom(j).name()];
+			unsigned int JJ=speciesMap_[struc.name(j)];
 			//calc rIJ
-			Cell::diff(struc.atom(i).posn(),struc.atom(j).posn(),rIJ_,struc.cell().R(),struc.cell().RInv());
+			Cell::diff(struc.posn(i),struc.posn(j),rIJ_,struc.cell().R(),struc.cell().RInv());
 			//loop over lattice vector shifts
 			for(unsigned short idIJ=0; idIJ<R_.size(); ++idIJ){
 				rIJt_=rIJ_; rIJt_.noalias()+=R_[idIJ]; double dIJ=rIJt_.norm();
@@ -593,19 +761,19 @@ void NNPot::forces_radial(Structure<AtomT>& struc){
 					//first version - mathematically simpler, less efficient
 					//compute the IJ contribution to all radial basis functions
 					/*for(unsigned int nr=0; nr<basisR_[II][JJ].fR.size(); ++nr){
-						struc.atom(i).force().noalias()+=-1*rIJt_/dIJ*(
+						struc.force(i).noalias()+=-1*rIJt_/dIJ*(
 							dEdG_[i][offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR[nr]->grad(dIJ)
 							+dEdG_[j][offsetR_[JJ][II]+nr]*basisR_[JJ][II].fR[nr]->grad(dIJ)
 						);
 					}*/
-					//second version - mathematically more obtuse, more efficient
+					//second version - mathematically more obtuse, but more efficient
 					rIJt_/=dIJ;
 					Eigen::Vector3d ftemp=Eigen::Vector3d::Zero();
 					for(unsigned int nr=0; nr<basisR_[II][JJ].nfR(); ++nr){
 						ftemp.noalias()+=-1*rIJt_*dEdG[offsetR_[II][JJ]+nr]*basisR_[II][JJ].fR(nr).grad(dIJ);
 					}
-					struc.atom(i).force().noalias()+=ftemp;
-					struc.atom(j).force().noalias()-=ftemp;
+					struc.force(i).noalias()+=ftemp;
+					struc.force(j).noalias()-=ftemp;
 				}
 			}
 		}
@@ -613,12 +781,12 @@ void NNPot::forces_radial(Structure<AtomT>& struc){
 }
 
 //calculate forces
-void NNPot::forces_angular(Structure<AtomT>& struc){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::forces_angular(Structure<AtomT>&):\n";
+void NNPot::forces_angular(Structure& struc){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::forces_angular(Structure&):\n";
 	//local variables
 	Eigen::VectorXd dEdG;
 	//reset the forces
-	for(unsigned int i=0; i<struc.nAtoms(); ++i) struc.atom(i).force().setZero();
+	for(unsigned int i=0; i<struc.nAtoms(); ++i) struc.force(i).setZero();
 	//lattice vector shifts
 	unsigned short count=0;
 	for(short ix=-1; ix<=1; ++ix){
@@ -639,9 +807,9 @@ void NNPot::forces_angular(Structure<AtomT>& struc){
 		//local loop variables
 		double dIJ,dIK,dJK;
 		//find the index of the species of atom i
-		unsigned int II=speciesMap_[struc.atom(i).name()];
+		unsigned int II=speciesMap_[struc.name(i)];
 		//execute the appropriate network
-		nn_[II].execute(struc.atom(i).symm());
+		nn_[II].execute(struc.symm(i));
 		//calculate the network gradient
 		nn_[II].grad_out();
 		//set the gradient
@@ -650,9 +818,9 @@ void NNPot::forces_angular(Structure<AtomT>& struc){
 		for(unsigned int j=0; j<struc.nAtoms(); ++j){
 			if(i==j) continue;
 			//find the index of the species of atom j
-			unsigned int JJ=speciesMap_[struc.atom(j).name()];
+			unsigned int JJ=speciesMap_[struc.name(j)];
 			//calc rIJ
-			Cell::diff(struc.atom(i).posn(),struc.atom(j).posn(),rIJ_,struc.cell().R(),struc.cell().RInv());
+			Cell::diff(struc.posn(i),struc.posn(j),rIJ_,struc.cell().R(),struc.cell().RInv());
 			//loop over lattice vector shifts
 			for(unsigned short idIJ=0; idIJ<R_.size(); ++idIJ){
 				rIJt_=rIJ_; rIJt_.noalias()+=R_[idIJ]; dIJ=rIJt_.norm();
@@ -661,11 +829,11 @@ void NNPot::forces_angular(Structure<AtomT>& struc){
 					for(unsigned int k=0; k<struc.nAtoms(); ++k){
 						if(k==i || k==j) continue;
 						//find the index of the species of atom k
-						unsigned int KK=speciesMap_[struc.atom(k).name()];
+						unsigned int KK=speciesMap_[struc.name(k)];
 						//calculate rIK and rJK
 						if(NN_POT_PRINT_STATUS>2) std::cout<<"calculating theta("<<i<<","<<j<<","<<k<<")\n";
-						Cell::diff(struc.atom(i).posn(),struc.atom(k).posn(),rIK_,struc.cell().R(),struc.cell().RInv());
-						Cell::diff(struc.atom(j).posn(),struc.atom(k).posn(),rJK_,struc.cell().R(),struc.cell().RInv());
+						Cell::diff(struc.posn(i),struc.posn(k),rIK_,struc.cell().R(),struc.cell().RInv());
+						Cell::diff(struc.posn(j),struc.posn(k),rJK_,struc.cell().R(),struc.cell().RInv());
 						//loop over all cell shifts
 						for(unsigned short idIK=0; idIK<R_.size(); ++idIK){
 							rIKt_=rIK_; rIKt_.noalias()+=R_[idIK]; dIK=rIKt_.norm();
@@ -679,34 +847,34 @@ void NNPot::forces_angular(Structure<AtomT>& struc){
 										//gradient - cosine - central atom
 										cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
 										amp=-0.5*basisA_[II](JJ,KK).fA[na]->grad_angle(cosIJK)*basisA_[II](JJ,KK).fA[na]->dist(dIJ,dIK,dJK)*dEdG_[i][nInputR_[II]+offsetA_[II][JJ]+na];
-										struc.atom(i).force().noalias()+=amp*(1.0/dIK-cosIJK/dIJ)*rIJt_/dIJ;
-										struc.atom(i).force().noalias()+=amp*(1.0/dIJ-cosIJK/dIK)*rIKt_/dIK;
+										struc.force(i).noalias()+=amp*(1.0/dIK-cosIJK/dIJ)*rIJt_/dIJ;
+										struc.force(i).noalias()+=amp*(1.0/dIJ-cosIJK/dIK)*rIKt_/dIK;
 										//gradient distance - central atom
 										amp=-0.5*basisA_[II](JJ,KK).fA[na]->angle(cosIJK)*dEdG_[i][nInputR_[II]+offsetA_[II][JJ]+na];
-										struc.atom(i).force().noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
-										struc.atom(i).force().noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
+										struc.force(i).noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,0)*rIJt_/dIJ;
+										struc.force(i).noalias()+=amp*basisA_[II](JJ,KK).fA[na]->grad_dist(dIJ,dIK,dJK,1)*rIKt_/dIK;
 									}
 									for(unsigned int na=0; na<basisA_[JJ](II,KK).fA.size(); ++na){
 										//gradient - cosine - first neighbor
 										cosIJK=-rIJt_.dot(rJKt_)/(dIJ*dJK);
 										amp=-0.5*basisA_[JJ](II,KK).fA[na]->grad_angle(cosIJK)*basisA_[JJ](II,KK).fA[na]->dist(dIJ,dJK,dIK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][II]+na];
-										struc.atom(i).force().noalias()-=amp*cosIJK/dIJ*rIJt_/dIJ;
-										struc.atom(i).force().noalias()-=amp*1.0/(dIJ)*rJKt_/dJK;
+										struc.force(i).noalias()-=amp*cosIJK/dIJ*rIJt_/dIJ;
+										struc.force(i).noalias()-=amp*1.0/(dIJ)*rJKt_/dJK;
 										//gradient - cosine - first neighbor
 										amp=-0.5*basisA_[JJ](II,KK).fA[na]->angle(cosIJK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][II]+na];
-										struc.atom(i).force().noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,0)*rIJt_/dIJ;
-										struc.atom(i).force().noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,2)*rIKt_/dIK;
+										struc.force(i).noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,0)*rIJt_/dIJ;
+										struc.force(i).noalias()+=amp*basisA_[JJ](II,KK).fA[na]->grad_dist(dIJ,dJK,dIK,2)*rIKt_/dIK;
 									}
 									for(unsigned int na=0; na<basisA_[JJ](KK,II).fA.size(); ++na){
 										//gradient - cosine - second neighbor
 										cosIJK=-rJKt_.dot(rIJt_)/(dJK*dIJ);
 										amp=-0.5*basisA_[JJ](KK,II).fA[na]->grad_angle(cosIJK)*basisA_[JJ](KK,II).fA[na]->dist(dJK,dIJ,dIK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][KK]+na];
-										struc.atom(i).force().noalias()-=amp*cosIJK/dIJ*rIJt_/dIJ;
-										struc.atom(i).force().noalias()-=amp*1.0/(dIJ)*rJKt_/dJK;
+										struc.force(i).noalias()-=amp*cosIJK/dIJ*rIJt_/dIJ;
+										struc.force(i).noalias()-=amp*1.0/(dIJ)*rJKt_/dJK;
 										//gradient - cosine - second neighbor
 										amp=-0.5*basisA_[JJ](KK,II).fA[na]->angle(cosIJK)*dEdG_[j][nInputR_[JJ]+offsetA_[JJ][KK]+na];
-										struc.atom(i).force().noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,1)*rIJt_/dIJ;
-										struc.atom(i).force().noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,2)*rIKt_/dIK;
+										struc.force(i).noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,1)*rIJt_/dIJ;
+										struc.force(i).noalias()+=amp*basisA_[JJ](KK,II).fA[na]->grad_dist(dJK,dIJ,dIK,2)*rIKt_/dIK;
 									}
 									*/
 									//==== second version - mathematically more obtuse, but more efficient, better memory locality ====
@@ -731,10 +899,10 @@ void NNPot::forces_angular(Structure<AtomT>& struc){
 										fij1.noalias()+=amp*basisA_[II](JJ,KK).fA(na).grad_dist_0(dIJ,dIK,dJK)*rIJt_;
 										fik1.noalias()+=amp*basisA_[II](JJ,KK).fA(na).grad_dist_1(dIJ,dIK,dJK)*rIKt_;
 									}
-									struc.atom(i).force().noalias()+=fij1+fij2;
-									struc.atom(i).force().noalias()+=fik1+fik2;
-									struc.atom(j).force().noalias()-=fij1+fik2;
-									struc.atom(k).force().noalias()-=fik1+fij2;
+									struc.force(i).noalias()+=fij1+fij2;
+									struc.force(i).noalias()+=fik1+fik2;
+									struc.force(j).noalias()-=fij1+fik2;
+									struc.force(k).noalias()-=fik1+fij2;
 									//*/
 								}
 							}
@@ -747,19 +915,19 @@ void NNPot::forces_angular(Structure<AtomT>& struc){
 }
 
 //execute all atomic networks and return energy
-double NNPot::energy(Structure<AtomT>& struc){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::energy(Structure<AtomT>&):\n";
+double NNPot::energy(Structure& struc, bool calc_symm){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::energy(Structure&):\n";
 	double energy=0;
 	//set the inputs for the atoms
-	inputs_symm(struc);
+	if(calc_symm) inputs_symm(struc);
 	//loop over species
 	for(unsigned int n=0; n<struc.nSpecies(); ++n){
 		//loop over atoms
 		for(unsigned int m=0; m<struc.nAtoms(n); ++m){
 			//set the index
-			unsigned int index=speciesMap_[struc.atom(n,m).name()];
+			unsigned int index=speciesMap_[struc.name(n,m)];
 			//execute the network
-			nn_[index].execute(struc.atom(n,m).symm());
+			nn_[index].execute(struc.symm(n,m));
 			//add the energy
 			energy+=nn_[index].output()[0]+energyAtom_[n];
 		}
@@ -771,14 +939,15 @@ double NNPot::energy(Structure<AtomT>& struc){
 //static functions
 
 //write all neural network potentials to file
-void NNPot::write()const{
+void NNPot::write(unsigned int step)const{
 	if(NN_POT_PRINT_FUNC) std::cout<<"NNPot::write(const NNPot&):\n";
 	//======== local function variables ========
 	std::string filename;
 	//======== write all networks ========
 	for(unsigned int n=0; n<nSpecies(); ++n){
 		//create the file name
-		filename=header_+speciesMap_.key(n);
+		if(step==0) filename=header_+speciesMap_.key(n);
+		else filename=header_+speciesMap_.key(n)+"."+std::to_string(step);
 		if(NN_POT_PRINT_DATA>0) std::cout<<"filename = "<<filename<<"\n";
 		//write the network
 		NNPot::write(n,filename);
@@ -787,7 +956,7 @@ void NNPot::write()const{
 
 //read all neural network potentials from file
 void NNPot::read(){
-	if(NN_POT_PRINT_FUNC) std::cout<<"NNPot::read(const NNPot&):\n";
+	if(NN_POT_PRINT_FUNC) std::cout<<"NNPot::read():\n";
 	//======== local function variables ========
 	std::string filename;
 	//======== read all networks ========
@@ -829,83 +998,83 @@ void NNPot::write(unsigned int index, const std::string& filename)const{
 	if(NN_POT_PRINT_FUNC) std::cout<<"NNPot::write(const NNPot&,unsigned int,const std::string&):\n";
 	//======== local function variables ========
 	FILE* writer=NULL;
-	//======== write the basis ========
+	//======== open the file ========
 	writer=fopen(filename.c_str(),"w");
 	if(writer!=NULL){
-		//write the header
+		//==== write the header ====
 		fprintf(writer,"ann\n");
-		//write the global cutoff
+		//==== write the global cutoff ====
 		fprintf(writer,"cut %f\n",rc_);
-		//write the atomic name
+		//==== write the atomic name ====
 		fprintf(writer,"species %s\n",speciesName(index).c_str());
-		//write the atomic mass
+		//==== write the atomic mass ====
 		fprintf(writer,"mass %f\n",PTable::mass(PTable::an(speciesName(index).c_str())));
-		//write the atomic energy
+		//==== write the atomic energy ====
 		fprintf(writer,"energy %.5f\n",energyAtom_[index]);
-		//print the number of species
+		//==== print the number of species ====
 		fprintf(writer,"nspecies %i\n",nSpecies());
-		//write the radial basis
+		//==== write the radial basis ====
 		for(unsigned int i=0; i<nSpecies(); ++i){
 			fprintf(writer,"basis_radial %s\n",speciesName(i).c_str());
 			BasisR::write(writer,basisR_[index][i]);
 		}
-		//write the angular basis
+		//==== write the angular basis ====
 		for(unsigned int i=0; i<nSpecies(); ++i){
 			for(unsigned int j=i; j<nSpecies(); ++j){
 				fprintf(writer,"basis_angular %s %s\n",speciesName(index).c_str(),speciesName(i).c_str(),speciesName(j).c_str());
 				BasisA::write(writer,basisA_[index](i,j));
 			}
 		}
-		//write the neural network
+		//==== write the neural network ====
 		NN::Network::write(writer,nn_[index]);
-		//close the file
+		//==== close the file ====
 		fclose(writer);
 		writer=NULL;
 	}
 }
 
-//write neural network potential to file
+//read neural network potential from file
 void NNPot::read(unsigned int index, const std::string& filename){
-	if(NN_POT_PRINT_FUNC) std::cout<<"NNPot::read(NNPot&,unsigned int,const std::string&):\n";
+	if(NN_POT_PRINT_FUNC) std::cout<<"NNPot::read(unsigned int,const std::string&):\n";
 	//======== local function variables ========
 	FILE* reader=NULL;
 	double rc=0;
 	std::string name;
 	double mass=0,energy=0;
 	unsigned int nspecies=0;
-	char* input=(char*)malloc(sizeof(char)*string::M);
-	char* temp=(char*)malloc(sizeof(char)*string::M);
-	//======== write the basis ========
+	char* input=new char[string::M];
+	char* temp=new char[string::M];
+	//======== open the file ========
 	reader=fopen(filename.c_str(),"r");
 	if(reader!=NULL){
-		//reader in header
+		//==== reader in header ====
 		fgets(input,string::M,reader);
-		//read in global cutoff
+		//==== read in global cutoff ====
 		std::strtok(fgets(input,string::M,reader),string::WS);
 		rc=std::atof(std::strtok(NULL,string::WS));
 		if(rc>rc_) rc_=rc;
-		//read in species name
+		//==== read in species names ====
 		std::strtok(fgets(input,string::M,reader),string::WS);
 		name=std::string(std::strtok(NULL,string::WS));
 		if(name!=speciesMap_.key(index)) throw std::invalid_argument("Invalid index for species in nn file.");
-		//read in species mass
+		//==== read in species mass ====
 		std::strtok(fgets(input,string::M,reader),string::WS);
 		mass=std::atof(std::strtok(NULL,string::WS));
-		//read in species energy
+		//==== read in species energy ====
 		std::strtok(fgets(input,string::M,reader),string::WS);
 		energy=std::atof(std::strtok(NULL,string::WS));
 		energyAtom_[index]=energy;
-		//read in the number of species
+		//==== read in the number of species ====
 		std::strtok(fgets(input,string::M,reader),string::WS);
 		nspecies=std::atoi(std::strtok(NULL,string::WS));
-		//read the radial basis
+		//==== read the radial basis ====
 		for(unsigned int i=0; i<nspecies; ++i){
 			std::strtok(fgets(input,string::M,reader),string::WS);
 			name=std::string(std::strtok(NULL,string::WS));
 			unsigned int jj=speciesIndex(name);
 			BasisR::read(reader,basisR_[index][jj]);
 		}
-		//read the angular basis
+		//==== read the angular basis ====
 		for(unsigned int i=0; i<nspecies; ++i){
 			for(unsigned int j=i; j<nspecies; ++j){
 				std::strtok(fgets(input,string::M,reader),string::WS);
@@ -916,13 +1085,29 @@ void NNPot::read(unsigned int index, const std::string& filename){
 				BasisA::read(reader,basisA_[index](jj,kk));
 			}
 		}
-		//read the neural network
+		//==== read the neural network ====
 		NN::Network::read(reader,nn_[index]);
-		//close the file
+		//==== close the file ====
 		fclose(reader);
 		reader=NULL;
 	}
 	//======== free local variables ========
-	free(temp);
-	free(input);
+	delete[] input;
+	delete[] temp;
+}
+
+//operators
+	
+bool operator==(const NNPot& nnPot1, const NNPot& nnPot2){
+	if(nnPot1.rc()!=nnPot2.rc()) return false;
+	else if(nnPot1.nSpecies()!=nnPot2.nSpecies()) return false;
+	else if(nnPot1.speciesMap()!=nnPot2.speciesMap()) return false;
+	else if(nnPot1.header()!=nnPot2.header()) return false;
+	else{
+		if(nnPot1.basisR()!=nnPot2.basisR()) return false;
+		if(nnPot1.basisA()!=nnPot2.basisA()) return false;
+		if(nnPot1.energyAtom()!=nnPot2.energyAtom()) return false;
+		if(nnPot1.nn()!=nnPot2.nn()) return false;
+		return true;
+	}
 }
