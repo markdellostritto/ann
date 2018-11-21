@@ -1,6 +1,8 @@
 #ifndef ANN_NN_HPP
 #define ANN_NN_HPP
 
+#define EIGEN_NO_DEBUG
+
 // c libraries
 #include <cstdlib>
 #include <cstdio>
@@ -80,19 +82,30 @@ struct TransferFD{
 	static inline double f_lin(double x)noexcept{return 1;}
 };
 
+struct TransferFFD{
+	static inline void f_tanh(double x, double& v, double& d)noexcept{v=std::tanh(x);d=1.0-v*v;}
+	static inline void f_sigmoid(double x, double& v, double& d)noexcept{x=std::exp(-x);v=1.0/(1.0+x);d=1.0/((1.0+x)*(1.0+1.0/x));}
+	static inline void f_lin(double x, double& v, double& d)noexcept{v=x;d=1;}
+};
+
 //***********************************************************************
 // NETWORK CLASS
 //***********************************************************************
 
 class Network{
 private:
+	//macros
+		EIGEN_MAKE_ALIGNED_OPERATOR_NEW//just in case we are storing Eigen objects
 	//typedefs
 		typedef double (*FuncP)(double);
+		typedef void (*FFDP)(double,double&,double&);
 	//network dimensions
 		unsigned int nlayer_;//number of layers of the network (hidden + output)
 	//initialize
 		double bInit_;
 		double wInit_;
+	//regularization
+		double lambda_;//regularization weight
 	//node weights and biases
 		Eigen::VectorXd input_;//input layer
 		Eigen::VectorXd sinput_;//scaled input
@@ -111,10 +124,10 @@ private:
 		TransferN::type tfType_;//transfer function type
 		std::vector<std::function<double(double)> > tf_;//transfer function - input for indexed layer (nlayer_)
 		std::vector<std::function<double(double)> > tfd_;//transfer derivative - input for indexed layer (nlayer_)
+		std::vector<std::function<void(double,double&,double&)> > tffd_;//transfer derivative - input for indexed layer (nlayer_)
 		//std::vector<FuncP> tf_;//transfer function - input for indexed layer (nlayer_)
 		//std::vector<FuncP> tfd_;//transfer derivative - input for indexed layer (nlayer_)
-	//regularization
-		double lambda_;//regularization weight
+		//std::vector<FFDP> tffd_;//transfer derivative - input for indexed layer (nlayer_)
 public:
 	//======== friend declarations ========
 	friend class NNOpt;
@@ -194,10 +207,14 @@ public:
 		const std::function<double(double)>& tf(unsigned int l)const{return tf_[l];};
 		std::function<double(double)>& tfd(unsigned int l){return tfd_[l];};
 		const std::function<double(double)>& tfd(unsigned int l)const{return tfd_[l];};
+		std::function<void(double,double&,double&)>& tffd(unsigned int l){return tffd_[l];};
+		const std::function<void(double,double&,double&)>& tffd(unsigned int l)const{return tffd_[l];};
 		//FuncP tf(unsigned int l){return tf_[l];};
 		//const FuncP tf(unsigned int l)const{return tf_[l];};
 		//FuncP tfd(unsigned int l){return tfd_[l];};
 		//const FuncP tfd(unsigned int l)const{return tfd_[l];};
+		//FFDP tfd(unsigned int l){return tffd_[l];};
+		//const FFDP tfd(unsigned int l)const{return tffd_[l];};
 	//regularization
 		double& lambda(){return lambda_;};
 		const double& lambda()const{return lambda_;};
@@ -219,7 +236,7 @@ public:
 		Eigen::VectorXd& grad(const Eigen::VectorXd& dcda, Eigen::VectorXd& grad);
 	//execution
 		const Eigen::VectorXd& execute();
-		const Eigen::VectorXd& execute(const Eigen::VectorXd& input);
+		const Eigen::VectorXd& execute(const Eigen::VectorXd& input){input_.noalias()=input;return execute();};
 		
 	//======== static functions ========
 	static void write(FILE* writer, const Network& nn);
@@ -227,6 +244,9 @@ public:
 	static void read(FILE* writer, Network& nn);
 	static void read(const char*, Network& nn);
 };
+
+bool operator==(const Network& n1, const Network& n2);
+inline bool operator!=(const Network& n1, const Network& n2){return !(n1==n2);};
 
 }
 
