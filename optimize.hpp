@@ -11,13 +11,20 @@
 #include <functional>
 // eigen libraries
 #include <Eigen/Dense>
+#include "eigen.hpp"
 // local libraries - math
 #include "math_const.hpp"
 #include "math_cmp.hpp"
-#include "math_function.hpp"
+#include "math_special.hpp"
+//serialization
+#include "serialize.hpp"
 
-#ifndef DEBUG_OPT
-#define DEBUG_OPT 0
+#ifndef PRINT_OPT_FUNC
+#define PRINT_OPT_FUNC 0
+#endif
+
+#ifndef PRINT_OPT_DATA
+#define PRINT_OPT_DATA 0
 #endif
 
 //***************************************************
@@ -26,16 +33,15 @@
 
 struct OPT_METHOD{
 	enum type {
-		SD,
-		SDG,
-		BFGS,
-		BFGSG,
+		SGD,
 		SDM,
 		NAG,
 		ADAGRAD,
 		ADADELTA,
 		RMSPROP,
 		ADAM,
+		BFGS,
+		LM,
 		RPROP,
 		UNKNOWN
 	};
@@ -68,35 +74,24 @@ std::ostream& operator<<(std::ostream& out, const OPT_VAL::type& type);
 class Opt{
 public:
 	typedef const std::function<double (const Eigen::VectorXd& x, Eigen::VectorXd& grad)> Func;
-private:
+	template <class T> using FuncT=std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>;
+protected:
 	/*optimization*/
 	//status
 		unsigned int nPrint_;//frequency of printing
 		unsigned int nStep_;//the number of steps
 		unsigned int nEval_;//the number of evaluations
-		int status_;//status of the optimization
 	//stopping
 		double tol_;//optimization tolerance
 		unsigned int maxIter_;//the max number of iterations
-		double dx_,dv_;
-	//memory
-		unsigned int mem_;//memory of previous iterations
 	//parameters
 		unsigned int dim_;//dimension of the problem
 		double val_,valOld_;//value of the objective function
-		std::vector<double> valPrev_;//previous values of the objective function
 		Eigen::VectorXd x_,xOld_;//parameters
-		Eigen::VectorXd grad_;//gradient
-		std::vector<Eigen::VectorXd> gradPrev_;//previous values of the gradient
-		Eigen::VectorXd lower_,upper_;//bounds
+		Eigen::VectorXd grad_,gradOld_;//gradient
 	//algorithm
 		OPT_METHOD::type algo_;//optimization algorithm
-		OPT_VAL::type optVal_;	
-		double gamma_;//descent parameter
-		double eta_;//friction parameter
-		double eps_;//small number, prevents divide by zero
-		unsigned int period_;//period of oscilation of gamma
-		unsigned int decay_;//decay constant of gamma
+		OPT_VAL::type optVal_;//the type of value determining the end condition
 	//line searching
 		double precln_;//precision for line searches
 		unsigned int maxln_;//max for line searches
@@ -104,53 +99,44 @@ private:
 public:
 	//constructors/destructors
 	Opt(){defaults();};
-	Opt(const Opt& opt);
 	~Opt(){};
 	
 	//operators
-	Opt& operator=(const Opt& opt);
 	friend std::ostream& operator<<(std::ostream& out, const Opt& opt);
 	
 	/*access*/
 	//status
 		unsigned int& nPrint(){return nPrint_;};
 		const unsigned int& nPrint()const{return nPrint_;};
+		unsigned int& nStep(){return nStep_;};
 		const unsigned int& nStep()const{return nStep_;};
+		unsigned int& nEval(){return nEval_;};
 		const unsigned int& nEval()const{return nEval_;};
-		const int& status()const{return status_;};
+		double& val(){return val_;};
 		const double& val()const{return val_;};
+		double& valOld(){return valOld_;};
+		const double& valOld()const{return valOld_;};
 	//stopping
 		double& tol(){return tol_;};
 		const double& tol()const{return tol_;};
 		unsigned int& maxIter(){return maxIter_;};
 		const unsigned int& maxIter()const{return maxIter_;};
-	//memory
-		unsigned int& mem(){return mem_;};
-		const unsigned int& mem()const{return mem_;};
 	//parameters
 		unsigned int& dim(){return dim_;};
 		const unsigned int& dim()const{return dim_;};
 		Eigen::VectorXd& x(){return x_;};
 		const Eigen::VectorXd& x()const{return x_;};
-		Eigen::VectorXd& lower(){return lower_;};
-		const Eigen::VectorXd& lower()const{return lower_;};
-		Eigen::VectorXd& upper(){return upper_;};
-		const Eigen::VectorXd& upper()const{return upper_;};
+		Eigen::VectorXd& xOld(){return xOld_;};
+		const Eigen::VectorXd& xOld()const{return xOld_;};
+		Eigen::VectorXd& grad(){return grad_;};
+		const Eigen::VectorXd& grad()const{return grad_;};
+		Eigen::VectorXd& gradOld(){return gradOld_;};
+		const Eigen::VectorXd& gradOld()const{return gradOld_;};
 	//algorithm
 		OPT_METHOD::type& algo(){return algo_;};
 		const OPT_METHOD::type& algo()const{return algo_;};
 		OPT_VAL::type& optVal(){return optVal_;};
 		const OPT_VAL::type& optVal()const{return optVal_;};
-		double& gamma(){return gamma_;};
-		const double& gamma()const{return gamma_;};
-		double& eta(){return eta_;};
-		const double& eta()const{return eta_;};
-		double& eps(){return eps_;};
-		const double& eps()const{return eps_;};
-		unsigned int& period(){return period_;};
-		const unsigned int& period()const{return period_;};
-		unsigned int& decay(){return decay_;};
-		const unsigned int& decay()const{return decay_;};
 	//linear optimization
 		double& precln(){return precln_;};
 		const double& precln()const{return precln_;};
@@ -161,64 +147,26 @@ public:
 	void defaults();
 	void clear(){defaults();};
 	void resize(unsigned int n);
-	double opt(const Func& func, Eigen::VectorXd& x0);
-	double opt_sd(Func& func);
-	double opt_sdg(Func& func);
-	double opt_bfgs(Func& func);
-	double opt_bfgsg(Func& func);
-	double opt_sdm(Func& func);
-	double opt_nag(Func& func);
-	double opt_adagrad(Func& func);
-	double opt_adadelta(Func& func);
-	double opt_rmsprop(Func& func);
-	double opt_adam(Func& func);
-	double opt_rprop(Func& func);
 	
 	//optimization functions
 	double opt_ln(Func& func);
 	double opt_ln(Func& func, Eigen::VectorXd& x0, Eigen::VectorXd& x1);
-	template <class T> double opt(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj, Eigen::VectorXd& x0);
-	template <class T> double opt_ln(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_sd(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_sdg(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_sdm(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_nag(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_adagrad(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_adadelta(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_rmsprop(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_adam(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_bfgs(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_bfgsg(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
-	template <class T> double opt_rprop(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj);
+	template <class T> double opt_ln(const FuncT<T>& func, T& obj);
+	double opts(const Func& func, Eigen::VectorXd& x0);
+	double opts(const Func& func, Eigen::VectorXd& x0, Eigen::VectorXd& grad, double& val);
+	template <class T> double opts(const FuncT<T>& func, T& obj, Eigen::VectorXd& x0);
+	template <class T> double opts(const FuncT<T>& func, T& obj, Eigen::VectorXd& x0, Eigen::VectorXd& grad, double& val);
+	void opts_impl(const Func& func);
+	template <class T> void opts_impl(const FuncT<T>& func, T& obj);
+	
+	//virtual functions
+	virtual void step(){}; 
+	virtual void init(unsigned int dim){};
 };
 
 template <class T>
-double Opt::opt(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj, Eigen::VectorXd& x0){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt<T>(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>&,T&,Eigen::VectorXd&):\n";
-	nStep_=0; nEval_=0;
-	val_=0; valOld_=0;
-	//if(x0.size()!=dim_) throw std::invalid_argument("Invalid array dimension.");
-	resize(x0.size());
-	x_.noalias()=x0; xOld_.noalias()=x0;
-	grad_.resize(dim_);
-	if(algo_==OPT_METHOD::SD) opt_sd<T>(func,obj);
-	else if(algo_==OPT_METHOD::SDG) opt_sdg<T>(func,obj);
-	else if(algo_==OPT_METHOD::SDM) opt_sdm<T>(func,obj);
-	else if(algo_==OPT_METHOD::NAG) opt_nag<T>(func,obj);
-	else if(algo_==OPT_METHOD::ADAGRAD) opt_adagrad<T>(func,obj);
-	else if(algo_==OPT_METHOD::ADADELTA) opt_adadelta<T>(func,obj);
-	else if(algo_==OPT_METHOD::RMSPROP) opt_rmsprop<T>(func,obj);
-	else if(algo_==OPT_METHOD::ADAM) opt_adam<T>(func,obj);
-	else if(algo_==OPT_METHOD::BFGS) opt_bfgs<T>(func,obj);
-	else if(algo_==OPT_METHOD::BFGSG) opt_bfgsg<T>(func,obj);
-	else if(algo_==OPT_METHOD::RPROP) opt_rprop<T>(func,obj);
-	else throw std::runtime_error("Invalid optimization algorithm.");
-	x0=x_;
-}
-
-template <class T>
-double Opt::opt_ln(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_ln<T>(const std::function<double (T&, const Eigen::VectorXd&,Eigen::VectorXd& grad)>&,T&):\n";
+double Opt::opt_ln(const FuncT<T>& func, T& obj){
+	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opt_ln<T>(const FuncT<T>&,T&):\n";
 	a_.noalias()=x_; b_.noalias()=xOld_;
 	double va=func(obj,a_,grad_);
 	double vb=func(obj,b_,grad_);
@@ -242,7 +190,7 @@ double Opt::opt_ln(const std::function<double (T&, const Eigen::VectorXd& x, Eig
 	if(count==maxln_) std::cout<<"WARNING: Could not resolve line optimization.\n";
 	if(vc<vd) x_.noalias()=c_;
 	else x_.noalias()=d_;
-	if(DEBUG_OPT>1){
+	if(PRINT_OPT_DATA>1){
 		std::cout<<"count_ln = "<<count<<"\n";
 		std::cout<<"val_ln = "<<((vc<vd)?vc:vd)<<"\n";
 	}
@@ -250,45 +198,56 @@ double Opt::opt_ln(const std::function<double (T&, const Eigen::VectorXd& x, Eig
 }
 
 template <class T>
-double Opt::opt_sd(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_sd<T>(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		val_=func(obj,x_,grad_); ++nEval_;
-		//calculate the new position
-		x_.noalias()=xOld_-grad_;
-		//calculate the new position using a line search
-		val_=opt_ln(func,obj);
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		if(optVal_==OPT_VAL::FTOL_REL && dv_<tol_) break;
-		else if(optVal_==OPT_VAL::XTOL_REL && dx_<tol_) break;
-		else if(optVal_==OPT_VAL::FTOL_ABS && val_<tol_) break;
-		//set the new "old" values
-		xOld_.noalias()=x_;
-		valOld_=val_;
-		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		//update the counts
-		++nStep_;
-	}
+double Opt::opts(const FuncT<T>& func, T& obj, Eigen::VectorXd& x0){
+	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opts<T>(const FuncT<T>&,T&,Eigen::VectorXd&):\n";
+	//initialization/resizing
+	resize(x0.size());
+	x_=x0; 
+	xOld_=x0;
+	init(dim_);
+	opts_impl(func,obj);
+	//finalization
+	x0=x_;
+	//return value
 	return val_;
 }
 
 template <class T>
-double Opt::opt_sdg(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_sdg<T>(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
+double Opt::opts(const FuncT<T>& func, T& obj, Eigen::VectorXd& x0, Eigen::VectorXd& grad, double& val){
+	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opts(const FuncT<T>&,T&,Eigen::VectorXd&,Eigen::VectorXd&,double&):\n";
+	//initialization/resizing
+	resize(x0.size());
+	if(grad.size()==0) grad=Eigen::VectorXd::Zero(dim_);
+	else if(x0.size()!=grad.size()) throw std::runtime_error("Invalid initial gradient.");
+	x_=x0; 
+	xOld_=x0;
+	grad_=grad;
+	gradOld_=grad;
+	init(dim_);
+	//optimization
+	opts_impl(func,obj);
+	//finalization
+	x0=x_;
+	grad=grad_;
+	val=val_;
+	//return value
+	return val_;
+}
+
+template <class T>
+void Opt::opts_impl(const FuncT<T>& func, T& obj){
+	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opts_impl(const FuncT<T>&,T&,const OptAlgo*):\n";
+	double dx_=0;
+	double dv_=0;
 	for(unsigned int i=0; i<maxIter_; ++i){
 		//calculate the value and gradient
 		val_=func(obj,x_,grad_); ++nEval_;
 		//calculate the new position
-		double gam=gamma_;
-		if(period_>0) gam=0.5*gam*(std::cos(num_const::PI*function::mod(((double)i)/period_,1.0))+1.0);
-		if(decay_>0) gam=std::exp(-1.0*((double)i)/decay_)*gam;
-		grad_*=gam;
-		x_.noalias()=xOld_-grad_;
+		step();
+		//set the new "old" values
+		xOld_=x_;
+		gradOld_=grad_;
+		valOld_=val_;
 		//calculate the difference
 		dv_=std::fabs(val_-valOld_);
 		dx_=(x_-xOld_).norm();
@@ -296,352 +255,365 @@ double Opt::opt_sdg(const std::function<double (T&, const Eigen::VectorXd& x, Ei
 		if(optVal_==OPT_VAL::FTOL_REL && dv_<tol_) break;
 		else if(optVal_==OPT_VAL::XTOL_REL && dx_<tol_) break;
 		else if(optVal_==OPT_VAL::FTOL_ABS && val_<tol_) break;
-		//set the new "old" values
-		xOld_.noalias()=x_;
-		valOld_=val_;
 		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" gam "<<gam<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" gam "<<gam<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		//update the counts
-		++nStep_;
-	}
-	return val_;
-}
-
-template <class T>
-double Opt::opt_sdm(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_sdm<T>(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
-	Eigen::VectorXd gradOld_=Eigen::VectorXd::Zero(grad_.size());
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		val_=func(obj,x_,grad_); ++nEval_;
-		//scale the gradient
-		grad_*=gamma_;
-		grad_.noalias()+=eta_*gradOld_;
-		//calculate the new position
-		x_.noalias()=xOld_-grad_;
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		if(optVal_==OPT_VAL::FTOL_REL && dv_<tol_) break;
-		else if(optVal_==OPT_VAL::XTOL_REL && dx_<tol_) break;
-		else if(optVal_==OPT_VAL::FTOL_ABS && val_<tol_) break;
-		//set the new "old" values
-		xOld_=x_;
-		gradOld_=grad_;
-		valOld_=val_;
-		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" gam "<<gamma_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" gam "<<gamma_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		//update the counts
-		++nStep_;
-	}
-	return val_;
-}
-
-template <class T>
-double Opt::opt_nag(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_nag<T>(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
-	Eigen::VectorXd gradOld_=Eigen::VectorXd::Zero(x_.size());
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		x_.noalias()-=eta_*gradOld_;
-		val_=func(obj,x_,grad_); ++nEval_;
-		//scale the gradient
-		grad_*=gamma_;
-		grad_.noalias()+=eta_*gradOld_;
-		//calculate the new position
-		x_.noalias()=xOld_-grad_;
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		if(dv_<tol_) break;
-		//set the new "old" values
-		xOld_=x_;
-		gradOld_=grad_;
-		valOld_=val_;
-		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" gam "<<gamma_<<" eta "<<eta_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" gam "<<gamma_<<" eta "<<eta_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		//update the counts
-		++nStep_;
-	}
-	return val_;
-}
-
-template <class T>
-double Opt::opt_adagrad(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_adagrad<T>(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
-	Eigen::VectorXd gradAvg_=Eigen::VectorXd::Zero(x_.size());
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		val_=func(obj,x_,grad_); ++nEval_;
-		//add to the running average of the square of the gradients
-		gradAvg_.noalias()+=grad_.cwiseProduct(grad_);
-		//scale the gradient
-		for(unsigned int n=0; n<grad_.size(); ++n) grad_[n]*=gamma_/std::sqrt(gradAvg_[n]+eps_);
-		//calculate the new position
-		x_.noalias()=xOld_-grad_;
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		if(dv_<tol_) break;
-		//update the "old" values
-		xOld_=x_;
-		valOld_=val_;
-		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" gam "<<gamma_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" gam "<<gamma_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		//update the counts
-		++nStep_;
-	}
-	return val_;
-}
-
-template <class T>
-double Opt::opt_adadelta(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_adagrad<T>(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
-	Eigen::VectorXd gradAvg_=Eigen::VectorXd::Zero(x_.size());
-	Eigen::VectorXd dxAvg_=Eigen::VectorXd::Zero(x_.size());
-	Eigen::VectorXd dxv_=Eigen::VectorXd::Zero(x_.size());
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		val_=func(obj,x_,grad_); ++nEval_;
-		//add to the running average of the square of the gradients
-		gradAvg_*=eta_;
-		gradAvg_.noalias()+=(1.0-eta_)*grad_.cwiseProduct(grad_);
-		//add to the running average of the square of the deltas
-		dxAvg_*=eta_;
-		dxAvg_.noalias()+=(1.0-eta_)*dxv_.cwiseProduct(dxv_);
-		//scale the gradient
-		for(unsigned int n=0; n<grad_.size(); ++n) grad_[n]*=std::sqrt(dxAvg_[n]+eps_)/std::sqrt(gradAvg_[n]+eps_);
-		//calculate the new position
-		x_.noalias()=xOld_-grad_;
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dxv_.noalias()=x_-xOld_;
-		dx_=dxv_.norm();
-		if(dv_<tol_) break;
-		//update the "old" values
-		xOld_=x_;
-		valOld_=val_;
-		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		//update the counts
-		++nStep_;
-	}
-	return val_;
-}
-
-template <class T>
-double Opt::opt_rmsprop(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_rmsprop<T>(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
-	Eigen::VectorXd gradAvg_=Eigen::VectorXd::Zero(x_.size());
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		val_=func(obj,x_,grad_); ++nEval_;
-		//add to the running average of the square of the gradients
-		gradAvg_*=0.9;
-		gradAvg_.noalias()+=0.1*grad_.cwiseProduct(grad_);
-		//scale the gradient
-		for(unsigned int n=0; n<grad_.size(); ++n) grad_[n]*=gamma_/std::sqrt(gradAvg_[n]+eps_);
-		//calculate the new position
-		x_.noalias()=xOld_-grad_;
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		if(dv_<tol_) break;
-		//update the "old" values
-		xOld_=x_;
-		valOld_=val_;
-		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" gam "<<gamma_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" gam "<<gamma_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		//update the counts
-		++nStep_;
-	}
-	return val_;
-}
-
-template <class T>
-double Opt::opt_adam(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_adam<T>(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
-	Eigen::VectorXd gradAvg_=Eigen::VectorXd::Zero(x_.size());
-	Eigen::VectorXd grad2Avg_=Eigen::VectorXd::Zero(x_.size());
-	const double beta1=0.9;
-	const double beta2=0.999;
-	double beta1i=beta1;//power w.r.t i
-	double beta2i=beta2;//power w.r.t i
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		val_=func(obj,x_,grad_); ++nEval_;
-		//add to the running average of the gradients
-		gradAvg_*=beta1;
-		gradAvg_.noalias()+=(1.0-beta1)*grad_;
-		//add to the running average of the square of the gradients
-		grad2Avg_*=beta2;
-		grad2Avg_.noalias()+=(1.0-beta2)*grad_.cwiseProduct(grad_);
-		//calculate the update
-		for(unsigned int n=0; n<grad_.size(); ++n) grad_[n]=gamma_*gradAvg_[n]/(1.0-beta1i)/(std::sqrt(grad2Avg_[n]/(1.0-beta2i))+eps_);
-		//calculate the new position
-		x_.noalias()=xOld_-grad_;
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		if(dv_<tol_) break;
-		//update the "old" values
-		xOld_=x_;
-		valOld_=val_;
-		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" gam "<<gamma_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" gam "<<gamma_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		//update the counts
-		++nStep_;
-		//update the powers of betas
-		beta1i*=beta1;
-		beta2i*=beta2;
-	}
-	return val_;
-}
-
-template <class T>
-double Opt::opt_bfgs(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_bfgs(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
-	Eigen::MatrixXd B=Eigen::MatrixXd::Identity(x_.size(),x_.size());
-	Eigen::MatrixXd BOld=Eigen::MatrixXd::Identity(x_.size(),x_.size());
-	Eigen::VectorXd s=Eigen::VectorXd::Zero(x_.size());
-	Eigen::VectorXd y=Eigen::VectorXd::Zero(x_.size());
-	Eigen::VectorXd gradOld_=Eigen::VectorXd::Zero(x_.size());
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		val_=func(obj,x_,grad_); ++nEval_;
-		//obtain direction
-		x_=xOld_;
-		x_.noalias()-=B.llt().solve(grad_);
-		//calculate the new position using a line search
-		val_=opt_ln(func,obj);
-		//find the s vector
-		s.noalias()=x_-xOld_;
-		//set the y vector
-		y.noalias()=grad_-gradOld_;
-		//set the new B matrix
-		B=BOld;
-		B.noalias()+=y*y.transpose()/y.dot(s);
-		B.noalias()-=BOld*(s*s.transpose())*BOld.transpose()/(s.dot(BOld*s));
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		//set the new "old" values
-		xOld_=x_;
-		valOld_=val_;
-		gradOld_=grad_;
-		BOld=B;
-		if(optVal_==OPT_VAL::FTOL_REL && dv_<tol_) break;
-		else if(optVal_==OPT_VAL::XTOL_REL && dx_<tol_) break;
-		else if(optVal_==OPT_VAL::FTOL_ABS && val_<tol_) break;
-		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
+		if(PRINT_OPT_FUNC>0) std::cout<<"opt step "<<i<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
+		else if(nPrint_>0){if(i%nPrint_==0) std::cout<<"opt step "<<i<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";}
 		//update the counts
 		++nStep_;
 	}
 }
 
-template <class T>
-double Opt::opt_bfgsg(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_bfgs(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
-	Eigen::MatrixXd B=Eigen::MatrixXd::Identity(x_.size(),x_.size());
-	Eigen::MatrixXd BOld=Eigen::MatrixXd::Identity(x_.size(),x_.size());
-	Eigen::VectorXd s=Eigen::VectorXd::Zero(x_.size());
-	Eigen::VectorXd y=Eigen::VectorXd::Zero(x_.size());
-	Eigen::VectorXd gradOld_=Eigen::VectorXd::Zero(x_.size());
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		val_=func(obj,x_,grad_); ++nEval_;
-		//obtain direction
-		x_=xOld_;
-		x_.noalias()-=B.llt().solve(grad_);
-		//calculate the new position
-		double gam=gamma_;
-		if(period_>0) gam=0.5*gam*(std::cos(num_const::PI*function::mod(((double)i)/period_,1.0))+1.0);
-		if(decay_>0) gam=std::exp(-1.0*((double)i)/decay_)*gam;
-		x_.noalias()=xOld_-gam*grad_;
-		//calculate the new value
-		val_=func(obj,x_,grad_); ++nEval_;
-		//find the s vector
-		s.noalias()=x_-xOld_;
-		//set the y vector
-		y.noalias()=gam*(grad_-gradOld_);
-		//set the new B matrix
-		B=BOld;
-		B.noalias()+=y*y.transpose()/y.dot(s);
-		B.noalias()-=(BOld*s)*(BOld*s).transpose()/(s.dot(BOld*s));
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		//set the new "old" values
-		xOld_=x_;
-		valOld_=val_;
-		gradOld_=grad_;
-		BOld=B;
-		if(optVal_==OPT_VAL::FTOL_REL && dv_<tol_) break;
-		else if(optVal_==OPT_VAL::XTOL_REL && dx_<tol_) break;
-		else if(optVal_==OPT_VAL::FTOL_ABS && val_<tol_) break;
-		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" gam "<<gam<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" gam "<<gam<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		//update the counts
-		++nStep_;
-	}
-}
+//steepest-desccent
+class SGD: public Opt{
+private:
+	unsigned int period_;
+	unsigned int decay_;
+	double gamma_;
+public:
+	//constructors/destructors
+	SGD(){defaults();};
+	SGD(const Opt& opt):Opt(opt){defaults();};
+	~SGD(){};
+	//access
+	unsigned int& period(){return period_;};
+	const unsigned int& period()const{return period_;};
+	unsigned int& decay(){return decay_;};
+	const unsigned int& decay()const{return decay_;};
+	double& gamma(){return gamma_;};
+	const double& gamma()const{return gamma_;};
+	//member functions
+	void step();
+	void defaults();
+	void init(unsigned int dim){};
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const SGD& sgd);
+};
 
-template <class T>
-double Opt::opt_rprop(const std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>& func, T& obj){
-	if(DEBUG_OPT>0) std::cout<<"Opt::opt_bfgs(const std::function<double (T&,const Eigen::VectorXd&,Eigen::VectorXd&)>&,T&):\n";
-	//initialize the optimization
-	Eigen::VectorXd gradOld_=Eigen::VectorXd::Zero(dim_);
-	Eigen::VectorXd delta_=Eigen::VectorXd::Constant(dim_,0.1);
-	double etaP=1.2,etaM=0.5;
-	double deltaMax=50,deltaMin=1e-14;
-	//execute the optimization
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		val_=func(obj,x_,grad_); ++nEval_;
-		//calculate new position and delta
-		double gam=deltaMin;
-		if(period_>0) gam=0.5*gam*(std::cos(num_const::PI*function::mod(((double)i)/period_,1.0))+1.0);
-		if(decay_>0) gam=std::exp(-1.0*((double)i)/decay_)*gam;
-		for(unsigned int n=0; n<dim_; ++n){
-			double s=grad_[n]*gradOld_[n];
-			if(s>0){
-				delta_[n]=cmp::min(delta_[n]*etaP,deltaMax);
-				x_[n]-=function::sign(grad_[n])*delta_[n];
-			}else if(s<0){
-				delta_[n]=cmp::max(delta_[n]*etaM,gam);
-				grad_[n]=0.0;
-				if(val_>valOld_) x_[n]-=function::sign(grad_[n])*delta_[n];
-			} else if(s==0){
-				x_[n]-=function::sign(grad_[n])*delta_[n];
-			}
-		}
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		//check the break condition
-		if(optVal_==OPT_VAL::FTOL_REL && dv_<tol_) break;
-		else if(optVal_==OPT_VAL::XTOL_REL && dx_<tol_) break;
-		else if(optVal_==OPT_VAL::FTOL_ABS && val_<tol_) break;
-		//set the new "old" values
-		xOld_=x_;
-		valOld_=val_;
-		gradOld_=grad_;
-		//print the status
-		if(DEBUG_OPT==0 && i%nPrint_==0) std::cout<<"opt step "<<i<<" dmin "<<gam<<" delta "<<delta_.norm()<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(DEBUG_OPT>0) std::cout<<"opt step "<<i<<" delta "<<delta_.norm()<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		//update the count
-		++nStep_;
-	}
+//steepest-descent + momentum
+class SDM: public Opt{
+private:
+	double gamma_;//gradient step size
+	double eta_;//mixing term
+public:
+	//constructors/destructors
+	SDM(){defaults();};
+	SDM(const Opt& opt):Opt(opt){defaults();};
+	~SDM(){};
+	//access
+	double& gamma(){return gamma_;};
+	const double& gamma()const{return gamma_;};
+	double& eta(){return eta_;};
+	const double& eta()const{return eta_;};
+	//member functions
+	void step();
+	void defaults();
+	void init(unsigned int dim){};
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const SDM& sdm);
+};
+
+//nesterov accelerated gradient
+class NAG: public Opt{
+private:
+	double gamma_;//gradient step size
+	double eta_;//mixing term
+public:
+	//constructors/destructors
+	NAG(){defaults();};
+	NAG(const Opt& opt):Opt(opt){defaults();};
+	~NAG(){};
+	//access
+	double& gamma(){return gamma_;};
+	const double& gamma()const{return gamma_;};
+	double& eta(){return eta_;};
+	const double& eta()const{return eta_;};
+	//member functions
+	void step();
+	void defaults();
+	void init(unsigned int dim){};
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const NAG& nag);
+};
+
+//adagrad
+class ADAGRAD: public Opt{
+private:
+	static const double eps_;//small term to prevent divergence
+	double gamma_;//gradient step size
+	Eigen::VectorXd mgrad2_;//avg of square of gradient
+public:
+	//constructors/destructors
+	ADAGRAD(){defaults();};
+	ADAGRAD(const Opt& opt):Opt(opt){defaults();};
+	~ADAGRAD(){};
+	//access
+	double& gamma(){return gamma_;};
+	const double& gamma()const{return gamma_;};
+	Eigen::VectorXd& mgrad2(){return mgrad2_;};
+	const Eigen::VectorXd& mgrad2()const{return mgrad2_;};
+	//member functions
+	void step();
+	void defaults();
+	void init(unsigned int dim);
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const ADAGRAD& adagrad);
+};
+
+class ADADELTA: public Opt{
+private:
+	static const double eps_;//small term to prevent divergence
+	double gamma_;//gradient step size
+	double eta_;//mixing fraction
+	Eigen::VectorXd mgrad2_;//avg of square of gradient
+	Eigen::VectorXd mdx2_;//avg of square of dx
+	Eigen::VectorXd dxv_;//change in x
+public:
+	//constructors/destructors
+	ADADELTA(){defaults();};
+	ADADELTA(const Opt& opt):Opt(opt){defaults();};
+	~ADADELTA(){};
+	//access
+	double& gamma(){return gamma_;};
+	const double& gamma()const{return gamma_;};
+	double& eta(){return eta_;};
+	const double& eta()const{return eta_;};
+	Eigen::VectorXd& mgrad2(){return mgrad2_;};
+	const Eigen::VectorXd& mgrad2()const{return mgrad2_;};
+	Eigen::VectorXd& dxv(){return dxv_;};
+	const Eigen::VectorXd& dxv()const{return dxv_;};
+	Eigen::VectorXd& mdx2(){return mdx2_;};
+	const Eigen::VectorXd& mdx2()const{return mdx2_;};
+	//member functions
+	void step();
+	void defaults();
+	void init(unsigned int dim);
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const ADADELTA& adadelta);
+};
+
+class RMSPROP: public Opt{
+private:
+	static const double eps_;//small term to prevent divergence
+	double gamma_;//gradient step size
+	Eigen::VectorXd mgrad2_;//avg of square of gradient
+public:
+	//constructors/destructors
+	RMSPROP(){defaults();};
+	~RMSPROP(){};
+	//access
+	double& gamma(){return gamma_;};
+	const double& gamma()const{return gamma_;};
+	Eigen::VectorXd& mgrad2(){return mgrad2_;};
+	const Eigen::VectorXd& mgrad2()const{return mgrad2_;};
+	//member functions
+	void step();
+	void defaults();
+	void init(unsigned int dim);
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const RMSPROP& rmsprop);
+};
+
+class ADAM: public Opt{
+private:
+	static const double eps_;//small term to prevent divergence
+	static const double beta1;
+	static const double beta2;
+	double beta1i_;//power w.r.t i
+	double beta2i_;//power w.r.t i
+	double gamma_;//gradient step size
+	Eigen::VectorXd mgrad_;//avg of gradient
+	Eigen::VectorXd mgrad2_;//avg of square of gradient
+public:
+	//constructors/destructors
+	ADAM(){defaults();};
+	ADAM(const Opt& opt):Opt(opt){defaults();};
+	~ADAM(){};
+	//access
+	double& gamma(){return gamma_;};
+	const double& gamma()const{return gamma_;};
+	double& beta1i(){return beta1i_;};
+	const double& beta1i()const{return beta1i_;};
+	double& beta2i(){return beta2i_;};
+	const double& beta2i()const{return beta2i_;};
+	Eigen::VectorXd& mgrad(){return mgrad_;};
+	const Eigen::VectorXd& mgrad()const{return mgrad_;};
+	Eigen::VectorXd& mgrad2(){return mgrad2_;};
+	const Eigen::VectorXd& mgrad2()const{return mgrad2_;};
+	//member functions
+	void step();
+	void defaults();
+	void init(unsigned int dim);
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const ADAM& adam);
+};
+
+class BFGS: public Opt{
+private:
+	double gamma_;//gradient step size
+	Eigen::MatrixXd B_,BOld_;
+	Eigen::VectorXd s_,y_;
+	unsigned int period_;
+	unsigned int decay_;
+public:
+	//constructors/destructors
+	BFGS(){defaults();};
+	BFGS(const Opt& opt):Opt(opt){defaults();};
+	~BFGS(){};
+	//access
+	unsigned int& period(){return period_;};
+	const unsigned int& period()const{return period_;};
+	unsigned int& decay(){return decay_;};
+	const unsigned int& decay()const{return decay_;};
+	double& gamma(){return gamma_;};
+	const double& gamma()const{return gamma_;};
+	//member functions
+	void step();
+	void defaults();
+	void init(unsigned int dim);
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const BFGS& bfgs);
+};
+
+class LM: public Opt{
+private:
+	unsigned int period_;
+	unsigned int decay_;
+	double gamma_;//gradient step size
+	double lambda_;
+	double damp_;
+	double min_,max_;
+	Eigen::MatrixXd H_,D_;//hessian
+public:
+	//constructors/destructors
+	LM(){defaults();};
+	LM(const Opt& opt):Opt(opt){defaults();};
+	~LM(){};
+	//access
+	unsigned int& period(){return period_;};
+	const unsigned int& period()const{return period_;};
+	unsigned int& decay(){return decay_;};
+	const unsigned int& decay()const{return decay_;};
+	double& gamma(){return gamma_;};
+	const double& gamma()const{return gamma_;};
+	double& damp(){return damp_;};
+	const double& damp()const{return damp_;};
+	double& lambda(){return lambda_;};
+	const double& lambda()const{return lambda_;};
+	double& min(){return min_;};
+	const double& min()const{return min_;};
+	double& max(){return max_;};
+	const double& max()const{return max_;};
+	//member functions
+	void step();
+	void defaults();
+	void init(unsigned int dim);
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const LM& lm);
+};
+
+class RPROP: public Opt{
+private:
+	static const double etaP;
+	static const double etaM;
+	static const double deltaMax;
+	static const double deltaMin;
+	unsigned int period_;
+	unsigned int decay_;
+	Eigen::VectorXd delta_;
+public:
+	//constructors/destructors
+	RPROP(){defaults();};
+	RPROP(const Opt& opt):Opt(opt){defaults();};
+	~RPROP(){};
+	//access
+	unsigned int& period(){return period_;};
+	const unsigned int& period()const{return period_;};
+	unsigned int& decay(){return decay_;};
+	const unsigned int& decay()const{return decay_;};
+	Eigen::VectorXd& delta(){return delta_;};
+	const Eigen::VectorXd& delta()const{return delta_;};
+	//member functions
+	void step();
+	void defaults();
+	void init(unsigned int dim);
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const RPROP& rprop);
+};
+
+Opt& read(Opt& opt, const char* file);
+SGD& read(SGD& sdg, const char* file);
+SDM& read(SDM& sdm, const char* file);
+NAG& read(NAG& nag, const char* file);
+ADAGRAD& read(ADAGRAD& adagrad, const char* file);
+ADADELTA& read(ADADELTA& adadelta, const char* file);
+RMSPROP& read(RMSPROP& rmsprop, const char* file);
+ADAM& read(ADAM& adam, const char* file);
+BFGS& read(BFGS& bfgs, const char* file);
+LM& read(LM& lm, const char* file);
+RPROP& read(RPROP& rprop, const char* file);
+
+Opt& read(Opt& opt, FILE* reader);
+SGD& read(SGD& sdg, FILE* reader);
+SDM& read(SDM& sdm, FILE* reader);
+NAG& read(NAG& nag, FILE* reader);
+ADAGRAD& read(ADAGRAD& adagrad, FILE* reader);
+ADADELTA& read(ADADELTA& adadelta, FILE* reader);
+RMSPROP& read(RMSPROP& rmsprop, FILE* reader);
+ADAM& read(ADAM& adam, FILE* reader);
+BFGS& read(BFGS& bfgs, FILE* reader);
+LM& read(LM& lm, FILE* reader);
+RPROP& read(RPROP& rprop, FILE* reader);
+
+namespace serialize{
+
+	//**********************************************
+	// byte measures
+	//**********************************************
+	
+	template <> unsigned int nbytes(const Opt& obj);
+	template <> unsigned int nbytes(const SGD& obj);
+	template <> unsigned int nbytes(const SDM& obj);
+	template <> unsigned int nbytes(const NAG& obj);
+	template <> unsigned int nbytes(const ADAGRAD& obj);
+	template <> unsigned int nbytes(const ADADELTA& obj);
+	template <> unsigned int nbytes(const RMSPROP& obj);
+	template <> unsigned int nbytes(const ADAM& obj);
+	template <> unsigned int nbytes(const BFGS& obj);
+	template <> unsigned int nbytes(const LM& obj);
+	template <> unsigned int nbytes(const RPROP& obj);
+	
+	//**********************************************
+	// packing
+	//**********************************************
+	
+	template <> void pack(const Opt& obj, char* arr);
+	template <> void pack(const SGD& obj, char* arr);
+	template <> void pack(const SDM& obj, char* arr);
+	template <> void pack(const NAG& obj, char* arr);
+	template <> void pack(const ADAGRAD& obj, char* arr);
+	template <> void pack(const ADADELTA& obj, char* arr);
+	template <> void pack(const RMSPROP& obj, char* arr);
+	template <> void pack(const ADAM& obj, char* arr);
+	template <> void pack(const BFGS& obj, char* arr);
+	template <> void pack(const LM& obj, char* arr);
+	template <> void pack(const RPROP& obj, char* arr);
+	
+	//**********************************************
+	// unpacking
+	//**********************************************
+	
+	template <> void unpack(Opt& obj, const char* arr);
+	template <> void unpack(SGD& obj, const char* arr);
+	template <> void unpack(SDM& obj, const char* arr);
+	template <> void unpack(NAG& obj, const char* arr);
+	template <> void unpack(ADAGRAD& obj, const char* arr);
+	template <> void unpack(ADADELTA& obj, const char* arr);
+	template <> void unpack(RMSPROP& obj, const char* arr);
+	template <> void unpack(ADAM& obj, const char* arr);
+	template <> void unpack(BFGS& obj, const char* arr);
+	template <> void unpack(LM& obj, const char* arr);
+	template <> void unpack(RPROP& obj, const char* arr);
+	
 }
 
 #endif
