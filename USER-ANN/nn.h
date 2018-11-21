@@ -1,6 +1,9 @@
 #ifndef ANN_NN_HPP
 #define ANN_NN_HPP
 
+//no bounds checking in Eigen
+#define EIGEN_NO_DEBUG
+
 // c libraries
 #include <cstdlib>
 #include <cstdio>
@@ -14,7 +17,7 @@
 // ann library - math 
 #include "ann_math_special.h"
 // ann library - string
-#include "string.h"
+#include "ann_string.h"
 // ann library - serialization
 #include "serialize.h"
 
@@ -80,6 +83,12 @@ struct TransferFD{
 	static inline double f_lin(double x){return 1;}
 };
 
+struct TransferFFD{
+	static inline void f_tanh(double x, double& v, double& d){v=std::tanh(x);d=1.0-v*v;}
+	static inline void f_sigmoid(double x, double& v, double& d){x=std::exp(-x);v=1.0/(1.0+x);d=1.0/((1.0+x)*(1.0+1.0/x));}
+	static inline void f_lin(double x, double& v, double& d){v=x;d=1;}
+};
+
 //***********************************************************************
 // NETWORK CLASS
 //***********************************************************************
@@ -88,6 +97,7 @@ class Network{
 private:
 	//typedefs
 		typedef double (*FuncP)(double);
+		typedef void (*FFDP)(double,double&,double&);
 	//network dimensions
 		unsigned int nlayer_;//number of layers of the network (hidden + output)
 	//initialize
@@ -198,6 +208,8 @@ public:
 		const FuncP tf(unsigned int l)const{return tf_[l];};
 		FuncP tfd(unsigned int l){return tfd_[l];};
 		const FuncP tfd(unsigned int l)const{return tfd_[l];};
+		FFDP tfd(unsigned int l){return tffd_[l];};
+		const FFDP tfd(unsigned int l)const{return tffd_[l];};
 	//regularization
 		double& lambda(){return lambda_;};
 		const double& lambda()const{return lambda_;};

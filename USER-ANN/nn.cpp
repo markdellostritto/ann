@@ -233,8 +233,8 @@ double Network::error(const Eigen::VectorXd& output, Eigen::VectorXd& grad){
 	double err=0.5*(output_-output).squaredNorm();
 	if(NN_PRINT_DATA>1){
 		std::cout<<"output_ = "<<output_.transpose()<<"\n";
-		std::cout<<"output = "<<output.transpose()<<"\n";
-		std::cout<<"error = "<<err<<"\n";
+		std::cout<<"output  = "<<output.transpose()<<"\n";
+		std::cout<<"error   = "<<err<<"\n";
 	}
 	if(lambda_>0) for(unsigned int l=0; l<nlayer_; ++l) err+=0.5*lambda_*edge_[l].squaredNorm();
 	//compute the gradient of the error function
@@ -337,11 +337,10 @@ void Network::grad_out(){
 	dOut_[nlayer_+1].diagonal()=postScale_;
 	//back-propogate the error
 	for(int l=nlayer_; l>0; --l){
-		Eigen::MatrixXd tempMat=edge_[l-1].array().colwise()*dndz_[l-1].array();
-		dOut_[l].noalias()=dOut_[l+1]*tempMat;
+		dOut_[l].noalias()=dOut_[l+1]*(dndz_[l-1].asDiagonal()*edge_[l-1]);
 	}
 	//compute delta for the input scaling layer
-	dOut_[0]=dOut_[0+1]*preScale_.asDiagonal();
+	dOut_[0].noalias()=dOut_[0+1]*preScale_.asDiagonal();
 }
 
 const Eigen::VectorXd& Network::execute(){
@@ -350,18 +349,14 @@ const Eigen::VectorXd& Network::execute(){
 	//first layer
 	node_.front()=bias_.front();
 	node_.front().noalias()+=edge_.front()*sinput_;
-	//for(unsigned int n=0; n<node_.front().size(); ++n) dndz_.front()[n]=tfd_.front()(node_.front()[n]);
-	//for(unsigned int n=0; n<node_.front().size(); ++n) node_.front()[n]=tf_.front()(node_.front()[n]);
-	for(unsigned int n=0; n<node_.front().size(); ++n) dndz_.front()[n]=(*tfd_.front())(node_.front()[n]);
-	for(unsigned int n=0; n<node_.front().size(); ++n) node_.front()[n]=(*tf_.front())(node_.front()[n]);
+	//for(int n=node_.front().size()-1; n>=0; --n) tffd_.front()(node_.front()[n],node_.front()[n],dndz_.front()[n]);
+	for(int n=node_.front().size()-1; n>=0; --n) (*tffd_.front()(node_.front()[n],node_.front()[n],dndz_.front()[n]);
 	//subsequent layers
 	for(unsigned int l=1; l<node_.size(); ++l){
 		node_[l]=bias_[l];
 		node_[l].noalias()+=edge_[l]*node_[l-1];
-		//for(unsigned int n=0; n<node_[l].size(); ++n) dndz_[l][n]=tfd_[l](node_[l][n]);
-		//for(unsigned int n=0; n<node_[l].size(); ++n) node_[l][n]=tf_[l](node_[l][n]);
-		for(unsigned int n=0; n<node_[l].size(); ++n) dndz_[l][n]=(*tfd_[l])(node_[l][n]);
-		for(unsigned int n=0; n<node_[l].size(); ++n) node_[l][n]=(*tf_[l])(node_[l][n]);
+		//for(int n=node_[l].size()-1; n>=0; --n) tffd_[l](node_[l][n],node_[l][n],dndz_[l][n]);
+		for(int n=node_[l].size()-1; n>=0; --n) (*tffd_[l])(node_[l][n],node_[l][n],dndz_[l][n]);
 	}
 	//scale the output
 	output_=postBias_;
@@ -450,15 +445,22 @@ void Network::read(const char* file, Network& nn){
 
 void Network::read(FILE* reader, Network& nn){
 	if(NN_PRINT_FUNC>0) std::cout<<"Network::read(FILE*,Network&):\n";
-	//local variables
+	//==== local variables ====
 	const unsigned int MAX=5000;
+	const unsigned int N_DIGITS=16;//max number of digits in number
+	unsigned int B_LEN=0;//length of string storing biases
+	unsigned int W_LEN=0;//length of string storing weights
+	unsigned int b_max=0;//max number of biases for a given layer
+	unsigned int w_max=0;//max number of weights for a given layer
 	char* input=(char*)malloc(sizeof(char)*MAX);
+	char* b_str=NULL;//bias string
+	char* w_str=NULL;//weight string
 	std::vector<unsigned int> nh;
 	std::vector<std::string> strlist;
-	//clear the network
+	//==== clear the network ====
 	if(NN_PRINT_STATUS>0) std::cout<<"clearing the network...\n";
 	nn.clear();
-	//load the configuration
+	//==== load the configuration ====
 	if(NN_PRINT_STATUS>0) std::cout<<"loading configuration...\n";
 	fgets(input,MAX,reader);
 	strlist.resize(string::substrN(input,string::WS)-1); std::strtok(input,string::WS);
@@ -467,19 +469,24 @@ void Network::read(FILE* reader, Network& nn){
 	unsigned int nInput=std::atoi(strlist.front().c_str());
 	unsigned int nOutput=std::atoi(strlist.back().c_str());
 	for(unsigned int i=1; i<strlist.size()-1; ++i) nh[i-1]=std::atoi(strlist[i].c_str());
-	//set the transfer function
+	//==== set the transfer function ====
 	if(NN_PRINT_STATUS>0) std::cout<<"loading transfer function...\n";
 	fgets(input,MAX,reader);
 	strlist.resize(string::substrN(input,string::WS)-1); std::strtok(input,string::WS);
 	for(unsigned int j=0; j<strlist.size(); ++j) strlist[j]=std::string(std::strtok(NULL,string::WS));
 	nn.tfType()=TransferN::load(strlist[0].c_str());
 	if(nn.tfType()==TransferN::UNKNOWN) throw std::invalid_argument("Invalid transfer function.");
-	//resize the nueral newtork
+	//==== resize the nueral newtork ====
 	if(NN_PRINT_STATUS>0) std::cout<<"resizing neural network...\n";
 	if(NN_PRINT_STATUS>0) {std::cout<<nInput<<" "; for(unsigned int i=0; i<nh.size(); ++i) std::cout<<nh[i]<<" "; std::cout<<nOutput<<"\n";}
 	nn.resize(nInput,nh,nOutput);
 	if(NN_PRINT_STATUS>1) std::cout<<"nn = "<<nn<<"\n";
-	//read the scaling layers
+	for(unsigned int i=0; i<nn.nlayer(); ++i) b_max=(b_max>nn.nNodes(i))?b_max:nn.nNodes(i);
+	for(unsigned int i=1; i<nn.nlayer(); ++i) w_max=(w_max>nn.nNodes(i)*nn.nNodes(i-1))?w_max:nn.nNodes(i)*nn.nNodes(i-1);
+	if(NN_PRINT_DATA>0) std::cout<<"b_max "<<b_max<<" w_max "<<w_max<<"\n";
+	b_str=(char*)malloc(sizeof(char)*b_max*N_DIGITS);
+	w_str=(char*)malloc(sizeof(char)*w_max*N_DIGITS);
+	//==== read the scaling layers ====
 	if(NN_PRINT_STATUS>0) std::cout<<"loading scaling layers...\n";
 	fgets(input,MAX,reader);
 	strlist.resize(string::substrN(input,string::WS)-1); std::strtok(input,string::WS);
@@ -489,7 +496,7 @@ void Network::read(FILE* reader, Network& nn){
 	strlist.resize(string::substrN(input,string::WS)-1); std::strtok(input,string::WS);
 	for(unsigned int j=0; j<strlist.size(); ++j) strlist[j]=std::string(std::strtok(NULL,string::WS));
 	for(unsigned int j=0; j<strlist.size(); ++j) nn.postScale(j)=std::atof(strlist[j].c_str());
-	//read the biasing layers
+	//==== read the biasing layers ====
 	if(NN_PRINT_STATUS>0) std::cout<<"loading biasing layers...\n";
 	fgets(input,MAX,reader);
 	strlist.resize(string::substrN(input,string::WS)-1); std::strtok(input,string::WS);
@@ -499,21 +506,21 @@ void Network::read(FILE* reader, Network& nn){
 	strlist.resize(string::substrN(input,string::WS)-1); std::strtok(input,string::WS);
 	for(unsigned int j=0; j<strlist.size(); ++j) strlist[j]=std::string(std::strtok(NULL,string::WS));
 	for(unsigned int j=0; j<strlist.size(); ++j) nn.postBias(j)=std::atof(strlist[j].c_str());
-	//read in the biases
+	//==== read in the biases ====
 	if(NN_PRINT_STATUS>0) std::cout<<"loading biases...\n";
 	for(unsigned int n=0; n<nn.nlayer(); ++n){
-		fgets(input,MAX,reader);
-		strlist.resize(string::substrN(input,string::WS)-1); std::strtok(input,string::WS);
+		fgets(b_str,b_max*N_DIGITS,reader);
+		strlist.resize(string::substrN(b_str,string::WS)-1); std::strtok(b_str,string::WS);
 		for(unsigned int j=0; j<strlist.size(); ++j) strlist[j]=std::string(std::strtok(NULL,string::WS));
 		for(unsigned int i=0; i<nn.nlayer(n); ++i){
 			nn.bias(n,i)=std::atof(strlist[i].c_str());
 		}
 	}
-	//read in the edge weights
+	//==== read in the edge weights ====
 	if(NN_PRINT_STATUS>0) std::cout<<"loading weights...\n";
 	for(unsigned int n=0; n<nn.nlayer(); ++n){
-		fgets(input,MAX,reader);
-		strlist.resize(string::substrN(input,string::WS)-1); std::strtok(input,string::WS);
+		fgets(w_str,w_max*N_DIGITS,reader);
+		strlist.resize(string::substrN(w_str,string::WS)-1); std::strtok(w_str,string::WS);
 		for(unsigned int j=0; j<strlist.size(); ++j) strlist[j]=std::string(std::strtok(NULL,string::WS));
 		unsigned int count=0;
 		for(unsigned int i=0; i<nn.edge(n).rows(); ++i){
@@ -522,8 +529,10 @@ void Network::read(FILE* reader, Network& nn){
 			}
 		}
 	}
-	//free local variables
-	free(input);
+	//==== free local variables ====
+	if(input!=NULL) free(input);
+	if(b_str!=NULL) free(b_str);
+	if(w_str!=NULL) free(w_str);
 }
 
 }
