@@ -4,7 +4,7 @@ Author: Mark J. DelloStritto
 Date: 11/21/18  
 
 A code to train neural network potentials using periodic atomic structures and ab-initio references energies.  
-Also included is a an extension to [LAMMPS][https://lammps.sandia.gov/] which implements neural network potentials 
+Also included is a an extension to LAMMPS (https://lammps.sandia.gov/) which implements neural network potentials 
 for molecular dynamics simulations.
 
 ## CODE ORGANIZATION
@@ -61,7 +61,7 @@ for molecular dynamics simulations.
 
 ## INSTALLATION
 
-This code requires the Eigen Matrix Library [(eigen)]:http://eigen.tuxfamily.org
+This code requires the Eigen Matrix Library (http://eigen.tuxfamily.org)
 
 The Eigen library is a header library, and thus does not need to be compiled. 
 In the makefile, the location of the Eigen library must be specified in the indicated line.
