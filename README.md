@@ -61,12 +61,12 @@ for molecular dynamics simulations.
 
 ## INSTALLATION
 
-This code requires the Eigen Matrix Library [(eigen)][http://eigen.tuxfamily.org]
+This code requires the Eigen Matrix Library [(eigen)]:http://eigen.tuxfamily.org
 
 The Eigen library is a header library, and thus does not need to be compiled. 
 In the makefile, the location of the Eigen library must be specified in the indicated line.
 
-** Makefile options:
+**Makefile options:**
 * make omp     - makes training binary - parallelized - OMP
 * make mpi     - makes training binary - parallelized - MPI
 * make test    - makes testing binary
@@ -77,20 +77,21 @@ In the makefile, the location of the Eigen library must be specified in the indi
 
 ### data - files:
 
-The code reads in each data file provided.  
-Each data file in turn should contain a list of files containing structures to be read for training, validation, and testing.  
-Each data file can be classified as training, validation, or testing.  
-The file names should either be accessible from the working directory, or they should contain the full path name (e.g. starting at $HOME)
+The code reads in each data file provided. Each data file in turn should contain a list of 
+files containing structures to be read for training, validation, and testing. Each data 
+file can be classified as training, validation, or testing. The file names should either 
+be accessible from the working directory, or they should contain the full path name (e.g. 
+starting at $HOME)
 
 ### data - training:
 
-The data used for training the neural network potential.  
-This data is the ONLY data which determines the gradient for optimization.  
-The training data should comprise the bulk of the reference data.  
+The data used for training the neural network potential. This data is the ONLY data 
+which determines the gradient for optimization. The training data should comprise 
+the bulk of the reference data.  
 
 ### data - validation:
 
-The data used for determining the end of the optimization of the neural network training.  
+The data used for determining the end of the optimization of the neural network training. 
 No stopping criterion is implemented, rather one should monitor the validation error 
 closely and end the optimization when the change in validation error is negligible or 
 when the validation error is less than a threshold value. The validation data should be a 
@@ -167,16 +168,16 @@ All gradient descent algorithms require a descent parameter (gamma).  Most also 
 a memory parameter (eta) which adds different forms of momentum to the descent by 
 combining the current gradient with past gradients.
 
-The rprop algorithm uses the sign of the gradient only, with the step sized determined by 
-the sign of the change in the objective function. The rprop algorithms is highly recommended, 
+The RPROP algorithm uses the sign of the gradient only, with the step sized determined by 
+the sign of the change in the objective function. The RPROP algorithms is highly recommended, 
 as it is extremently stable, exhibiting a monotonic decrease in the objective function 
-for essentially any parameter values. The adam algorithm is also effective, though it requires 
-a good choice of gamma. The nag algorithm is similar to adam, though slighly less effective. 
+for essentially any parameter values. The ADAM algorithm is also effective, though it requires 
+a good choice of gamma. The NAG algorithm is similar to ADAM, though slighly less effective. 
 All other algorithms work to some degree, but are not recommended.
 
 ## WRITING
 
-Every nsave iterations the neural network potential is written to a file, and a restart
+Every "nsave" iterations the neural network potential is written to a file, and a restart
 file is written.  Each have the current optimization count appended to the end.  The count is stored in
 the restart file and thereby consistently maintained when restarting.  When the max
 number of iterations is reached, the final potential and restart files are written,
@@ -207,7 +208,7 @@ A conversion utility is included.  The arguments are as follows:
 * frac = fractional coordinate ouput
 * cart = Cartesian coordinate output
 * offset x:y:z = uniform position offset
-* interval beg:end:stride = interval to load trajectory
+* interval beg : end : stride = interval to load trajectory
 * sep = seperate the output into separate files for each timestep
 * poscar "file" = poscar file
 * xdatcar "file" = xdatcar file
