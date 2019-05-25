@@ -20,15 +20,20 @@ for molecular dynamics simulations.
 * math_cmp.hpp     - comparison functions
 * accumulator.hpp  - statistical accumulator
 * eigen.hpp        - Eigen utilities
+
 **OPTIMIZATION**
 * optimize.hpp - optimization
+
 **STRING**
 * string.hpp - string utilities
+
 **CHEMISTRY**
 * units.hpp  - physical units
 * ptable.hpp - physical constants
+
 **NEURAL NETWORK**
 * nn.hpp - neural network implementation
+
 **NEURAL NETWORK POTENTIAL**
 * cutoff.hpp          - distance cutoff
 * symm_radial.hpp     - radial symmetry function header
@@ -40,12 +45,15 @@ for molecular dynamics simulations.
 * basis_radial.hpp    - radial basis (table of radial symmetry functions)
 * basis_angular.hpp   - angular basis (table of radial symmetry functions)
 * nn_pot.hpp          - neural network potential
+
 **TRAINING**
 * nn_pot_train_omp.hpp - nn pot - training - OpenMP
 * nn_pot_train_mpi.hpp - nn pot - training - MPI
+
 **STRUCTURE**
 * cell.hpp      - unit cell
 * structure.hpp - atomic trajectories/properties
+
 **FILE**
 * vasp.hpp - read/write structures - VASP
 * qe.hpp   - read/write structures - QE
