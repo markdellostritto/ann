@@ -1,6 +1,6 @@
 # ANN - Atomic Nueral Network
 
-Author: Mark J. DelloStritto  
+Author: Mark J. DelloStritto
 
 A code to train neural network potentials using periodic atomic structures and ab-initio references energies.  
 Also included is a an extension to LAMMPS (https://lammps.sandia.gov/) which implements neural network potentials 
@@ -219,3 +219,7 @@ A conversion utility is included.  The arguments are as follows:
 * in "file" = qe input file
 * ame "file" = ame file
 * out "file" = output file
+
+## REFERENCES
+
+[1] Behler, J. Constructing High-Dimensional Neural Network Potentials: A Tutorial Review. Int. J. Quantum Chem. 2015, 115 (16), 1032–1050. https://doi.org/10.1002/qua.24890.
