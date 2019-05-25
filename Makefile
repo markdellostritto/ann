@@ -1,9 +1,19 @@
 # include directories
-DIR1   = /usr/local/include/eigen-eigen-67e894c6cd8f/ # eigen library
-INC    = $(DIR1)
-# compiler 
-CXXFLAGS = -fopenmp -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
-CXX     = g++ 
+EIGEN = /usr/local/include/eigen-eigen-67e894c6cd8f/ # eigen library
+INC   = $(EIGEN)
+
+# openmp
+omp: CXXFLAGS = -fopenmp -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
+omp: CXX = g++
+# mpi
+mpi: CXXFLAGS = -std=gnu++11 -w -O3 -mavx $(foreach d, $(INC), -I$d)
+mpi: CXX = mpic++
+# test
+test: CXXFLAGS = -fopenmp -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
+test: CXX = g++
+# convert
+convert: CXXFLAGS = -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
+convert: CXX = g++
 
 # objects for final executable
 objects = nn_pot.o nn.o \
@@ -11,7 +21,8 @@ objects = nn_pot.o nn.o \
 		basis_angular.o symm_angular.o symm_angular_g3.o symm_angular_g4.o \
 		structure.o cell.o qe.o vasp.o ame.o \
 		math_func.o math_special.o \
-		units.o eigen.o parallel.o ptable.o string.o \
+		ewald3D.o \
+		units.o eigen.o parallel.o ptable.o string.o compiler.o \
 		optimize.o serialize.o cutoff.o map.o accumulator.o \
 
 nn_pot_train_omp: $(objects)
@@ -30,6 +41,8 @@ ptable.o: ptable.cpp
 	$(CXX) $(CXXFLAGS) -c ptable.cpp
 string.o: string.cpp
 	$(CXX) $(CXXFLAGS) -c string.cpp
+compiler.o: compiler.cpp
+	$(CXX) $(CXXFLAGS) -c compiler.cpp
 math_func.o: math_func.cpp
 	$(CXX) $(CXXFLAGS) -c math_func.cpp
 math_special.o: math_special.cpp math_const.hpp
@@ -60,6 +73,8 @@ cell.o: cell.cpp math_const.hpp math_special.hpp eigen.hpp serialize.hpp
 	$(CXX) $(CXXFLAGS) -c cell.cpp
 structure.o: structure.cpp cell.hpp string.hpp ptable.hpp
 	$(CXX) $(CXXFLAGS) -c structure.cpp
+ewald3D.o: ewald3D.cpp structure.hpp cell.hpp math_const.hpp
+	$(CXX) $(CXXFLAGS) -c ewald3D.cpp
 vasp.o: vasp.cpp structure.hpp cell.hpp string.hpp 
 	$(CXX) $(CXXFLAGS) -c vasp.cpp
 qe.o: qe.cpp structure.hpp cell.hpp string.hpp
@@ -76,6 +91,12 @@ clean:
 
 test: $(objects)
 	$(CXX) $(CXXFLAGS) -o nn_pot_test.exe nn_pot_test.cpp $(objects)
+
+mpi: $(objects)
+	$(CXX) $(CXXFLAGS) -o nn_pot_train_mpi.exe nn_pot_train_mpi.cpp $(objects)
+
+omp: $(objects)
+	$(CXX) $(CXXFLAGS) -o nn_pot_train_omp.exe nn_pot_train_omp.cpp $(objects)
 
 convert: convert.cpp structure.o eigen.o serialize.o units.o ptable.o vasp.o qe.o ame.o string.o cell.o
 	$(CXX) $(CXXFLAGS) -o convert.exe convert.cpp structure.o cell.o string.o eigen.o serialize.o units.o ptable.o vasp.o qe.o ame.o
