@@ -54,8 +54,8 @@ for molecular dynamics simulations.
 * structure.hpp - atomic trajectories/properties
 
 **FILE**
-* vasp.hpp - read/write structures - VASP
-* qe.hpp   - read/write structures - QE
+* vasp.hpp - read/write structures - VASP (https://www.vasp.at/)
+* qe.hpp   - read/write structures - QE (https://www.quantum-espresso.org/)
 * ame.hpp  - read/write structures - AME
 
 ## INSTALLATION
