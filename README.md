@@ -9,26 +9,26 @@ for molecular dynamics simulations.
 
 ## CODE ORGANIZATION
 
-** MEMORY **
+**MEMORY**
 * serialize.hpp - serialization of complex objects
 * map.hpp       - mapping two different objects to each other
-** MATH **
+**MATH**
 * math_const.hpp   - mathematical constants
 * math_special.hpp - special functions
 * math_func.hpp    - function evalulation
 * math_cmp.hpp     - comparison functions
 * accumulator.hpp  - statistical accumulator
 * eigen.hpp        - Eigen utilities
-** OPTIMIZATION **
+**OPTIMIZATION**
 * optimize.hpp - optimization
-** STRING **
+**STRING**
 * string.hpp - string utilities
-** CHEMISTRY **
+**CHEMISTRY**
 * units.hpp  - physical units
 * ptable.hpp - physical constants
-** NEURAL NETWORK **
+**NEURAL NETWORK**
 * nn.hpp - neural network implementation
-** NEURAL NETWORK POTENTIAL **
+**NEURAL NETWORK POTENTIAL**
 * cutoff.hpp          - distance cutoff
 * symm_radial.hpp     - radial symmetry function header
 * symm_radial_g1.hpp  - "G1" symmetry function [1]
@@ -39,13 +39,13 @@ for molecular dynamics simulations.
 * basis_radial.hpp    - radial basis (table of radial symmetry functions)
 * basis_angular.hpp   - angular basis (table of radial symmetry functions)
 * nn_pot.hpp          - neural network potential
-** TRAINING **
+**TRAINING**
 * nn_pot_train_omp.hpp - nn pot - training - OpenMP
 * nn_pot_train_mpi.hpp - nn pot - training - MPI
-** STRUCTURE **
+**STRUCTURE**
 * cell.hpp      - unit cell
 * structure.hpp - atomic trajectories/properties
-** FILE **
+**FILE**
 * vasp.hpp - read/write structures - VASP
 * qe.hpp   - read/write structures - QE
 * ame.hpp  - read/write structures - AME
