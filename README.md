@@ -1,7 +1,6 @@
 # ANN - Atomic Nueral Network
 
 Author: Mark J. DelloStritto  
-Date: 11/21/18  
 
 A code to train neural network potentials using periodic atomic structures and ab-initio references energies.  
 Also included is a an extension to LAMMPS (https://lammps.sandia.gov/) which implements neural network potentials 
