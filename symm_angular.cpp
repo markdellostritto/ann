@@ -1,5 +1,9 @@
 #include "symm_angular.hpp"
 
+//*****************************************
+// PhiAN - angular function names
+//*****************************************
+
 //loading/printing
 
 PhiAN::type PhiAN::load(const char* str){
@@ -15,9 +19,13 @@ std::ostream& operator<<(std::ostream& out, const PhiAN::type& t){
 	return out;
 }
 
+bool operator==(const PhiA& phia1, const PhiA& phia2){
+	return true;
+}
+
 //PhiA
 std::ostream& operator<<(std::ostream& out, const PhiA& f){
-	return out<<"PhiA "<<f.tcut<<" "<<f.rc;
+	return out;
 }
 
 namespace serialize{
@@ -27,10 +35,7 @@ namespace serialize{
 	//**********************************************
 	
 	template <> unsigned int nbytes(const PhiA& obj){
-		unsigned int N=0;
-		N+=sizeof(double);//rc
-		N+=sizeof(obj.tcut);//cutoff type
-		return N;
+		return 0;
 	}
 	
 	//**********************************************
@@ -38,8 +43,7 @@ namespace serialize{
 	//**********************************************
 	
 	template <> void pack(const PhiA& obj, char* arr){
-		std::memcpy(arr,&obj.rc,sizeof(double));
-		std::memcpy(arr+sizeof(double),&obj.tcut,sizeof(obj.tcut));
+		
 	}
 	
 	//**********************************************
@@ -47,8 +51,7 @@ namespace serialize{
 	//**********************************************
 	
 	template <> void unpack(PhiA& obj, const char* arr){
-		std::memcpy(&obj.rc,arr,sizeof(double));
-		std::memcpy(&obj.tcut,arr+sizeof(double),sizeof(obj.tcut));
+		
 	}
 	
 }
