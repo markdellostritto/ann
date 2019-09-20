@@ -70,9 +70,9 @@ void read_atoms(FILE* reader, std::vector<std::string>& names, std::vector<unsig
 	natoms.resize(nSpecies);
 	//read in the species names
 	if(DEBUG_VASP>1) std::cout<<"Reading in the species names...\n";
-	names[0]=std::string(std::strtok(input,string::WS));
+	names[0]=std::strtok(input,string::WS);
 	for(unsigned int i=1; i<nSpecies; ++i){
-		names[i]=std::string(std::strtok(NULL,string::WS));
+		names[i]=std::strtok(NULL,string::WS);
 	}
 	//read in the species numbers
 	if(DEBUG_VASP>1) std::cout<<"Reading in the species numbers...\n";
@@ -139,8 +139,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 	/* local function variables */
 	//file i/o
 		FILE* reader=NULL;
-		char* input=(char*)malloc(sizeof(char)*string::M);
-		char* temp=(char*)malloc(sizeof(char)*string::M);
+		char* input=new char[string::M];
 	//simulation flags
 		bool direct;//whether the coordinates are in direct or Cartesian coordinates
 	//cell
@@ -222,10 +221,9 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 	
 	//free all local variables
 	if(reader!=NULL) fclose(reader);
-	free(input);
-	free(temp);
-	
-	if(error) throw std::runtime_error("I/O Exception Occurred.");
+	delete[] input;
+		
+	if(error) throw std::runtime_error("I/O Exception: Could not read data.");
 }
 
 void write(const char* file, const AtomType& atomT, const Structure& struc){
@@ -285,7 +283,7 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 	//free local variables
 	if(writer!=NULL) fclose(writer);
 	
-	if(error) throw std::runtime_error("I/O Exception Occurred.");
+	if(error) throw std::runtime_error("I/O Exception: Could not write data.");
 }
 
 }
@@ -302,8 +300,7 @@ void read(const char* file, const Interval interval, const AtomType& atomT, Simu
 	/* local function variables */
 	//file i/o
 		FILE* reader=NULL;
-		char* input=(char*)malloc(sizeof(char)*string::M);
-		char* temp=(char*)malloc(sizeof(char)*string::M);
+		char* input=new char[string::M];
 		std::string str;
 	//simulation flags
 		bool direct;//whether the coordinates are in direct or Cartesian coordinates
@@ -321,7 +318,6 @@ void read(const char* file, const Interval interval, const AtomType& atomT, Simu
 		unsigned int N=0;
 	//timing
 		clock_t start,stop;
-		double time;
 	//units
 		double s=0.0;
 		if(units::consts::system()==units::System::AU) s=units::BOHRpANG;
@@ -516,6 +512,7 @@ void read(const char* file, const Interval interval, const AtomType& atomT, Simu
 			}
 		}
 		
+		//close the file
 		fclose(reader);
 		reader=NULL;
 		
@@ -523,8 +520,7 @@ void read(const char* file, const Interval interval, const AtomType& atomT, Simu
 		stop=std::clock();
 		
 		//print the time
-		time=((double)(stop-start))/CLOCKS_PER_SEC;
-		std::cout<<"Simulation loaded in "<<time<<" seconds.\n";
+		std::cout<<"Simulation loaded in "<<((double)(stop-start))/CLOCKS_PER_SEC<<" seconds.\n";
 	}catch(std::exception& e){
 		std::cout<<"ERROR in "<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<funcName<<":\n";
 		std::cout<<e.what()<<"\n";
@@ -533,10 +529,9 @@ void read(const char* file, const Interval interval, const AtomType& atomT, Simu
 	
 	//free all local variables
 	if(reader!=NULL) fclose(reader);
-	free(input);
-	free(temp);
+	delete[] input;
 	
-	if(error) throw std::runtime_error("I/O Exception Occurred.");
+	if(error) throw std::runtime_error("I/O Exception: Could not read data.");
 }
 
 void write(const char* file, const Interval interval, const AtomType& atomT, const Simulation& sim){
@@ -615,6 +610,8 @@ void write(const char* file, const Interval interval, const AtomType& atomT, con
 		std::cout<<e.what()<<"\n";
 		error=true;
 	}
+	
+	if(error) throw std::runtime_error("I/O Exception: Could not write data.");
 }
 
 }
@@ -631,8 +628,7 @@ void read(const char* file, unsigned int t, const AtomType& atomT, Structure& st
 	//==== local function variables ====
 	//file i/o
 		FILE* reader=NULL;
-		char* input=(char*)malloc(sizeof(char)*string::M);
-		char* temp=(char*)malloc(sizeof(char)*string::M);
+		char* input=new char[string::M];
 		std::string str;
 	//simulation flags
 		bool direct;//whether the coordinates are in direct or Cartesian coordinates
@@ -666,12 +662,12 @@ void read(const char* file, unsigned int t, const AtomType& atomT, Structure& st
 	try{
 		
 		//==== open the file ====
-		if(DEBUG_VASP>0) std::cout<<"Opening the file...\n";
+		if(DEBUG_VASP>0) std::cout<<"opening the file\n";
 		reader=fopen(file,"r");
 		if(reader==NULL) throw std::runtime_error(std::string("I/O Error: Could not open file: ")+file);
 		
 		//==== read the number of timesteps ====
-		if(DEBUG_VASP>0) std::cout<<"Loading the timesteps...\n";
+		if(DEBUG_VASP>0) std::cout<<"loading the timesteps\n";
 		std::rewind(reader);
 		while(fgets(input,string::M,reader)!=NULL){
 			if(std::strstr(input,"<calculation>")!=NULL) ++ts;
@@ -680,7 +676,7 @@ void read(const char* file, unsigned int t, const AtomType& atomT, Structure& st
 		if(t>ts) throw std::invalid_argument("Invalid timestep");
 		
 		//==== read in the atom info ====
-		if(DEBUG_VASP>0) std::cout<<"Reading in the atom info...\n";
+		if(DEBUG_VASP>0) std::cout<<"reading in the atom info\n";
 		std::rewind(reader);
 		while(fgets(input,string::M,reader)!=NULL){
 			if(std::strstr(input,"atominfo")!=NULL){
@@ -709,18 +705,18 @@ void read(const char* file, unsigned int t, const AtomType& atomT, Structure& st
 			}
 		}
 		if(DEBUG_VASP>0){
-			std::cout<<"ATOM_NAMES = "; for(unsigned int i=0; i<atomNames.size(); ++i) std::cout<<atomNames[i]<<" "; std::cout<<"\n";
+			std::cout<<"ATOM_NAMES   = "; for(unsigned int i=0; i<atomNames.size(); ++i) std::cout<<atomNames[i]<<" "; std::cout<<"\n";
 			std::cout<<"ATOM_NUMBERS = "; for(unsigned int i=0; i<nAtoms.size(); ++i) std::cout<<nAtoms[i]<<" "; std::cout<<"\n";
 		}
 		if(atomNames.size()!=nAtoms.size()) throw std::runtime_error("Mismatch in atom names/numbers.");
 		nSpecies=atomNames.size();
 		
 		//==== resize the simulation ====
-		if(DEBUG_VASP>0) std::cout<<"Resizing the simulation...\n";
+		if(DEBUG_VASP>0) std::cout<<"resizing the simulation\n";
 		struc.resize(nAtoms,atomNames,atomT);
 		
 		//==== read the cells ====
-		if(DEBUG_VASP>0) std::cout<<"Loading the cells...\n";
+		if(DEBUG_VASP>0) std::cout<<"reading the cells\n";
 		tt=0;
 		while(fgets(input,string::M,reader)!=NULL){
 			if(std::strstr(input,"<calculation>")!=NULL){
@@ -753,7 +749,7 @@ void read(const char* file, unsigned int t, const AtomType& atomT, Structure& st
 		}
 		
 		//==== read in the positions ====
-		if(DEBUG_VASP>0) std::cout<<"Reading in positions...\n";
+		if(DEBUG_VASP>0) std::cout<<"reading in positions\n";
 		std::rewind(reader);
 		tt=0;
 		while(fgets(input,string::M,reader)!=NULL){
@@ -776,7 +772,7 @@ void read(const char* file, unsigned int t, const AtomType& atomT, Structure& st
 		}
 		
 		//==== read in the energies ====
-		if(DEBUG_VASP>0) std::cout<<"Reading in the energies...\n";
+		if(DEBUG_VASP>0) std::cout<<"reading in the energies\n";
 		std::rewind(reader);
 		tt=0;
 		while(fgets(input,string::M,reader)!=NULL){
@@ -825,7 +821,7 @@ void read(const char* file, unsigned int t, const AtomType& atomT, Structure& st
 	}
 	
 	//==== transform to Cartesian coordinates ====
-	if(DEBUG_VASP>0) std::cout<<"Transforming to Cartesian coordinates...\n";
+	if(DEBUG_VASP>0) std::cout<<"transforming to Cartesian coordinates\n";
 	for(unsigned int n=0; n<struc.nAtoms(); ++n){
 		struc.posn(n)=struc.cell().R()*struc.posn(n);
 		Cell::returnToCell(struc.posn(n),struc.posn(n),struc.cell().R(),struc.cell().RInv());
@@ -833,10 +829,9 @@ void read(const char* file, unsigned int t, const AtomType& atomT, Structure& st
 	
 	//==== free all local variables ====
 	if(reader!=NULL) fclose(reader);
-	free(input);
-	free(temp);
+	delete[] input;
 	
-	if(error) throw std::runtime_error("I/O Exception Occurred.");
+	if(error) throw std::runtime_error("I/O Exception: Could not read data.");
 }
 
 }

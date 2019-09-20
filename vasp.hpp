@@ -1,3 +1,4 @@
+#pragma once
 #ifndef VASP_HPP
 #define VASP_HPP
 
