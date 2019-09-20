@@ -1,3 +1,4 @@
+#pragma once
 #ifndef OPTIMIZE_HPP
 #define OPTIMIZE_HPP
 
@@ -7,8 +8,6 @@
 // c++ libraries
 #include <iostream>
 #include <string>
-#include <limits>
-#include <functional>
 // eigen libraries
 #include <Eigen/Dense>
 #include "eigen.hpp"
@@ -19,528 +18,464 @@
 //serialization
 #include "serialize.hpp"
 
-#ifndef PRINT_OPT_FUNC
-#define PRINT_OPT_FUNC 0
+namespace Opt{
+	
+#ifndef OPT_PRINT_FUNC
+#define OPT_PRINT_FUNC 0
 #endif
 
-#ifndef PRINT_OPT_DATA
-#define PRINT_OPT_DATA 0
+#ifndef OPT_PRINT_DATA
+#define OPT_PRINT_DATA 0
 #endif
 
 //***************************************************
 // optimization method
 //***************************************************
 
-struct OPT_METHOD{
+struct ALGO{
 	enum type {
-		SGD,
-		SDM,
-		NAG,
-		ADAGRAD,
-		ADADELTA,
-		RMSPROP,
-		ADAM,
-		BFGS,
-		LM,
-		RPROP,
-		UNKNOWN
+		SGD=0,
+		SDM=1,
+		NAG=2,
+		ADAGRAD=3,
+		ADADELTA=4,
+		RMSPROP=5,
+		ADAM=6,
+		NADAM=7,
+		BFGS=8,
+		RPROP=9,
+		UNKNOWN=-1
 	};
-	static type load(const char* str);
+	static type read(const char* str);
 };
 
-std::ostream& operator<<(std::ostream& out, const OPT_METHOD::type& type);
+std::ostream& operator<<(std::ostream& out, const ALGO::type& type);
 
 //***************************************************
 // optimization value
 //***************************************************
 
-struct OPT_VAL{
+struct VAL{
 	enum type{
-		XTOL_REL,
-		XTOL_ABS,
-		FTOL_REL,
-		FTOL_ABS,
-		UNKNOWN
+		XTOL_REL=0,
+		XTOL_ABS=1,
+		FTOL_REL=2,
+		FTOL_ABS=3,
+		UNKNOWN=-1
 	};
-	static type load(const char* str);
+	static type read(const char* str);
 };
 
-std::ostream& operator<<(std::ostream& out, const OPT_VAL::type& type);
+std::ostream& operator<<(std::ostream& out, const VAL::type& type);
 
 //***************************************************
-// Opt
+// Data
 //***************************************************
 
-class Opt{
-public:
-	typedef const std::function<double (const Eigen::VectorXd& x, Eigen::VectorXd& grad)> Func;
-	template <class T> using FuncT=std::function<double (T&, const Eigen::VectorXd& x, Eigen::VectorXd& grad)>;
-protected:
-	/*optimization*/
-	//status
-		unsigned int nPrint_;//frequency of printing
-		unsigned int nStep_;//the number of steps
-		unsigned int nEval_;//the number of evaluations
+class Data{
+private:
+	//count
+		unsigned int nPrint_;
+		unsigned int nWrite_;
+		unsigned int step_;
 	//stopping
-		double tol_;//optimization tolerance
-		unsigned int maxIter_;//the max number of iterations
-	//parameters
-		unsigned int dim_;//dimension of the problem
-		double val_,valOld_;//value of the objective function
-		Eigen::VectorXd x_,xOld_;//parameters
-		Eigen::VectorXd grad_,gradOld_;//gradient
-	//algorithm
-		OPT_METHOD::type algo_;//optimization algorithm
-		OPT_VAL::type optVal_;//the type of value determining the end condition
-	//line searching
-		double precln_;//precision for line searches
-		unsigned int maxln_;//max for line searches
-		Eigen::VectorXd a_,b_,c_,d_;//for line search
-public:
-	//constructors/destructors
-	Opt(){defaults();};
-	~Opt(){};
-	
-	//operators
-	friend std::ostream& operator<<(std::ostream& out, const Opt& opt);
-	
-	/*access*/
+		unsigned int max_;
+		double tol_;
 	//status
-		unsigned int& nPrint(){return nPrint_;};
-		const unsigned int& nPrint()const{return nPrint_;};
-		unsigned int& nStep(){return nStep_;};
-		const unsigned int& nStep()const{return nStep_;};
-		unsigned int& nEval(){return nEval_;};
-		const unsigned int& nEval()const{return nEval_;};
-		double& val(){return val_;};
-		const double& val()const{return val_;};
-		double& valOld(){return valOld_;};
-		const double& valOld()const{return valOld_;};
-	//stopping
-		double& tol(){return tol_;};
-		const double& tol()const{return tol_;};
-		unsigned int& maxIter(){return maxIter_;};
-		const unsigned int& maxIter()const{return maxIter_;};
-	//parameters
-		unsigned int& dim(){return dim_;};
-		const unsigned int& dim()const{return dim_;};
-		Eigen::VectorXd& x(){return x_;};
-		const Eigen::VectorXd& x()const{return x_;};
-		Eigen::VectorXd& xOld(){return xOld_;};
-		const Eigen::VectorXd& xOld()const{return xOld_;};
-		Eigen::VectorXd& grad(){return grad_;};
-		const Eigen::VectorXd& grad()const{return grad_;};
-		Eigen::VectorXd& gradOld(){return gradOld_;};
-		const Eigen::VectorXd& gradOld()const{return gradOld_;};
+		double val_,valOld_;
+		double dv_,dp_;
 	//algorithm
-		OPT_METHOD::type& algo(){return algo_;};
-		const OPT_METHOD::type& algo()const{return algo_;};
-		OPT_VAL::type& optVal(){return optVal_;};
-		const OPT_VAL::type& optVal()const{return optVal_;};
-	//linear optimization
-		double& precln(){return precln_;};
-		const double& precln()const{return precln_;};
-		unsigned int& maxln(){return maxln_;};
-		const unsigned int& maxln()const{return maxln_;};
+		ALGO::type algo_;//optimization algorithm
+		VAL::type optVal_;//the type of value determining the end condition
+	//parameters
+		unsigned int dim_;
+		Eigen::VectorXd p_,pOld_;
+		Eigen::VectorXd g_,gOld_;
+public:
+	//==== constructors/destructors ====
+	Data(){defaults();}
+	Data(unsigned int dim){defaults();init(dim);}
+	~Data(){}
 	
-	//member functions
+	//==== operators ====
+	friend std::ostream& operator<<(std::ostream& out, const Data& data);
+	
+	//==== access ====
+	//status
+		double& val(){return val_;}
+		const double& val()const{return val_;}
+		double& valOld(){return valOld_;}
+		const double& valOld()const{return valOld_;}
+		double& dv(){return dv_;}
+		const double& dv()const{return dv_;}
+		double& dp(){return dp_;}
+		const double& dp()const{return dp_;}
+	//count
+		unsigned int& nPrint(){return nPrint_;}
+		const unsigned int& nPrint()const{return nPrint_;}
+		unsigned int& nWrite(){return nWrite_;}
+		const unsigned int& nWrite()const{return nWrite_;}
+		unsigned int& step(){return step_;}
+		const unsigned int& step()const{return step_;}
+	//stopping
+		double& tol(){return tol_;}
+		const double& tol()const{return tol_;}
+		unsigned int& max(){return max_;}
+		const unsigned int& max()const{return max_;}
+	//parameters
+		unsigned int& dim(){return dim_;}
+		const unsigned int& dim()const{return dim_;}
+		Eigen::VectorXd& p(){return p_;}
+		const Eigen::VectorXd& p()const{return p_;}
+		Eigen::VectorXd& pOld(){return pOld_;}
+		const Eigen::VectorXd& pOld()const{return pOld_;}
+		Eigen::VectorXd& g(){return g_;}
+		const Eigen::VectorXd& g()const{return g_;}
+		Eigen::VectorXd& gOld(){return gOld_;}
+		const Eigen::VectorXd& gOld()const{return gOld_;}
+	//algorithm
+		ALGO::type& algo(){return algo_;};
+		const ALGO::type& algo()const{return algo_;};
+		VAL::type& optVal(){return optVal_;};
+		const VAL::type& optVal()const{return optVal_;};
+	
+	//==== member functions ====
 	void defaults();
-	void clear(){defaults();};
-	void resize(unsigned int n);
-	
-	//optimization functions
-	double opt_ln(Func& func);
-	double opt_ln(Func& func, Eigen::VectorXd& x0, Eigen::VectorXd& x1);
-	template <class T> double opt_ln(const FuncT<T>& func, T& obj);
-	double opts(const Func& func, Eigen::VectorXd& x0);
-	double opts(const Func& func, Eigen::VectorXd& x0, Eigen::VectorXd& grad, double& val);
-	template <class T> double opts(const FuncT<T>& func, T& obj, Eigen::VectorXd& x0);
-	template <class T> double opts(const FuncT<T>& func, T& obj, Eigen::VectorXd& x0, Eigen::VectorXd& grad, double& val);
-	void opts_impl(const Func& func);
-	template <class T> void opts_impl(const FuncT<T>& func, T& obj);
-	
-	//virtual functions
-	virtual void step(){}; 
-	virtual void init(unsigned int dim){};
+	void clear(){defaults();}
+	void init(unsigned int dim);
 };
 
-template <class T>
-double Opt::opt_ln(const FuncT<T>& func, T& obj){
-	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opt_ln<T>(const FuncT<T>&,T&):\n";
-	a_.noalias()=x_; b_.noalias()=xOld_;
-	double va=func(obj,a_,grad_);
-	double vb=func(obj,b_,grad_);
-	c_.noalias()=b_-(b_-a_)*1.0/num_const::PHI;
-	d_.noalias()=a_+(b_-a_)*1.0/num_const::PHI;
-	double vc,vd;
-	unsigned int count=0;
-	while((c_-d_).norm()>precln_ && count<maxln_){
-		//calculate the new function values
-		vc=func(obj,c_,grad_);
-		vd=func(obj,d_,grad_);
-		//check the values to find min
-		if(vc<vd) {b_.noalias()=d_; vb=vd;}
-		else {a_.noalias()=c_; va=vc;}
-		//recompute c/d to prevent loss of precision
-		c_.noalias()=b_-(b_-a_)*1.0/num_const::PHI;
-		d_.noalias()=a_+(b_-a_)*1.0/num_const::PHI;
-		++count;
-	}
-	nEval_+=count*2;
-	if(count==maxln_) std::cout<<"WARNING: Could not resolve line optimization.\n";
-	if(vc<vd) x_.noalias()=c_;
-	else x_.noalias()=d_;
-	if(PRINT_OPT_DATA>1){
-		std::cout<<"count_ln = "<<count<<"\n";
-		std::cout<<"val_ln = "<<((vc<vd)?vc:vd)<<"\n";
-	}
-	return (vc<vd)?vc:vd;
-}
+//***************************************************
+// Model
+//***************************************************
 
-template <class T>
-double Opt::opts(const FuncT<T>& func, T& obj, Eigen::VectorXd& x0){
-	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opts<T>(const FuncT<T>&,T&,Eigen::VectorXd&):\n";
-	//initialization/resizing
-	resize(x0.size());
-	x_=x0; 
-	xOld_=x0;
-	init(dim_);
-	opts_impl(func,obj);
-	//finalization
-	x0=x_;
-	//return value
-	return val_;
-}
-
-template <class T>
-double Opt::opts(const FuncT<T>& func, T& obj, Eigen::VectorXd& x0, Eigen::VectorXd& grad, double& val){
-	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opts(const FuncT<T>&,T&,Eigen::VectorXd&,Eigen::VectorXd&,double&):\n";
-	//initialization/resizing
-	resize(x0.size());
-	if(grad.size()==0) grad=Eigen::VectorXd::Zero(dim_);
-	else if(x0.size()!=grad.size()) throw std::runtime_error("Invalid initial gradient.");
-	x_=x0; 
-	xOld_=x0;
-	grad_=grad;
-	gradOld_=grad;
-	init(dim_);
-	//optimization
-	opts_impl(func,obj);
-	//finalization
-	x0=x_;
-	grad=grad_;
-	val=val_;
-	//return value
-	return val_;
-}
-
-template <class T>
-void Opt::opts_impl(const FuncT<T>& func, T& obj){
-	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opts_impl(const FuncT<T>&,T&,const OptAlgo*):\n";
-	double dx_=0;
-	double dv_=0;
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//calculate the value and gradient
-		val_=func(obj,x_,grad_); ++nEval_;
-		//calculate the new position
-		step();
-		//set the new "old" values
-		xOld_=x_;
-		gradOld_=grad_;
-		valOld_=val_;
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		//check the break condition
-		if(optVal_==OPT_VAL::FTOL_REL && dv_<tol_) break;
-		else if(optVal_==OPT_VAL::XTOL_REL && dx_<tol_) break;
-		else if(optVal_==OPT_VAL::FTOL_ABS && val_<tol_) break;
-		//print the status
-		if(PRINT_OPT_FUNC>0) std::cout<<"opt step "<<i<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(nPrint_>0){if(i%nPrint_==0) std::cout<<"opt step "<<i<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";}
-		//update the counts
-		++nStep_;
-	}
-}
+class Model{
+protected:
+	unsigned int dim_;//dimension of the problem
+	ALGO::type algo_;//optimization algorithm
+public:
+	//==== constructors/destructors ====
+	Model(){defaults();}
+	virtual ~Model(){};
+	
+	//==== operators ====
+	friend std::ostream& operator<<(std::ostream& out, const Model& model);
+	
+	//==== access ====
+	unsigned int& dim(){return dim_;}
+	const unsigned int& dim()const{return dim_;}
+	ALGO::type& algo(){return algo_;}
+	const ALGO::type& algo()const{return algo_;}
+		
+	//==== member functions ====
+	void defaults();
+	void clear();
+	
+	//==== virtual functions ====
+	virtual void step(Data& d)=0;
+	virtual void init(unsigned int dim);
+};
 
 //steepest-desccent
-class SGD: public Opt{
+class SGD: public Model{
 private:
-	unsigned int period_;
-	unsigned int decay_;
 	double gamma_;
+	double decay_;
 public:
 	//constructors/destructors
-	SGD(){defaults();};
-	SGD(const Opt& opt):Opt(opt){defaults();};
+	SGD(){defaults();}
+	SGD(unsigned int dim){init(dim);}
 	~SGD(){};
 	//access
-	unsigned int& period(){return period_;};
-	const unsigned int& period()const{return period_;};
-	unsigned int& decay(){return decay_;};
-	const unsigned int& decay()const{return decay_;};
-	double& gamma(){return gamma_;};
-	const double& gamma()const{return gamma_;};
+	double& gamma(){return gamma_;}
+	const double& gamma()const{return gamma_;}
+	double& decay(){return decay_;}
+	const double& decay()const{return decay_;}
 	//member functions
-	void step();
+	void step(Data& d);
 	void defaults();
-	void init(unsigned int dim){};
+	void init(unsigned int dim);
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const SGD& sgd);
 };
 
 //steepest-descent + momentum
-class SDM: public Opt{
+class SDM: public Model{
 private:
 	double gamma_;//gradient step size
+	double decay_;
 	double eta_;//mixing term
+	Eigen::VectorXd dx_;//change in parameters
 public:
 	//constructors/destructors
-	SDM(){defaults();};
-	SDM(const Opt& opt):Opt(opt){defaults();};
+	SDM(){defaults();}
+	SDM(unsigned int dim){init(dim);}
 	~SDM(){};
 	//access
-	double& gamma(){return gamma_;};
-	const double& gamma()const{return gamma_;};
-	double& eta(){return eta_;};
-	const double& eta()const{return eta_;};
+	double& gamma(){return gamma_;}
+	const double& gamma()const{return gamma_;}
+	double& decay(){return decay_;}
+	const double& decay()const{return decay_;}
+	double& eta(){return eta_;}
+	const double& eta()const{return eta_;}
+	Eigen::VectorXd& dx(){return dx_;}
+	const Eigen::VectorXd& dx()const{return dx_;}
 	//member functions
-	void step();
+	void step(Data& d);
 	void defaults();
-	void init(unsigned int dim){};
+	void init(unsigned int dim);
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const SDM& sdm);
 };
 
 //nesterov accelerated gradient
-class NAG: public Opt{
+class NAG: public Model{
 private:
 	double gamma_;//gradient step size
+	double decay_;
 	double eta_;//mixing term
+	Eigen::VectorXd dx_;
 public:
 	//constructors/destructors
-	NAG(){defaults();};
-	NAG(const Opt& opt):Opt(opt){defaults();};
+	NAG(){defaults();}
+	NAG(unsigned int dim){init(dim);}
 	~NAG(){};
 	//access
-	double& gamma(){return gamma_;};
-	const double& gamma()const{return gamma_;};
-	double& eta(){return eta_;};
-	const double& eta()const{return eta_;};
+	double& gamma(){return gamma_;}
+	const double& gamma()const{return gamma_;}
+	double& decay(){return decay_;}
+	const double& decay()const{return decay_;}
+	double& eta(){return eta_;}
+	const double& eta()const{return eta_;}
+	Eigen::VectorXd& dx(){return dx_;}
+	const Eigen::VectorXd& dx()const{return dx_;}
 	//member functions
-	void step();
+	void step(Data& d);
 	void defaults();
-	void init(unsigned int dim){};
+	void init(unsigned int dim);
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const NAG& nag);
 };
 
 //adagrad
-class ADAGRAD: public Opt{
+class ADAGRAD: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
 	double gamma_;//gradient step size
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
 public:
 	//constructors/destructors
-	ADAGRAD(){defaults();};
-	ADAGRAD(const Opt& opt):Opt(opt){defaults();};
+	ADAGRAD(){defaults();}
+	ADAGRAD(unsigned int dim){init(dim);}
 	~ADAGRAD(){};
 	//access
-	double& gamma(){return gamma_;};
-	const double& gamma()const{return gamma_;};
-	Eigen::VectorXd& mgrad2(){return mgrad2_;};
-	const Eigen::VectorXd& mgrad2()const{return mgrad2_;};
+	double& gamma(){return gamma_;}
+	const double& gamma()const{return gamma_;}
+	Eigen::VectorXd& mgrad2(){return mgrad2_;}
+	const Eigen::VectorXd& mgrad2()const{return mgrad2_;}
 	//member functions
-	void step();
+	void step(Data& d);
 	void defaults();
 	void init(unsigned int dim);
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const ADAGRAD& adagrad);
 };
 
-class ADADELTA: public Opt{
+//adadelta
+class ADADELTA: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
 	double gamma_;//gradient step size
 	double eta_;//mixing fraction
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
 	Eigen::VectorXd mdx2_;//avg of square of dx
-	Eigen::VectorXd dxv_;//change in x
+	Eigen::VectorXd dx_;//change in x
 public:
 	//constructors/destructors
-	ADADELTA(){defaults();};
-	ADADELTA(const Opt& opt):Opt(opt){defaults();};
+	ADADELTA(){defaults();}
+	ADADELTA(unsigned int dim){init(dim);}
 	~ADADELTA(){};
 	//access
-	double& gamma(){return gamma_;};
-	const double& gamma()const{return gamma_;};
-	double& eta(){return eta_;};
-	const double& eta()const{return eta_;};
-	Eigen::VectorXd& mgrad2(){return mgrad2_;};
-	const Eigen::VectorXd& mgrad2()const{return mgrad2_;};
-	Eigen::VectorXd& dxv(){return dxv_;};
-	const Eigen::VectorXd& dxv()const{return dxv_;};
-	Eigen::VectorXd& mdx2(){return mdx2_;};
-	const Eigen::VectorXd& mdx2()const{return mdx2_;};
+	double& gamma(){return gamma_;}
+	const double& gamma()const{return gamma_;}
+	double& eta(){return eta_;}
+	const double& eta()const{return eta_;}
+	Eigen::VectorXd& mgrad2(){return mgrad2_;}
+	const Eigen::VectorXd& mgrad2()const{return mgrad2_;}
+	Eigen::VectorXd& mdx2(){return mdx2_;}
+	const Eigen::VectorXd& mdx2()const{return mdx2_;}
+	Eigen::VectorXd& dx(){return dx_;}
+	const Eigen::VectorXd& dx()const{return dx_;}
 	//member functions
-	void step();
+	void step(Data& d);
 	void defaults();
 	void init(unsigned int dim);
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const ADADELTA& adadelta);
 };
 
-class RMSPROP: public Opt{
+//rmsprop
+class RMSPROP: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
 	double gamma_;//gradient step size
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
 public:
 	//constructors/destructors
-	RMSPROP(){defaults();};
-	~RMSPROP(){};
+	RMSPROP(){defaults();}
+	RMSPROP(unsigned int dim){init(dim);}
+	~RMSPROP(){}
 	//access
-	double& gamma(){return gamma_;};
-	const double& gamma()const{return gamma_;};
-	Eigen::VectorXd& mgrad2(){return mgrad2_;};
-	const Eigen::VectorXd& mgrad2()const{return mgrad2_;};
+	double& gamma(){return gamma_;}
+	const double& gamma()const{return gamma_;}
+	Eigen::VectorXd& mgrad2(){return mgrad2_;}
+	const Eigen::VectorXd& mgrad2()const{return mgrad2_;}
 	//member functions
-	void step();
+	void step(Data& d);
 	void defaults();
 	void init(unsigned int dim);
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const RMSPROP& rmsprop);
 };
 
-class ADAM: public Opt{
+//adam
+class ADAM: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
-	static const double beta1;
-	static const double beta2;
+	static const double beta1_;
+	static const double beta2_;
 	double beta1i_;//power w.r.t i
 	double beta2i_;//power w.r.t i
 	double gamma_;//gradient step size
+	double decay_;
 	Eigen::VectorXd mgrad_;//avg of gradient
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
 public:
 	//constructors/destructors
-	ADAM(){defaults();};
-	ADAM(const Opt& opt):Opt(opt){defaults();};
-	~ADAM(){};
+	ADAM(){defaults();}
+	ADAM(unsigned int dim){init(dim);}
+	~ADAM(){}
 	//access
-	double& gamma(){return gamma_;};
-	const double& gamma()const{return gamma_;};
-	double& beta1i(){return beta1i_;};
-	const double& beta1i()const{return beta1i_;};
-	double& beta2i(){return beta2i_;};
-	const double& beta2i()const{return beta2i_;};
-	Eigen::VectorXd& mgrad(){return mgrad_;};
-	const Eigen::VectorXd& mgrad()const{return mgrad_;};
-	Eigen::VectorXd& mgrad2(){return mgrad2_;};
-	const Eigen::VectorXd& mgrad2()const{return mgrad2_;};
+	double& gamma(){return gamma_;}
+	const double& gamma()const{return gamma_;}
+	double& decay(){return decay_;}
+	const double& decay()const{return decay_;}
+	double& beta1i(){return beta1i_;}
+	const double& beta1i()const{return beta1i_;}
+	double& beta2i(){return beta2i_;}
+	const double& beta2i()const{return beta2i_;}
+	Eigen::VectorXd& mgrad(){return mgrad_;}
+	const Eigen::VectorXd& mgrad()const{return mgrad_;}
+	Eigen::VectorXd& mgrad2(){return mgrad2_;}
+	const Eigen::VectorXd& mgrad2()const{return mgrad2_;}
 	//member functions
-	void step();
+	void step(Data& d);
 	void defaults();
 	void init(unsigned int dim);
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const ADAM& adam);
 };
 
-class BFGS: public Opt{
+//nadam
+class NADAM: public Model{
+private:
+	static const double eps_;//small term to prevent divergence
+	static const double beta1_;
+	static const double beta2_;
+	double beta1i_;//power w.r.t i
+	double beta2i_;//power w.r.t i
+	double gamma_;//gradient step size
+	double decay_;
+	Eigen::VectorXd mgrad_;//avg of gradient
+	Eigen::VectorXd mgrad2_;//avg of square of gradient
+public:
+	//constructors/destructors
+	NADAM(){defaults();}
+	NADAM(unsigned int dim){init(dim);}
+	~NADAM(){}
+	//access
+	double& gamma(){return gamma_;}
+	const double& gamma()const{return gamma_;}
+	double& decay(){return decay_;}
+	const double& decay()const{return decay_;}
+	double& beta1i(){return beta1i_;}
+	const double& beta1i()const{return beta1i_;}
+	double& beta2i(){return beta2i_;}
+	const double& beta2i()const{return beta2i_;}
+	Eigen::VectorXd& mgrad(){return mgrad_;}
+	const Eigen::VectorXd& mgrad()const{return mgrad_;}
+	Eigen::VectorXd& mgrad2(){return mgrad2_;}
+	const Eigen::VectorXd& mgrad2()const{return mgrad2_;}
+	//member functions
+	void step(Data& d);
+	void defaults();
+	void init(unsigned int dim);
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const NADAM& nadam);
+};
+
+//bfgs
+class BFGS: public Model{
 private:
 	double gamma_;//gradient step size
 	Eigen::MatrixXd B_,BOld_;
 	Eigen::VectorXd s_,y_;
-	unsigned int period_;
-	unsigned int decay_;
 public:
 	//constructors/destructors
-	BFGS(){defaults();};
-	BFGS(const Opt& opt):Opt(opt){defaults();};
-	~BFGS(){};
+	BFGS(){defaults();}
+	BFGS(unsigned int dim){init(dim);}
+	~BFGS(){}
 	//access
-	unsigned int& period(){return period_;};
-	const unsigned int& period()const{return period_;};
-	unsigned int& decay(){return decay_;};
-	const unsigned int& decay()const{return decay_;};
-	double& gamma(){return gamma_;};
-	const double& gamma()const{return gamma_;};
+	double& gamma(){return gamma_;}
+	const double& gamma()const{return gamma_;}
 	//member functions
-	void step();
+	void step(Data& d);
 	void defaults();
 	void init(unsigned int dim);
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const BFGS& bfgs);
 };
 
-class LM: public Opt{
-private:
-	unsigned int period_;
-	unsigned int decay_;
-	double gamma_;//gradient step size
-	double lambda_;
-	double damp_;
-	double min_,max_;
-	Eigen::MatrixXd H_,D_;//hessian
-public:
-	//constructors/destructors
-	LM(){defaults();};
-	LM(const Opt& opt):Opt(opt){defaults();};
-	~LM(){};
-	//access
-	unsigned int& period(){return period_;};
-	const unsigned int& period()const{return period_;};
-	unsigned int& decay(){return decay_;};
-	const unsigned int& decay()const{return decay_;};
-	double& gamma(){return gamma_;};
-	const double& gamma()const{return gamma_;};
-	double& damp(){return damp_;};
-	const double& damp()const{return damp_;};
-	double& lambda(){return lambda_;};
-	const double& lambda()const{return lambda_;};
-	double& min(){return min_;};
-	const double& min()const{return min_;};
-	double& max(){return max_;};
-	const double& max()const{return max_;};
-	//member functions
-	void step();
-	void defaults();
-	void init(unsigned int dim);
-	//operators
-	friend std::ostream& operator<<(std::ostream& out, const LM& lm);
-};
-
-class RPROP: public Opt{
+//rprop
+class RPROP: public Model{
 private:
 	static const double etaP;
 	static const double etaM;
 	static const double deltaMax;
 	static const double deltaMin;
-	unsigned int period_;
-	unsigned int decay_;
 	Eigen::VectorXd delta_;
+	Eigen::VectorXd dx_;
 public:
 	//constructors/destructors
-	RPROP(){defaults();};
-	RPROP(const Opt& opt):Opt(opt){defaults();};
-	~RPROP(){};
+	RPROP(){defaults();}
+	RPROP(unsigned int dim){init(dim);}
+	~RPROP(){}
 	//access
-	unsigned int& period(){return period_;};
-	const unsigned int& period()const{return period_;};
-	unsigned int& decay(){return decay_;};
-	const unsigned int& decay()const{return decay_;};
-	Eigen::VectorXd& delta(){return delta_;};
-	const Eigen::VectorXd& delta()const{return delta_;};
+	Eigen::VectorXd& delta(){return delta_;}
+	const Eigen::VectorXd& delta()const{return delta_;}
+	Eigen::VectorXd& dx(){return dx_;}
+	const Eigen::VectorXd& dx()const{return dx_;}
 	//member functions
-	void step();
+	void step(Data& d);
 	void defaults();
 	void init(unsigned int dim);
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const RPROP& rprop);
 };
+/*
+	Christian Igel and Michael Hüsken. 
+		Improving the Rprop Learning Algorithm. 
+		Second International Symposium on Neural Computation 
+		(NC 2000), pp. 115-121, ICSC Academic Press, 2000
+	Christian Igel and Michael Hüsken. 
+		Empirical Evaluation of the Improved Rprop Learning Algorithm. 
+		Neurocomputing 50:105-123, 2003
+*/
 
-Opt& read(Opt& opt, const char* file);
+//read from file
+
+Model& read(Model& model, const char* file);
+Data& read(Data& data, const char* file);
 SGD& read(SGD& sdg, const char* file);
 SDM& read(SDM& sdm, const char* file);
 NAG& read(NAG& nag, const char* file);
@@ -548,11 +483,14 @@ ADAGRAD& read(ADAGRAD& adagrad, const char* file);
 ADADELTA& read(ADADELTA& adadelta, const char* file);
 RMSPROP& read(RMSPROP& rmsprop, const char* file);
 ADAM& read(ADAM& adam, const char* file);
+NADAM& read(NADAM& nadam, const char* file);
 BFGS& read(BFGS& bfgs, const char* file);
-LM& read(LM& lm, const char* file);
 RPROP& read(RPROP& rprop, const char* file);
 
-Opt& read(Opt& opt, FILE* reader);
+//read from file pointer
+
+Model& read(Model& model, FILE* reader);
+Data& read(Data& data, FILE* reader);
 SGD& read(SGD& sdg, FILE* reader);
 SDM& read(SDM& sdm, FILE* reader);
 NAG& read(NAG& nag, FILE* reader);
@@ -560,9 +498,24 @@ ADAGRAD& read(ADAGRAD& adagrad, FILE* reader);
 ADADELTA& read(ADADELTA& adadelta, FILE* reader);
 RMSPROP& read(RMSPROP& rmsprop, FILE* reader);
 ADAM& read(ADAM& adam, FILE* reader);
+NADAM& read(NADAM& nadam, FILE* reader);
 BFGS& read(BFGS& bfgs, FILE* reader);
-LM& read(LM& lm, FILE* reader);
 RPROP& read(RPROP& rprop, FILE* reader);
+
+//opterators - comparison
+
+bool operator==(const SGD& obj1, const SGD& obj2);
+bool operator==(const SDM& obj1, const SDM& obj2);
+bool operator==(const NAG& obj1, const NAG& obj2);
+bool operator==(const ADAGRAD& obj1, const ADAGRAD& obj2);
+bool operator==(const ADADELTA& obj1, const ADADELTA& obj2);
+bool operator==(const RMSPROP& obj1, const RMSPROP& obj2);
+bool operator==(const ADAM& obj1, const ADAM& obj2);
+bool operator==(const NADAM& obj1, const NADAM& obj2);
+bool operator==(const BFGS& obj1, const BFGS& obj2);
+bool operator==(const RPROP& obj1, const RPROP& obj2);
+
+}
 
 namespace serialize{
 
@@ -570,49 +523,52 @@ namespace serialize{
 	// byte measures
 	//**********************************************
 	
-	template <> unsigned int nbytes(const Opt& obj);
-	template <> unsigned int nbytes(const SGD& obj);
-	template <> unsigned int nbytes(const SDM& obj);
-	template <> unsigned int nbytes(const NAG& obj);
-	template <> unsigned int nbytes(const ADAGRAD& obj);
-	template <> unsigned int nbytes(const ADADELTA& obj);
-	template <> unsigned int nbytes(const RMSPROP& obj);
-	template <> unsigned int nbytes(const ADAM& obj);
-	template <> unsigned int nbytes(const BFGS& obj);
-	template <> unsigned int nbytes(const LM& obj);
-	template <> unsigned int nbytes(const RPROP& obj);
+	template <> unsigned int nbytes(const Opt::Data& obj);
+	template <> unsigned int nbytes(const Opt::Model& obj);
+	template <> unsigned int nbytes(const Opt::SGD& obj);
+	template <> unsigned int nbytes(const Opt::SDM& obj);
+	template <> unsigned int nbytes(const Opt::NAG& obj);
+	template <> unsigned int nbytes(const Opt::ADAGRAD& obj);
+	template <> unsigned int nbytes(const Opt::ADADELTA& obj);
+	template <> unsigned int nbytes(const Opt::RMSPROP& obj);
+	template <> unsigned int nbytes(const Opt::ADAM& obj);
+	template <> unsigned int nbytes(const Opt::NADAM& obj);
+	template <> unsigned int nbytes(const Opt::BFGS& obj);
+	template <> unsigned int nbytes(const Opt::RPROP& obj);
 	
 	//**********************************************
 	// packing
 	//**********************************************
 	
-	template <> void pack(const Opt& obj, char* arr);
-	template <> void pack(const SGD& obj, char* arr);
-	template <> void pack(const SDM& obj, char* arr);
-	template <> void pack(const NAG& obj, char* arr);
-	template <> void pack(const ADAGRAD& obj, char* arr);
-	template <> void pack(const ADADELTA& obj, char* arr);
-	template <> void pack(const RMSPROP& obj, char* arr);
-	template <> void pack(const ADAM& obj, char* arr);
-	template <> void pack(const BFGS& obj, char* arr);
-	template <> void pack(const LM& obj, char* arr);
-	template <> void pack(const RPROP& obj, char* arr);
+	template <> void pack(const Opt::Data& obj, char* arr);
+	template <> void pack(const Opt::Model& obj, char* arr);
+	template <> void pack(const Opt::SGD& obj, char* arr);
+	template <> void pack(const Opt::SDM& obj, char* arr);
+	template <> void pack(const Opt::NAG& obj, char* arr);
+	template <> void pack(const Opt::ADAGRAD& obj, char* arr);
+	template <> void pack(const Opt::ADADELTA& obj, char* arr);
+	template <> void pack(const Opt::RMSPROP& obj, char* arr);
+	template <> void pack(const Opt::ADAM& obj, char* arr);
+	template <> void pack(const Opt::NADAM& obj, char* arr);
+	template <> void pack(const Opt::BFGS& obj, char* arr);
+	template <> void pack(const Opt::RPROP& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(Opt& obj, const char* arr);
-	template <> void unpack(SGD& obj, const char* arr);
-	template <> void unpack(SDM& obj, const char* arr);
-	template <> void unpack(NAG& obj, const char* arr);
-	template <> void unpack(ADAGRAD& obj, const char* arr);
-	template <> void unpack(ADADELTA& obj, const char* arr);
-	template <> void unpack(RMSPROP& obj, const char* arr);
-	template <> void unpack(ADAM& obj, const char* arr);
-	template <> void unpack(BFGS& obj, const char* arr);
-	template <> void unpack(LM& obj, const char* arr);
-	template <> void unpack(RPROP& obj, const char* arr);
+	template <> void unpack(Opt::Data& obj, const char* arr);
+	template <> void unpack(Opt::Model& obj, const char* arr);
+	template <> void unpack(Opt::SGD& obj, const char* arr);
+	template <> void unpack(Opt::SDM& obj, const char* arr);
+	template <> void unpack(Opt::NAG& obj, const char* arr);
+	template <> void unpack(Opt::ADAGRAD& obj, const char* arr);
+	template <> void unpack(Opt::ADADELTA& obj, const char* arr);
+	template <> void unpack(Opt::RMSPROP& obj, const char* arr);
+	template <> void unpack(Opt::ADAM& obj, const char* arr);
+	template <> void unpack(Opt::NADAM& obj, const char* arr);
+	template <> void unpack(Opt::BFGS& obj, const char* arr);
+	template <> void unpack(Opt::RPROP& obj, const char* arr);
 	
 }
 

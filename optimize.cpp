@@ -1,513 +1,503 @@
 #include "optimize.hpp"
 
+namespace Opt{
+
 //***************************************************
 // optimization method
 //***************************************************
 
-std::ostream& operator<<(std::ostream& out, const OPT_METHOD::type& type){
-	if(type==OPT_METHOD::SGD) return out<<"SGD";
-	else if(type==OPT_METHOD::SDM) return out<<"SDM";
-	else if(type==OPT_METHOD::NAG) return out<<"NAG";
-	else if(type==OPT_METHOD::ADAGRAD) return out<<"ADAGRAD";
-	else if(type==OPT_METHOD::ADADELTA) return out<<"ADADELTA";
-	else if(type==OPT_METHOD::RMSPROP) return out<<"RMSPROP";
-	else if(type==OPT_METHOD::ADAM) return out<<"ADAM";
-	else if(type==OPT_METHOD::BFGS) return out<<"BFGS";
-	else if(type==OPT_METHOD::LM) return out<<"LM";
-	else if(type==OPT_METHOD::RPROP) return out<<"RPROP";
-	else return out;
+std::ostream& operator<<(std::ostream& out, const ALGO::type& type){
+	switch(type){
+		case ALGO::SGD: out<<"SGD"; break;
+		case ALGO::SDM: out<<"SDM"; break;
+		case ALGO::NAG: out<<"NAG"; break;
+		case ALGO::ADAGRAD: out<<"ADAGRAD"; break;
+		case ALGO::ADADELTA: out<<"ADADELTA"; break;
+		case ALGO::RMSPROP: out<<"RMSPROP"; break;
+		case ALGO::ADAM: out<<"ADAM"; break;
+		case ALGO::NADAM: out<<"NADAM"; break;
+		case ALGO::BFGS: out<<"BFGS"; break;
+		case ALGO::RPROP: out<<"RPROP"; break;
+		default: out<<"UNKNOWN"; break;
+	}
+	return out;
 }
 
-OPT_METHOD::type OPT_METHOD::load(const char* str){
-	if(std::strcmp(str,"SGD")==0) return OPT_METHOD::SGD;
-	else if(std::strcmp(str,"SDM")==0) return OPT_METHOD::SDM;
-	else if(std::strcmp(str,"NAG")==0) return OPT_METHOD::NAG;
-	else if(std::strcmp(str,"ADAGRAD")==0) return OPT_METHOD::ADAGRAD;
-	else if(std::strcmp(str,"ADADELTA")==0) return OPT_METHOD::ADADELTA;
-	else if(std::strcmp(str,"RMSPROP")==0) return OPT_METHOD::RMSPROP;
-	else if(std::strcmp(str,"ADAM")==0) return OPT_METHOD::ADAM;
-	else if(std::strcmp(str,"BFGS")==0) return OPT_METHOD::BFGS;
-	else if(std::strcmp(str,"LM")==0) return OPT_METHOD::LM;
-	else if(std::strcmp(str,"RPROP")==0) return OPT_METHOD::RPROP;
-	else return OPT_METHOD::UNKNOWN;
+ALGO::type ALGO::read(const char* str){
+	if(std::strcmp(str,"SGD")==0) return ALGO::SGD;
+	else if(std::strcmp(str,"SDM")==0) return ALGO::SDM;
+	else if(std::strcmp(str,"NAG")==0) return ALGO::NAG;
+	else if(std::strcmp(str,"ADAGRAD")==0) return ALGO::ADAGRAD;
+	else if(std::strcmp(str,"ADADELTA")==0) return ALGO::ADADELTA;
+	else if(std::strcmp(str,"RMSPROP")==0) return ALGO::RMSPROP;
+	else if(std::strcmp(str,"ADAM")==0) return ALGO::ADAM;
+	else if(std::strcmp(str,"NADAM")==0) return ALGO::NADAM;
+	else if(std::strcmp(str,"BFGS")==0) return ALGO::BFGS;
+	else if(std::strcmp(str,"RPROP")==0) return ALGO::RPROP;
+	else return ALGO::UNKNOWN;
 }
 
 //***************************************************
 // optimization value
 //***************************************************
 
-std::ostream& operator<<(std::ostream& out, const OPT_VAL::type& type){
-	if(type==OPT_VAL::XTOL_REL) out<<"XTOL_REL";
-	else if(type==OPT_VAL::XTOL_ABS) out<<"XTOL_ABS";
-	else if(type==OPT_VAL::FTOL_REL) out<<"FTOL_REL";
-	else if(type==OPT_VAL::FTOL_ABS) out<<"FTOL_ABS";
-	else out<<"UNKNOWN";
+std::ostream& operator<<(std::ostream& out, const VAL::type& type){
+	switch(type){
+		case VAL::XTOL_REL: out<<"XTOL_REL"; break;
+		case VAL::XTOL_ABS: out<<"XTOL_ABS"; break;
+		case VAL::FTOL_REL: out<<"FTOL_REL"; break;
+		case VAL::FTOL_ABS: out<<"FTOL_ABS"; break;
+		default: out<<"UNKNOWN"; break;
+	}
 	return out;
 }
 
-OPT_VAL::type OPT_VAL::load(const char* str){
-	if(std::strcmp(str,"XTOL_REL")==0) return OPT_VAL::XTOL_REL;
-	else if(std::strcmp(str,"XTOL_ABS")==0) return OPT_VAL::XTOL_ABS;
-	else if(std::strcmp(str,"FTOL_REL")==0) return OPT_VAL::FTOL_REL;
-	else if(std::strcmp(str,"FTOL_ABS")==0) return OPT_VAL::FTOL_ABS;
-	else return OPT_VAL::UNKNOWN;
+VAL::type VAL::read(const char* str){
+	if(std::strcmp(str,"XTOL_REL")==0) return VAL::XTOL_REL;
+	else if(std::strcmp(str,"XTOL_ABS")==0) return VAL::XTOL_ABS;
+	else if(std::strcmp(str,"FTOL_REL")==0) return VAL::FTOL_REL;
+	else if(std::strcmp(str,"FTOL_ABS")==0) return VAL::FTOL_ABS;
+	else return VAL::UNKNOWN;
 }
 
 //*********************************************
-//Opt class
+//Data class
+//*********************************************
+
+std::ostream& operator<<(std::ostream& out, const Data& data){
+	out<<"**************************************************\n";
+	out<<"********************** DATA **********************\n";
+	out<<"VAL     = "<<data.val_<<"\n";
+	out<<"N-PRINT = "<<data.nPrint_<<"\n";
+	out<<"N-WRITE = "<<data.nWrite_<<"\n";
+	out<<"STEP    = "<<data.step_<<"\n";
+	out<<"TOL     = "<<data.tol_<<"\n";
+	out<<"MAX     = "<<data.max_<<"\n";
+	out<<"DIM     = "<<data.dim_<<"\n";
+	out<<"ALGO    = "<<data.algo_<<"\n";
+	out<<"OPT-VAL = "<<data.optVal_<<"\n";
+	out<<"********************** DATA **********************\n";
+	out<<"**************************************************\n";
+}
+
+void Data::defaults(){
+	//status
+		val_=0; valOld_=0;
+		dv_=0; dp_=0;
+	//count
+		nPrint_=0;
+		nWrite_=0;
+		step_=0;
+	//stopping
+		tol_=0;
+		max_=0;
+	//parameters
+		dim_=0;
+	//algorithm
+		algo_=ALGO::UNKNOWN;
+		optVal_=VAL::UNKNOWN;
+}
+
+void Data::init(unsigned int dim){
+	if(dim==0) throw std::invalid_argument("Invalid dimension");
+	dim_=dim;
+	p_=Eigen::VectorXd::Zero(dim_);
+	pOld_=Eigen::VectorXd::Zero(dim_);
+	g_=Eigen::VectorXd::Zero(dim_);
+	gOld_=Eigen::VectorXd::Zero(dim_);
+}
+
+//*********************************************
+//Model class
 //*********************************************
 
 //operators
 
-std::ostream& operator<<(std::ostream& out, const Opt& opt){
+std::ostream& operator<<(std::ostream& out, const Model& model){
 	out<<"**************************************************\n";
-	out<<"********************** OPT **********************\n";
-	out<<"DIM      = "<<opt.dim_<<"\n";
-	out<<"ALGO     = "<<opt.algo_<<"\n";
-	out<<"TOL      = "<<opt.tol_<<"\n";
-	out<<"MAX_ITER = "<<opt.maxIter_<<"\n";
-	out<<"N_PRINT  = "<<opt.nPrint_<<"\n";
-	out<<"OPT_VAL  = "<<opt.optVal_<<"\n";
-	out<<"PREC-LN  = "<<opt.precln_<<"\n";
-	out<<"MAX-LN   = "<<opt.maxln_<<"\n";
-	out<<"********************** OPT **********************\n";
+	out<<"********************* MODEL *********************\n";
+	out<<"DIM      = "<<model.dim_<<"\n";
+	out<<"********************* MODEL *********************\n";
 	out<<"**************************************************";
 	return out;
 }
 
 //member functions
 
-void Opt::defaults(){
-	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::defaults():\n";
-	//status
-		nPrint_=0;
-		nStep_=0;
-		nEval_=0;
+void Model::defaults(){
+	if(OPT_PRINT_FUNC>0) std::cout<<"Model::defaults():\n";
 	//parameters
 		dim_=0;
-		val_=0;
-		valOld_=0;
-		x_.resize(0);
-		xOld_.resize(0);
-		grad_.resize(0);
-		gradOld_.resize(0);
-	//stopping
-		maxIter_=100;
-		tol_=1e-5;
-	//algorithm
-		algo_=OPT_METHOD::UNKNOWN;
-		optVal_=OPT_VAL::FTOL_ABS;
-	//linear optimization
-		precln_=1e-5;
-		maxln_=100;
+		algo_=ALGO::UNKNOWN;
 }
 
-void Opt::resize(unsigned int n){
-	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::init(unsigned int):\n";
+void Model::init(unsigned int n){
+	if(OPT_PRINT_FUNC>0) std::cout<<"Model::init(unsigned int):\n";
 	if(n==0) throw std::invalid_argument("Invalid optimization dimenstion.");
-	val_=0;
-	valOld_=0;
 	dim_=n;
-	x_=Eigen::VectorXd::Constant(n,std::sqrt(1.0/(1.0*n)));
-	xOld_=Eigen::VectorXd::Constant(n,std::sqrt(1.0/(1.0*n)));
-	grad_=Eigen::VectorXd::Constant(n,0.0);
-	gradOld_=Eigen::VectorXd::Constant(n,0.0);
-}
-
-double Opt::opt_ln(Opt::Func& func, Eigen::VectorXd& x0, Eigen::VectorXd& x1){
-	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opt_ln(Opt::Func& func, Eigen::VectorXd x0, Eigen::VectorXd x1):\n";
-	a_.noalias()=x0; b_.noalias()=x1;
-	double va=func(a_,grad_);
-	double vb=func(b_,grad_);
-	c_.noalias()=b_-(b_-a_)*1.0/num_const::PHI;
-	d_.noalias()=a_+(b_-a_)*1.0/num_const::PHI;
-	double vc,vd;
-	unsigned int count=0;
-	while((c_-d_).norm()>precln_ && count<maxln_){
-		//calculate the new function values
-		vc=func(c_,grad_);
-		vd=func(d_,grad_);
-		//check the values to find min
-		if(vc<vd) {b_.noalias()=d_; vb=vd;}
-		else {a_.noalias()=c_; va=vc;}
-		//recompute c/d to prevent loss of precision
-		c_.noalias()=b_-(b_-a_)*1.0/num_const::PHI;
-		d_.noalias()=a_+(b_-a_)*1.0/num_const::PHI;
-		++count;
-	}
-	nEval_+=count*2;
-	if(count==maxln_) std::cout<<"WARNING: Could not resolve line optimization.\n";
-	x0.noalias()=c_; x1.noalias()=d_;
-	if(PRINT_OPT_DATA>1){
-		std::cout<<"count_ln = "<<count<<"\n";
-		std::cout<<"val_ln = "<<((vc<vd)?vc:vd)<<"\n";
-	}
-	return (vc<vd)?vc:vd;
-}
-
-double Opt::opt_ln(Opt::Func& func){
-	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opt_ln(Opt::Func& func):\n";
-	a_.noalias()=x_; b_.noalias()=xOld_;
-	double va=func(a_,grad_);
-	double vb=func(b_,grad_);
-	c_.noalias()=b_-(b_-a_)*1.0/num_const::PHI;
-	d_.noalias()=a_+(b_-a_)*1.0/num_const::PHI;
-	double vc,vd;
-	unsigned int count=0;
-	while((c_-d_).norm()>precln_ && count<maxln_){
-		//calculate the new function values
-		vc=func(c_,grad_);
-		vd=func(d_,grad_);
-		//check the values to find min
-		if(vc<vd) {b_.noalias()=d_; vb=vd;}
-		else {a_.noalias()=c_; va=vc;}
-		//recompute c/d to prevent loss of precision
-		c_.noalias()=b_-(b_-a_)*1.0/num_const::PHI;
-		d_.noalias()=a_+(b_-a_)*1.0/num_const::PHI;
-		++count;
-	}
-	nEval_+=count*2;
-	if(count==maxln_) std::cout<<"WARNING: Could not resolve line optimization.\n";
-	if(vc<vd) x_.noalias()=c_;
-	else x_.noalias()=d_;
-	if(PRINT_OPT_DATA>1){
-		std::cout<<"count_ln = "<<count<<"\n";
-		std::cout<<"val_ln = "<<((vc<vd)?vc:vd)<<"\n";
-	}
-	return (vc<vd)?vc:vd;
-}
-
-double Opt::opts(const Func& func, Eigen::VectorXd& x0){
-	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opt(const Func&,Eigen::VectorXd&):\n";
-	//initialization/resizing
-	resize(x0.size());
-	x_=x0; 
-	xOld_=x0;
-	init(dim_);
-	//optimization
-	opts_impl(func);
-	//finalization
-	x0=x_;
-	//return the value
-	return val_;
-}
-
-double Opt::opts(const Func& func, Eigen::VectorXd& x0, Eigen::VectorXd& grad, double& val){
-	std::cout<<"Opt::opts(const Func&,Eigen::VectorXd&,Eigen::VectorXd&,double&):\n";
-	//initialization/resizing
-	resize(x0.size());
-	if(grad.size()==0) grad=Eigen::VectorXd::Zero(dim_);
-	else if(x0.size()!=grad.size()) throw std::runtime_error("Invalid initial gradient.");
-	x_=x0; 
-	xOld_=x0;
-	grad_=grad;
-	gradOld_=grad;
-	val_=val;
-	valOld_=val;
-	init(dim_);
-	//optimization
-	opts_impl(func);
-	//finalization
-	x0=x_;
-	grad=grad_;
-	val=val_;
-	//return value
-	return val_;
-}
-
-void Opt::opts_impl(const Func& func){
-	if(PRINT_OPT_FUNC>0) std::cout<<"Opt::opts_impl(const Func&):\n";
-	double dv_=0,dx_=0;
-	for(unsigned int i=0; i<maxIter_; ++i){
-		//set the new "old" values
-		if(i>0){
-			xOld_=x_;
-			gradOld_=grad_;
-			valOld_=val_;
-		}
-		//calculate the value and gradient
-		val_=func(x_,grad_); ++nEval_;
-		//calculate the new position
-		step();
-		//calculate the difference
-		dv_=std::fabs(val_-valOld_);
-		dx_=(x_-xOld_).norm();
-		//check the break condition
-		if(optVal_==OPT_VAL::FTOL_REL && dv_<tol_) break;
-		else if(optVal_==OPT_VAL::XTOL_REL && dx_<tol_) break;
-		else if(optVal_==OPT_VAL::FTOL_ABS && val_<tol_) break;
-		//print the status
-		if(PRINT_OPT_DATA>0) std::cout<<"opt step "<<nStep_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";
-		else if(nPrint_>0){if(i%nPrint_==0) std::cout<<"opt step "<<nStep_<<" val "<<val_<<" dv "<<dv_<<" dx "<<dx_<<"\n";}
-		//update the counts
-		++nStep_;
-	}
 }
 
 //***************************************************
-// OptAlgo
+// Algorithms
 //***************************************************
 
 //steepest-descent
 
 void SGD::defaults(){
-	period_=0;
-	decay_=0;
-	gamma_=0.001;
+	algo_=ALGO::SGD;
+	gamma_=0;
+	decay_=1;
 }
 
 std::ostream& operator<<(std::ostream& out, const SGD& sgd){
-	out<<static_cast<const Opt&>(sgd)<<"\n";
+	out<<static_cast<const Model&>(sgd)<<"\n";
 	out<<"**************************************************\n";
-	out<<"********************* SGD *********************\n";
-	out<<"PERIOD = "<<sgd.period_<<"\n";
-	out<<"DECAY = "<<sgd.decay_<<"\n";
-	out<<"GAMMA = "<<sgd.gamma_<<"\n";
-	out<<"********************* SGD *********************\n";
+	out<<"********************** SGD **********************\n";
+	out<<"GAMMA  = "<<sgd.gamma_<<"\n";
+	out<<"********************** SGD **********************\n";
 	out<<"**************************************************";
+	return out;
 }
 
-void SGD::step(){
-	//calculate the new position
-	double gam=gamma_;
-	if(period_>0) gam=0.5*gam*(std::cos(num_const::PI*special::mod(((double)nStep_)/period_,1.0))+1.0);
-	if(decay_>0) gam=std::exp(-1.0*((double)nStep_)/decay_)*gam;
-	grad_*=gam;
-	x_.noalias()=xOld_-grad_;
+void SGD::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"SGD::step(Eigen::VectorXd&,Eigen::VectorXd&):\n";
+	//apply the decay
+	gamma_*=decay_;
+	//compute new position
+	d.p().noalias()-=gamma_*d.g();
+}
+
+void SGD::init(unsigned int dim){
+	if(OPT_PRINT_FUNC>0) std::cout<<"SGD::init(unsigned int):\n";
+	static_cast<Model&>(*this).init(dim);
 }
 
 //steepest-descent + momentum
 
 void SDM::defaults(){
-	gamma_=0.001;
-	eta_=0.9;
+	algo_=ALGO::SDM;
+	gamma_=0;
+	decay_=1;
+	eta_=0;
 }
 
 std::ostream& operator<<(std::ostream& out, const SDM& sdm){
-	out<<static_cast<const Opt&>(sdm)<<"\n";
+	out<<static_cast<const Model&>(sdm)<<"\n";
 	out<<"**************************************************\n";
-	out<<"********************* SDM *********************\n";
+	out<<"********************** SDM **********************\n";
 	out<<"GAMMA = "<<sdm.gamma_<<"\n";
-	out<<"ETA = "<<sdm.eta_<<"\n";
-	out<<"********************* SDM *********************\n";
+	out<<"ETA   = "<<sdm.eta_<<"\n";
+	out<<"********************** SDM **********************\n";
 	out<<"**************************************************";
+	return out;
 }
 
-void SDM::step(){
-	//scale the gradient
-	grad_*=gamma_;
-	grad_.noalias()+=eta_*gradOld_;
-	//calculate the new position
-	x_.noalias()=xOld_-grad_;
+void SDM::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"SDM::step(Eigen::VectorXd&,Eigen::VectorXd&):\n";
+	//apply the decay
+	gamma_*=decay_;
+	//compute step
+	dx_*=eta_;
+	dx_.noalias()+=gamma_*d.g();
+	//compute new position
+	d.p().noalias()-=dx_;
+}
+
+void SDM::init(unsigned int dim){
+	if(OPT_PRINT_FUNC>0) std::cout<<"SDM::init(unsigned int):\n";
+	Model::init(dim);
+	dx_=Eigen::VectorXd::Zero(dim);
 }
 
 //nesterov accelerated gradient
 
 void NAG::defaults(){
-	gamma_=0.001;
-	eta_=0.9;
+	algo_=ALGO::NAG;
+	gamma_=0;
+	decay_=1;
+	eta_=0;
 }
 
 std::ostream& operator<<(std::ostream& out, const NAG& nag){
-	out<<static_cast<const Opt&>(nag)<<"\n";
+	out<<static_cast<const Model&>(nag)<<"\n";
 	out<<"**************************************************\n";
-	out<<"********************* NAG *********************\n";
+	out<<"********************** NAG **********************\n";
 	out<<"GAMMA = "<<nag.gamma_<<"\n";
-	out<<"ETA = "<<nag.eta_<<"\n";
-	out<<"********************* NAG *********************\n";
+	out<<"ETA   = "<<nag.eta_<<"\n";
+	out<<"********************** NAG **********************\n";
 	out<<"**************************************************";
+	return out;
 }
 
-void NAG::step(){
-	//scale the gradient
-	grad_*=gamma_;
-	grad_.noalias()+=eta_*gradOld_;
+void NAG::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"NAG::step(Eigen::VectorXd&,Eigen::VectorXd&):\n";
+	//apply the decay
+	gamma_*=decay_;
+	//compute step
+	dx_*=eta_;
+	dx_.noalias()+=gamma_*d.g();
 	//calculate the new position
-	x_.noalias()=xOld_-grad_;
-	x_.noalias()-=eta_*grad_;
+	d.p().noalias()-=eta_*dx_+gamma_*d.g();
 }
 
-//adagrad
+void NAG::init(unsigned int dim){
+	if(OPT_PRINT_FUNC>0) std::cout<<"NAG::init(unsigned int):\n";
+	Model::init(dim);
+	dx_=Eigen::VectorXd::Zero(dim);
+}
+
+//ADAGRAD
 
 const double ADAGRAD::eps_=1e-8;
 
 void ADAGRAD::defaults(){
-	gamma_=0.001;
+	algo_=ALGO::ADAGRAD;
+	gamma_=0;
 }
 
 std::ostream& operator<<(std::ostream& out, const ADAGRAD& adagrad){
-	out<<static_cast<const Opt&>(adagrad)<<"\n";
+	out<<static_cast<const Model&>(adagrad)<<"\n";
 	out<<"**************************************************\n";
-	out<<"********************* ADAGRAD *********************\n";
+	out<<"******************** ADAGRAD ********************\n";
 	out<<"GAMMA = "<<adagrad.gamma_<<"\n";
-	out<<"********************* ADAGRAD *********************\n";
+	out<<"******************** ADAGRAD ********************\n";
 	out<<"**************************************************";
+	return out;
 }
 
-void ADAGRAD::step(){
+void ADAGRAD::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"ADAGRAD::step(Eigen::VectorXd&,Eigen::VectorXd&):\n";
+	const Eigen::VectorXd& g=d.g();
 	//add to the running average of the square of the gradients
-	mgrad2_.noalias()+=grad_.cwiseProduct(grad_);
+	mgrad2_.noalias()+=g.cwiseProduct(g);
 	//calculate the new position
-	for(unsigned int n=0; n<grad_.size(); ++n){
-		x_[n]=xOld_[n]-grad_[n]*gamma_/std::sqrt(mgrad2_[n]+eps_);
+	for(int n=dim_-1; n>=0; --n){
+		d.p()[n]-=gamma_*g[n]/std::sqrt(mgrad2_[n]+eps_);
 	}
 }
 
 void ADAGRAD::init(unsigned int dim){
-	if(mgrad2_.size()!=dim) mgrad2_=Eigen::VectorXd::Zero(dim);
+	if(OPT_PRINT_FUNC>0) std::cout<<"ADAGRAD::init(unsigned int):\n";
+	Model::init(dim);
+	mgrad2_=Eigen::VectorXd::Zero(dim);
 }
 
-//adadelta
+//ADADELTA
 
 const double ADADELTA::eps_=1e-8;
 
 void ADADELTA::defaults(){
-	gamma_=0.001;
-	eta_=0.9;
+	algo_=ALGO::ADADELTA;
+	gamma_=0;
+	eta_=0;
 }
 
 std::ostream& operator<<(std::ostream& out, const ADADELTA& adadelta){
-	out<<static_cast<const Opt&>(adadelta)<<"\n";
+	out<<static_cast<const Model&>(adadelta)<<"\n";
 	out<<"**************************************************\n";
-	out<<"********************* ADADELTA *********************\n";
+	out<<"******************** ADADELTA ********************\n";
 	out<<"GAMMA = "<<adadelta.gamma_<<"\n";
-	out<<"ETA = "<<adadelta.eta_<<"\n";
-	out<<"********************* ADADELTA *********************\n";
+	out<<"ETA   = "<<adadelta.eta_<<"\n";
+	out<<"******************** ADADELTA ********************\n";
 	out<<"**************************************************";
+	return out;
 }
 
-void ADADELTA::step(){
+void ADADELTA::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"ADADELTA::step(Eigen::VectorXd&,Eigen::VectorXd&):\n";
+	const Eigen::VectorXd& g=d.g();
 	//add to the running average of the square of the gradients
 	mgrad2_*=eta_;
-	mgrad2_.noalias()+=(1.0-eta_)*grad_.cwiseProduct(grad_);
+	mgrad2_.noalias()+=(1.0-eta_)*g.cwiseProduct(g);
 	//calculate the new position
-	for(unsigned int n=0; n<grad_.size(); ++n){
-		x_[n]=xOld_[n]-grad_[n]*std::sqrt(mdx2_[n]+eps_)/std::sqrt(mgrad2_[n]+eps_);
+	for(int n=dim_-1; n>=0; --n){
+		dx_[n]=g[n]*std::sqrt(mdx2_[n]+eps_)/std::sqrt(mgrad2_[n]+eps_);
+		d.p()[n]-=dx_[n];
 	}
-	//calculate the difference
-	dxv_.noalias()=x_-xOld_;
 	//add to the running average of the square of the deltas
 	mdx2_*=eta_;
-	mdx2_.noalias()+=(1.0-eta_)*dxv_.cwiseProduct(dxv_);
+	mdx2_.noalias()+=(1.0-eta_)*dx_.cwiseProduct(dx_);
 }
 
 void ADADELTA::init(unsigned int dim){
-	if(mgrad2_.size()!=dim) mgrad2_=Eigen::VectorXd::Zero(dim);
-	if(mdx2_.size()!=dim) mdx2_=Eigen::VectorXd::Zero(dim);
-	if(dxv_.size()!=dim) dxv_=Eigen::VectorXd::Zero(dim);
+	if(OPT_PRINT_FUNC>0) std::cout<<"ADADELTA::init(unsigned int):\n";
+	Model::init(dim);
+	eta_=0.9;
+	mgrad2_=Eigen::VectorXd::Zero(dim);
+	mdx2_=Eigen::VectorXd::Zero(dim);
+	dx_=Eigen::VectorXd::Zero(dim);
 }
 
-//rmsprop
+//RMSPROP
 
 const double RMSPROP::eps_=1e-8;
 
 void RMSPROP::defaults(){
-	gamma_=0.001;
+	algo_=ALGO::RMSPROP;
+	gamma_=0;
 }
 
 std::ostream& operator<<(std::ostream& out, const RMSPROP& rmsprop){
-	out<<static_cast<const Opt&>(rmsprop)<<"\n";
+	out<<static_cast<const Model&>(rmsprop)<<"\n";
 	out<<"**************************************************\n";
-	out<<"********************* RMSPROP *********************\n";
+	out<<"******************** RMSPROP ********************\n";
 	out<<"GAMMA = "<<rmsprop.gamma_<<"\n";
-	out<<"********************* RMSPROP *********************\n";
+	out<<"******************** RMSPROP ********************\n";
 	out<<"**************************************************";
+	return out;
 }
 
-void RMSPROP::step(){
+void RMSPROP::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"RMSPROP::step(Eigen::VectorXd&,Eigen::VectorXd&):\n";
 	//add to the running average of the square of the gradients
 	mgrad2_*=0.9;
-	mgrad2_.noalias()+=0.1*grad_.cwiseProduct(grad_);
+	mgrad2_.noalias()+=0.1*d.g().cwiseProduct(d.g());
 	//calculate the new position
-	for(unsigned int n=0; n<grad_.size(); ++n){
-		x_[n]=xOld_[n]-grad_[n]*gamma_/std::sqrt(mgrad2_[n]+eps_);
+	for(int n=dim_-1; n>=0; --n){
+		d.p()[n]-=gamma_*d.g()[n]/std::sqrt(mgrad2_[n]+eps_);
 	}
 }
 
 void RMSPROP::init(unsigned int dim){
-	if(mgrad2_.size()!=dim) mgrad2_=Eigen::VectorXd::Zero(dim);
+	if(OPT_PRINT_FUNC>0) std::cout<<"RMSPROP::init(unsigned int):\n";
+	Model::init(dim);
+	mgrad2_=Eigen::VectorXd::Zero(dim);
 }
 
-//adam
+//ADAM
 
 const double ADAM::eps_=1e-8;
-const double ADAM::beta1=0.9;
-const double ADAM::beta2=0.999;
+const double ADAM::beta1_=0.9;
+const double ADAM::beta2_=0.999;
 	
 void ADAM::defaults(){
-	if(PRINT_OPT_FUNC>0) std::cout<<"ADAM::defaults():\n";
-	gamma_=0.001;
-	beta1i_=0;
-	beta2i_=0;
+	algo_=ALGO::ADAM;
+	gamma_=0;
+	decay_=1;
+	beta1i_=beta1_;
+	beta2i_=beta2_;
 }
 
 std::ostream& operator<<(std::ostream& out, const ADAM& adam){
-	out<<static_cast<const Opt&>(adam)<<"\n";
+	out<<static_cast<const Model&>(adam)<<"\n";
 	out<<"**************************************************\n";
-	out<<"********************* ADAM *********************\n";
+	out<<"********************** ADAM **********************\n";
 	out<<"GAMMA = "<<adam.gamma_<<"\n";
-	out<<"********************* ADAM *********************\n";
+	out<<"DECAY = "<<adam.decay_<<"\n";
+	out<<"********************** ADAM **********************\n";
 	out<<"**************************************************";
+	return out;
 }
 
-void ADAM::step(){
-	if(PRINT_OPT_FUNC>0) std::cout<<"ADAM::step():\n";
+void ADAM::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"ADAM::step(Eigen::VectorXd&,Eigen::VectorXd&):\n";
+	const Eigen::VectorXd& g=d.g();
+	//apply the decay
+	gamma_*=decay_;
 	//add to the running average of the gradients
-	mgrad_*=beta1;
-	mgrad_.noalias()+=(1.0-beta1)*grad_;
+	mgrad_*=beta1_;
+	mgrad_.noalias()+=(1.0-beta1_)*g;
 	//add to the running average of the square of the gradients
-	mgrad2_*=beta2;
-	mgrad2_.noalias()+=(1.0-beta2)*grad_.cwiseProduct(grad_);
-	//calculate the update
-	for(unsigned int n=0; n<grad_.size(); ++n){
-		grad_[n]=gamma_*mgrad_[n]/(1.0-beta1i_)/(std::sqrt(mgrad2_[n]/(1.0-beta2i_))+eps_);
-	}
+	mgrad2_*=beta2_;
+	mgrad2_.noalias()+=(1.0-beta2_)*g.cwiseProduct(g);
 	//calculate the new position
-	x_.noalias()=xOld_-grad_;
+	for(int n=dim_-1; n>=0; --n){
+		d.p()[n]-=gamma_*mgrad_[n]/((1.0-beta1i_)*(std::sqrt(mgrad2_[n]/(1.0-beta2i_))+eps_));
+	}
 	//update the powers of betas
-	beta1i_*=beta1;
-	beta2i_*=beta2;
+	beta1i_*=beta1_;
+	beta2i_*=beta2_;
 }
 
 void ADAM::init(unsigned int dim){
-	if(PRINT_OPT_FUNC>0) std::cout<<"ADAM::init(unsigned int):\n";
-	if(mgrad_.size()!=dim) mgrad_=Eigen::VectorXd::Zero(dim);
-	if(mgrad2_.size()!=dim) mgrad2_=Eigen::VectorXd::Zero(dim);
-	if(beta1i_==0) beta1i_=beta1;//power w.r.t i
-	if(beta2i_==0) beta2i_=beta2;//power w.r.t i
+	if(OPT_PRINT_FUNC>0) std::cout<<"ADAM::init(unsigned int):\n";
+	Model::init(dim);
+	mgrad_=Eigen::VectorXd::Zero(dim);
+	mgrad2_=Eigen::VectorXd::Zero(dim);
+	beta1i_=beta1_;//power w.r.t i
+	beta2i_=beta2_;//power w.r.t i
+}
+
+//NADAM
+
+const double NADAM::eps_=1e-8;
+const double NADAM::beta1_=0.9;
+const double NADAM::beta2_=0.999;
+
+void NADAM::defaults(){
+	algo_=ALGO::NADAM;
+	gamma_=0;
+	decay_=1;
+	beta1i_=beta1_;
+	beta2i_=beta2_;
+}
+
+std::ostream& operator<<(std::ostream& out, const NADAM& nadam){
+	out<<static_cast<const Model&>(nadam)<<"\n";
+	out<<"**************************************************\n";
+	out<<"********************** NADAM **********************\n";
+	out<<"GAMMA = "<<nadam.gamma_<<"\n";
+	out<<"DECAY = "<<nadam.decay_<<"\n";
+	out<<"********************** NADAM **********************\n";
+	out<<"**************************************************";
+	return out;
+}
+
+void NADAM::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"NADAM::step(Eigen::VectorXd&,Eigen::VectorXd&):\n";
+	const Eigen::VectorXd& g=d.g();
+	//apply the decay
+	gamma_*=decay_;
+	//add to the running average of the gradients
+	mgrad_*=beta1_;
+	mgrad_.noalias()+=(1.0-beta1_)*g;
+	//add to the running average of the square of the gradients
+	mgrad2_*=beta2_;
+	mgrad2_.noalias()+=(1.0-beta2_)*g.cwiseProduct(g);
+	//calculate the new position
+	for(int n=dim_-1; n>=0; --n){
+		d.p()[n]-=gamma_*(beta1_*mgrad_[n]+(1.0-beta1_)*g[n])/((1.0-beta1i_)*(std::sqrt(mgrad2_[n]/(1.0-beta2i_))+eps_));
+	}
+	//update the powers of betas
+	beta1i_*=beta1_;
+	beta2i_*=beta2_;
+}
+
+void NADAM::init(unsigned int dim){
+	if(OPT_PRINT_FUNC>0) std::cout<<"NADAM::init(unsigned int):\n";
+	Model::init(dim);
+	mgrad_=Eigen::VectorXd::Zero(dim);
+	mgrad2_=Eigen::VectorXd::Zero(dim);
+	beta1i_=beta1_;//power w.r.t i
+	beta2i_=beta2_;//power w.r.t i
 }
 
 //BFGS
 
 void BFGS::defaults(){
-	period_=0;
-	decay_=0;
+	algo_=ALGO::BFGS;
 	gamma_=0.001;
 }
 
 std::ostream& operator<<(std::ostream& out, const BFGS& bfgs){
-	out<<static_cast<const Opt&>(bfgs)<<"\n";
+	out<<static_cast<const Model&>(bfgs)<<"\n";
 	out<<"**************************************************\n";
-	out<<"********************* BFGS *********************\n";
-	out<<"PERIOD = "<<bfgs.period_<<"\n";
-	out<<"DECAY = "<<bfgs.decay_<<"\n";
-	out<<"GAMMA = "<<bfgs.gamma_<<"\n";
-	out<<"********************* BFGS *********************\n";
+	out<<"********************** BFGS **********************\n";
+	out<<"GAMMA  = "<<bfgs.gamma_<<"\n";
+	out<<"********************** BFGS **********************\n";
 	out<<"**************************************************";
 }
 
-void BFGS::step(){
+void BFGS::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"BFGS::step(Eigen::VectorXd&,Eigen::VectorXd&):\n";
 	//obtain direction
-	s_.noalias()=B_.llt().solve(grad_);
+	s_.noalias()=B_.llt().solve(d.g());
 	//set the s vector
-	double gam=gamma_;
-	if(period_>0) gam=0.5*gam*(std::cos(num_const::PI*special::mod(((double)nStep_)/period_,1.0))+1.0);
-	if(decay_>0) gam=std::exp(-1.0*((double)nStep_)/decay_)*gam;
-	s_*=-gam/s_.norm();
+	s_*=-gamma_/s_.norm();
 	//calculate new position
-	x_.noalias()=xOld_+s_;
+	d.p().noalias()+=s_;
 	//set the y vector
-	y_.noalias()=gam*(grad_-gradOld_);
+	y_.noalias()=gamma_*(d.g()-d.gOld());
 	//set the new B matrix
 	B_.noalias()+=y_*y_.transpose()/y_.dot(s_);
 	y_.noalias()=BOld_*s_;
@@ -517,55 +507,12 @@ void BFGS::step(){
 }
 
 void BFGS::init(unsigned int dim){
-	if(B_.rows()!=dim) B_=Eigen::MatrixXd::Identity(dim,dim);
-	if(BOld_.rows()!=dim) BOld_=Eigen::MatrixXd::Identity(dim,dim);
-	if(s_.size()!=dim) s_=Eigen::VectorXd::Zero(dim);
-	if(y_.size()!=dim) y_=Eigen::VectorXd::Zero(dim);
-}
-
-//LM
-
-void LM::defaults(){
-	period_=0;
-	decay_=0;
-	gamma_=0.001;
-	damp_=1e-4;
-	min_=1e-6;
-	max_=1000;
-	lambda_=1.0;
-}
-
-std::ostream& operator<<(std::ostream& out, const LM& lm){
-	out<<static_cast<const Opt&>(lm)<<"\n";
-	out<<"**************************************************\n";
-	out<<"*********************** LM ***********************\n";
-	out<<"PERIOD = "<<lm.period_<<"\n";
-	out<<"DECAY  = "<<lm.decay_<<"\n";
-	out<<"GAMMA  = "<<lm.gamma_<<"\n";
-	out<<"DAMP   = "<<lm.damp_<<"\n";
-	out<<"LAMBDA = "<<lm.lambda_<<"\n";
-	out<<"MIN    = "<<lm.min_<<"\n";
-	out<<"MAX    = "<<lm.max_<<"\n";
-	out<<"*********************** LM ***********************\n";
-	out<<"**************************************************";
-}
-
-void LM::step(){
-	//check the value, update step
-	if(val_<valOld_) lambda_*=1.0/(1.0+damp_);
-	else lambda_*=(1.0+damp_);
-	if(lambda_<min_) lambda_=min_;
-	else if(lambda_>max_) lambda_=max_;
-	//compute the Hessian
-	H_=grad_*grad_.transpose();
-	D_=H_.diagonal().asDiagonal();
-	//calculate new position
-	x_.noalias()-=gamma_*(H_+D_*lambda_).llt().solve(grad_)*val_;
-}
-
-void LM::init(unsigned int dim){
-	if(H_.rows()!=dim) H_=Eigen::MatrixXd::Identity(dim,dim);
-	if(D_.rows()!=dim) D_=Eigen::MatrixXd::Identity(dim,dim);
+	if(OPT_PRINT_FUNC>0) std::cout<<"BFGS::init(unsigned int):\n";
+	Model::init(dim);
+	B_=Eigen::MatrixXd::Identity(dim,dim);
+	BOld_=Eigen::MatrixXd::Identity(dim,dim);
+	s_=Eigen::VectorXd::Zero(dim);
+	y_=Eigen::VectorXd::Zero(dim);
 }
 
 //RPROP
@@ -576,150 +523,172 @@ const double RPROP::deltaMax=50.0;
 const double RPROP::deltaMin=1e-14;
 
 void RPROP::defaults(){
-	period_=0;
-	decay_=0;
+	algo_=ALGO::RPROP;
 }
 
 std::ostream& operator<<(std::ostream& out, const RPROP& rprop){
-	out<<static_cast<const Opt&>(rprop)<<"\n";
+	out<<static_cast<const Model&>(rprop)<<"\n";
 	out<<"**************************************************\n";
 	out<<"********************* RPROP *********************\n";
-	out<<"PERIOD   = "<<rprop.period_<<"\n";
-	out<<"DECAY    = "<<rprop.decay_<<"\n";
 	out<<"********************* RPROP *********************\n";
 	out<<"**************************************************";
+	return out;
 }
 
-void RPROP::step(){
-	//calculate new position and delta
-	double gam=deltaMin;
-	if(period_>0) gam=0.5*gam*(std::cos(num_const::PI*special::mod(((double)nStep_)/period_,1.0))+1.0);
-	if(decay_>0) gam=std::exp(-1.0*((double)nStep_)/decay_)*gam;
-	for(unsigned int n=0; n<dim_; ++n){
-		double s=grad_[n]*gradOld_[n];
+void RPROP::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"RPROP::step(Eigen::VectorXd&,Eigen::VectorXd&):\n";
+	//iRProp+
+	const bool inc=d.val()>d.valOld();
+	for(int n=dim_-1; n>=0; --n){
+		const double s=d.g()[n]*d.gOld()[n];
 		if(s>0){
 			delta_[n]=cmp::min(delta_[n]*etaP,deltaMax);
-			x_[n]-=special::sign(grad_[n])*delta_[n];
+			dx_[n]=-1.0*special::sign(d.g()[n])*delta_[n];
+			d.p()[n]+=dx_[n];
 		}else if(s<0){
-			delta_[n]=cmp::max(delta_[n]*etaM,gam);
-			grad_[n]=0.0;
-			if(val_>valOld_) x_[n]-=special::sign(grad_[n])*delta_[n];
+			delta_[n]=cmp::max(delta_[n]*etaM,deltaMin);
+			if(inc) d.p()[n]-=dx_[n];
+			d.g()[n]=0.0;
 		} else if(s==0){
-			x_[n]-=special::sign(grad_[n])*delta_[n];
+			dx_[n]=-1.0*special::sign(d.g()[n])*delta_[n];
+			d.p()[n]+=dx_[n];
 		}
 	}
+	//iRProp-
+	/*for(int n=dim_-1; n>=0; --n){
+		const double s=grad[n]*gradOld_[n];
+		if(s>0){
+			delta_[n]=cmp::min(delta_[n]*etaP,deltaMax);
+		}else if(s<0){
+			delta_[n]=cmp::max(delta_[n]*etaM,deltaMin);
+			grad[n]=0.0;
+		}
+		x[n]-=special::sign(grad[n])*delta_[n];
+	}*/
 }
 
 void RPROP::init(unsigned int dim){
-	if(delta_.size()!=dim) delta_=Eigen::VectorXd::Constant(dim,0.1);
+	if(OPT_PRINT_FUNC>1) std::cout<<"RPROP::init(unsigned int):\n";
+	Model::init(dim);
+	delta_=Eigen::VectorXd::Constant(dim,0.1);
+	dx_=Eigen::VectorXd::Constant(dim,0.0);
 }
 
 //reading - file
 
-Opt& read(Opt& opt, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(Opt&,const char*):\n";
+Model& read(Model& model, const char* file){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(Model&,const char*):\n";
 	FILE* reader=fopen(file,"r");
 	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(opt,reader);
+	read(model,reader);
 	fclose(reader); reader=NULL;
-	return opt;
+	return model;
+} 
+
+Data& read(Data& data, const char* file){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(Data&,const char*):\n";
+	FILE* reader=fopen(file,"r");
+	if(reader==NULL) throw std::runtime_error("Could not open file.");
+	read(data,reader);
+	fclose(reader); reader=NULL;
+	return data;
 } 
 
 SGD& read(SGD& sgd, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(SGD&,const char*):\n";
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(SGD&,const char*):\n";
 	FILE* reader=fopen(file,"r");
 	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(static_cast<Opt&>(sgd),reader);
+	read(static_cast<Model&>(sgd),reader);
 	read(sgd,reader);
 	fclose(reader); reader=NULL;
 	return sgd;
 }
 
 SDM& read(SDM& sdm, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(SDM&,const char*):\n";
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(SDM&,const char*):\n";
 	FILE* reader=fopen(file,"r");
 	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(static_cast<Opt&>(sdm),reader);
+	read(static_cast<Model&>(sdm),reader);
 	read(sdm,reader);
 	fclose(reader); reader=NULL;
 	return sdm;
 }
 
 NAG& read(NAG& nag, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(NAG&,const char*):\n";
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(NAG&,const char*):\n";
 	FILE* reader=fopen(file,"r");
 	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(static_cast<Opt&>(nag),reader);
+	read(static_cast<Model&>(nag),reader);
 	read(nag,reader);
 	fclose(reader); reader=NULL;
 	return nag;
 }
 
 ADAGRAD& read(ADAGRAD& adagrad, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(ADAGRAD&,const char*):\n";
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(ADAGRAD&,const char*):\n";
 	FILE* reader=fopen(file,"r");
 	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(static_cast<Opt&>(adagrad),reader);
+	read(static_cast<Model&>(adagrad),reader);
 	read(adagrad,reader);
 	fclose(reader); reader=NULL;
 	return adagrad;
 }
 
 ADADELTA& read(ADADELTA& adadelta, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(ADADELTA&,const char*):\n";
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(ADADELTA&,const char*):\n";
 	FILE* reader=fopen(file,"r");
 	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(static_cast<Opt&>(adadelta),reader);
+	read(static_cast<Model&>(adadelta),reader);
 	read(adadelta,reader);
 	fclose(reader); reader=NULL;
 	return adadelta;
 }
 
 RMSPROP& read(RMSPROP& rmsprop, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(RMSPROP&,const char*):\n";
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(RMSPROP&,const char*):\n";
 	FILE* reader=fopen(file,"r");
 	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(static_cast<Opt&>(rmsprop),reader);
+	read(static_cast<Model&>(rmsprop),reader);
 	read(rmsprop,reader);
 	fclose(reader); reader=NULL;
 	return rmsprop;
 }
 
 ADAM& read(ADAM& adam, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(ADAM&,const char*):\n";
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(ADAM&,const char*):\n";
 	FILE* reader=fopen(file,"r");
 	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(static_cast<Opt&>(adam),reader);
+	read(static_cast<Model&>(adam),reader);
 	read(adam,reader);
 	fclose(reader); reader=NULL;
 	return adam;
 }
 
-BFGS& read(BFGS& bfgs, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(BFGS&,const char*):\n";
+NADAM& read(NADAM& nadam, const char* file){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(NADAM&,const char*):\n";
 	FILE* reader=fopen(file,"r");
 	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(static_cast<Opt&>(bfgs),reader);
+	read(static_cast<Model&>(nadam),reader);
+	read(nadam,reader);
+	fclose(reader); reader=NULL;
+	return nadam;
+}
+
+BFGS& read(BFGS& bfgs, const char* file){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(BFGS&,const char*):\n";
+	FILE* reader=fopen(file,"r");
+	if(reader==NULL) throw std::runtime_error("Could not open file.");
+	read(static_cast<Model&>(bfgs),reader);
 	read(bfgs,reader);
 	fclose(reader); reader=NULL;
 	return bfgs;
 }
 
-LM& read(LM& lm, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(LM&,const char*):\n";
-	FILE* reader=fopen(file,"r");
-	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(static_cast<Opt&>(lm),reader);
-	read(lm,reader);
-	fclose(reader); reader=NULL;
-	return lm;
-}
-
 RPROP& read(RPROP& rprop, const char* file){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(RPROP&,const char*):\n";
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(RPROP&,const char*):\n";
 	FILE* reader=fopen(file,"r");
 	if(reader==NULL) throw std::runtime_error("Could not open file.");
-	read(static_cast<Opt&>(rprop),reader);
+	read(static_cast<Model&>(rprop),reader);
 	read(rprop,reader);
 	fclose(reader); reader=NULL;
 	return rprop;
@@ -727,8 +696,8 @@ RPROP& read(RPROP& rprop, const char* file){
 
 //reading - file pointer
 
-Opt& read(Opt& opt, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(Opt&,FILE*):\n";
+Data& read(Data& data, FILE* reader){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(Data&,FILE*):\n";
 	fseek(reader,0,SEEK_SET);
 	char* input=new char[string::M];
 	std::vector<std::string> strlist;
@@ -736,29 +705,34 @@ Opt& read(Opt& opt, FILE* reader){
 		string::trim_right(input,string::COMMENT);
 		if(string::split(input,string::WS,strlist)==0) continue;
 		string::to_upper(strlist.at(0));
+		if(strlist.size()<2) throw std::runtime_error("Parameter tag without corresponding value.");
 		if(strlist.at(0)=="ALGO"){
-			opt.algo()=OPT_METHOD::load(string::to_upper(strlist.at(1)).c_str());
+			data.algo()=ALGO::read(string::to_upper(strlist.at(1)).c_str());
 		} else if(strlist.at(0)=="OPT_VAL"){
-			opt.optVal()=OPT_VAL::load(string::to_upper(strlist.at(1)).c_str());
+			data.optVal()=VAL::read(string::to_upper(strlist.at(1)).c_str());
 		} else if(strlist.at(0)=="TOL"){
-			opt.tol()=std::atof(strlist.at(1).c_str());
+			data.tol()=std::atof(strlist.at(1).c_str());
 		} else if(strlist.at(0)=="MAX_ITER"){
-			opt.maxIter()=std::atof(strlist.at(1).c_str());
+			data.max()=std::atof(strlist.at(1).c_str());
 		} else if(strlist.at(0)=="N_PRINT"){
-			opt.nPrint()=std::atoi(strlist.at(1).c_str());
-		} else if(strlist.at(0)=="PREC_LN"){
-			opt.precln()=std::atoi(strlist.at(1).c_str());
-		} else if(strlist.at(0)=="MAX_LN"){
-			opt.maxln()=std::atoi(strlist.at(1).c_str());
-		}
+			data.nPrint()=std::atoi(strlist.at(1).c_str());
+		} else if(strlist.at(0)=="N_WRITE"){
+			data.nWrite()=std::atoi(strlist.at(1).c_str());
+		} 
 	}
 	delete[] input;
-	return opt;
+	return data;
+}
+
+Model& read(Model& model, FILE* reader){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(Data&,FILE*):\n";
+	fseek(reader,0,SEEK_SET);
+	return model;
 }
 
 SGD& read(SGD& sgd, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(SGD&,FILE*):\n";
-	read(static_cast<Opt&>(sgd),reader);
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(SGD&,FILE*):\n";
+	read(static_cast<Model&>(sgd),reader);
 	fseek(reader,0,SEEK_SET);
 	char* input=new char[string::M];
 	std::vector<std::string> strlist;
@@ -766,21 +740,21 @@ SGD& read(SGD& sgd, FILE* reader){
 		string::trim_right(input,string::COMMENT);
 		if(string::split(input,string::WS,strlist)==0) continue;
 		string::to_upper(strlist.at(0));
-		if(strlist.at(0)=="DECAY"){
-			sgd.decay()=std::atoi((strlist.at(1)).c_str());
-		} else if(strlist.at(0)=="PERIOD"){
-			sgd.period()=std::atoi((strlist.at(1)).c_str());
-		} else if(strlist.at(0)=="GAMMA"){
+		if(strlist.at(0)=="GAMMA"){
 			sgd.gamma()=std::atof((strlist.at(1)).c_str());
-		} 
+		} else if(strlist.at(0)=="DECAY"){
+			unsigned int period=std::atoi((strlist.at(1)).c_str());
+			if(period==0) sgd.decay()=1.0;
+			else sgd.decay()=(period-1.0)/period;
+		}
 	}
 	delete[] input;
 	return sgd;
 }
 
 SDM& read(SDM& sdm, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(SDM&,FILE*):\n";
-	read(static_cast<Opt&>(sdm),reader);
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(SDM&,FILE*):\n";
+	read(static_cast<Model&>(sdm),reader);
 	fseek(reader,0,SEEK_SET);
 	char* input=new char[string::M];
 	std::vector<std::string> strlist;
@@ -792,15 +766,19 @@ SDM& read(SDM& sdm, FILE* reader){
 			sdm.gamma()=std::atof((strlist.at(1)).c_str());
 		} else if(strlist.at(0)=="ETA"){
 			sdm.eta()=std::atof((strlist.at(1)).c_str());
-		} 
+		} else if(strlist.at(0)=="DECAY"){
+			unsigned int period=std::atoi((strlist.at(1)).c_str());
+			if(period==0) sdm.decay()=1.0;
+			else sdm.decay()=(period-1.0)/period;
+		}
 	}
 	delete[] input;
 	return sdm;
 }
 
 NAG& read(NAG& nag, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(NAG&,FILE*):\n";
-	read(static_cast<Opt&>(nag),reader);
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(NAG&,FILE*):\n";
+	read(static_cast<Model&>(nag),reader);
 	fseek(reader,0,SEEK_SET);
 	char* input=new char[string::M];
 	std::vector<std::string> strlist;
@@ -812,15 +790,19 @@ NAG& read(NAG& nag, FILE* reader){
 			nag.gamma()=std::atof((strlist.at(1)).c_str());
 		} else if(strlist.at(0)=="ETA"){
 			nag.eta()=std::atof((strlist.at(1)).c_str());
-		} 
+		} else if(strlist.at(0)=="DECAY"){
+			unsigned int period=std::atoi((strlist.at(1)).c_str());
+			if(period==0) nag.decay()=1.0;
+			else nag.decay()=(period-1.0)/period;
+		}
 	}
 	delete[] input;
 	return nag;
 }
 
 ADAGRAD& read(ADAGRAD& adagrad, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(ADAGRAD&,FILE*):\n";
-	read(static_cast<Opt&>(adagrad),reader);
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(ADAGRAD&,FILE*):\n";
+	read(static_cast<Model&>(adagrad),reader);
 	fseek(reader,0,SEEK_SET);
 	char* input=new char[string::M];
 	std::vector<std::string> strlist;
@@ -837,8 +819,8 @@ ADAGRAD& read(ADAGRAD& adagrad, FILE* reader){
 }
 
 ADADELTA& read(ADADELTA& adadelta, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(ADADELTA&,FILE*):\n";
-	read(static_cast<Opt&>(adadelta),reader);
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(ADADELTA&,FILE*):\n";
+	read(static_cast<Model&>(adadelta),reader);
 	fseek(reader,0,SEEK_SET);
 	char* input=new char[string::M];
 	std::vector<std::string> strlist;
@@ -857,8 +839,8 @@ ADADELTA& read(ADADELTA& adadelta, FILE* reader){
 }
 
 RMSPROP& read(RMSPROP& rmsprop, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(RMSPROP&,FILE*):\n";
-	read(static_cast<Opt&>(rmsprop),reader);
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(RMSPROP&,FILE*):\n";
+	read(static_cast<Model&>(rmsprop),reader);
 	fseek(reader,0,SEEK_SET);
 	char* input=new char[string::M];
 	std::vector<std::string> strlist;
@@ -875,8 +857,8 @@ RMSPROP& read(RMSPROP& rmsprop, FILE* reader){
 }
 
 ADAM& read(ADAM& adam, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(ADAM&,FILE*):\n";
-	read(static_cast<Opt&>(adam),reader);
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(ADAM&,FILE*):\n";
+	read(static_cast<Model&>(adam),reader);
 	fseek(reader,0,SEEK_SET);
 	char* input=new char[string::M];
 	std::vector<std::string> strlist;
@@ -886,15 +868,19 @@ ADAM& read(ADAM& adam, FILE* reader){
 		string::to_upper(strlist.at(0));
 		if(strlist.at(0)=="GAMMA"){
 			adam.gamma()=std::atof((strlist.at(1)).c_str());
+		} else if(strlist.at(0)=="DECAY"){
+			unsigned int period=std::atoi((strlist.at(1)).c_str());
+			if(period==0) adam.decay()=1.0;
+			else adam.decay()=(period-1.0)/period;
 		}
 	}
 	delete[] input;
 	return adam;
 }
 
-BFGS& read(BFGS& bfgs, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(BFGS&,FILE*):\n";
-	read(static_cast<Opt&>(bfgs),reader);
+NADAM& read(NADAM& nadam, FILE* reader){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(NADAM&,FILE*):\n";
+	read(static_cast<Model&>(nadam),reader);
 	fseek(reader,0,SEEK_SET);
 	char* input=new char[string::M];
 	std::vector<std::string> strlist;
@@ -902,11 +888,29 @@ BFGS& read(BFGS& bfgs, FILE* reader){
 		string::trim_right(input,string::COMMENT);
 		if(string::split(input,string::WS,strlist)==0) continue;
 		string::to_upper(strlist.at(0));
-		if(strlist.at(0)=="DECAY"){
-			bfgs.decay()=std::atoi((strlist.at(1)).c_str());
-		} else if(strlist.at(0)=="PERIOD"){
-			bfgs.period()=std::atoi((strlist.at(1)).c_str());
-		} else if(strlist.at(0)=="GAMMA"){
+		if(strlist.at(0)=="GAMMA"){
+			nadam.gamma()=std::atof((strlist.at(1)).c_str());
+		} else if(strlist.at(0)=="DECAY"){
+			unsigned int period=std::atoi((strlist.at(1)).c_str());
+			if(period==0) nadam.decay()=1.0;
+			else nadam.decay()=(period-1.0)/period;
+		}
+	}
+	delete[] input;
+	return nadam;
+}
+
+BFGS& read(BFGS& bfgs, FILE* reader){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(BFGS&,FILE*):\n";
+	read(static_cast<Model&>(bfgs),reader);
+	fseek(reader,0,SEEK_SET);
+	char* input=new char[string::M];
+	std::vector<std::string> strlist;
+	while(fgets(input,string::M,reader)!=NULL){
+		string::trim_right(input,string::COMMENT);
+		if(string::split(input,string::WS,strlist)==0) continue;
+		string::to_upper(strlist.at(0));
+		if(strlist.at(0)=="GAMMA"){
 			bfgs.gamma()=std::atoi((strlist.at(1)).c_str());
 		} 
 	}
@@ -914,52 +918,67 @@ BFGS& read(BFGS& bfgs, FILE* reader){
 	return bfgs;
 }
 
-LM& read(LM& lm, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(LM&,FILE*):\n";
-	read(static_cast<Opt&>(lm),reader);
+RPROP& read(RPROP& rprop, FILE* reader){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(RPROP&,FILE*):\n";
+	read(static_cast<Model&>(rprop),reader);
 	fseek(reader,0,SEEK_SET);
-	char* input=new char[string::M];
-	std::vector<std::string> strlist;
-	while(fgets(input,string::M,reader)!=NULL){
-		string::trim_right(input,string::COMMENT);
-		if(string::split(input,string::WS,strlist)==0) continue;
-		string::to_upper(strlist.at(0));
-		if(strlist.at(0)=="DECAY"){
-			lm.decay()=std::atoi((strlist.at(1)).c_str());
-		} else if(strlist.at(0)=="PERIOD"){
-			lm.period()=std::atoi((strlist.at(1)).c_str());
-		} else if(strlist.at(0)=="GAMMA"){
-			lm.gamma()=std::atof((strlist.at(1)).c_str());
-		} else if(strlist.at(0)=="DAMP"){
-			lm.damp()=std::atof((strlist.at(1)).c_str());
-		} else if(strlist.at(0)=="MAX"){
-			lm.max()=std::atof((strlist.at(1)).c_str());
-		} else if(strlist.at(0)=="MIN"){
-			lm.min()=std::atof((strlist.at(1)).c_str());
-		} 
-	}
-	delete[] input;
-	return lm;
+	return rprop;
 }
 
-RPROP& read(RPROP& rprop, FILE* reader){
-	if(PRINT_OPT_FUNC>0) std::cout<<"read(RPROP&,FILE*):\n";
-	read(static_cast<Opt&>(rprop),reader);
-	fseek(reader,0,SEEK_SET);
-	char* input=new char[string::M];
-	std::vector<std::string> strlist;
-	while(fgets(input,string::M,reader)!=NULL){
-		string::trim_right(input,string::COMMENT);
-		if(string::split(input,string::WS,strlist)==0) continue;
-		string::to_upper(strlist.at(0));
-		if(strlist.at(0)=="DECAY"){
-			rprop.decay()=std::atoi((strlist.at(1)).c_str());
-		} else if(strlist.at(0)=="PERIOD"){
-			rprop.period()=std::atoi((strlist.at(1)).c_str());
-		} 
-	}
-	delete[] input;
-	return rprop;
+//operators - comparison
+
+bool operator==(const SGD& obj1, const SGD& obj2){
+	return (
+		obj1.gamma()==obj2.gamma()
+	);
+}
+bool operator==(const SDM& obj1, const SDM& obj2){
+	return (
+		obj1.gamma()==obj2.gamma() &&
+		obj1.eta()==obj2.eta()
+	);
+}
+bool operator==(const NAG& obj1, const NAG& obj2){
+	return (
+		obj1.gamma()==obj2.gamma() &&
+		obj1.eta()==obj2.eta()
+	);
+}
+bool operator==(const ADAGRAD& obj1, const ADAGRAD& obj2){
+	return (
+		obj1.gamma()==obj2.gamma()
+	);
+}
+bool operator==(const ADADELTA& obj1, const ADADELTA& obj2){
+	return (
+		obj1.gamma()==obj2.gamma() && 
+		obj1.eta()==obj2.eta()
+	);
+}
+bool operator==(const RMSPROP& obj1, const RMSPROP& obj2){
+	return (
+		obj1.gamma()==obj2.gamma()
+	);
+}
+bool operator==(const ADAM& obj1, const ADAM& obj2){
+	return (
+		obj1.gamma()==obj2.gamma()
+	);
+}
+bool operator==(const NADAM& obj1, const NADAM& obj2){
+	return (
+		obj1.gamma()==obj2.gamma()
+	);
+}
+bool operator==(const BFGS& obj1, const BFGS& obj2){
+	return (
+		obj1.gamma()==obj2.gamma()
+	);
+}
+bool operator==(const RPROP& obj1, const RPROP& obj2){
+	return true;
+}
+
 }
 
 namespace serialize{
@@ -968,105 +987,117 @@ namespace serialize{
 // byte measures
 //**********************************************
 	
-template <> unsigned int nbytes(const Opt& obj){
+template <> unsigned int nbytes(const Opt::Data& obj){
 	unsigned int size=0;
+	//count
+		size+=sizeof(unsigned int);//nPrint_
+		size+=sizeof(unsigned int);//nWrite_
+		size+=sizeof(unsigned int);//step_
+	//stopping
+		size+=sizeof(unsigned int);//max_
+		size+=sizeof(double);//tol_
 	//status
-		size+=sizeof(unsigned int);//nStep_
-		size+=sizeof(unsigned int);//nEval_
+		size+=sizeof(double);//val_;
+		size+=sizeof(double);//valOld_;
+		size+=sizeof(double);//dv_;
+		size+=sizeof(double);//dp_;
+	//algorithm
+		size+=sizeof(Opt::ALGO::type);//algo_
+		size+=sizeof(Opt::VAL::type);//optVal_
 	//parameters
 		size+=sizeof(unsigned int);//dim_
-		size+=sizeof(double);//val_
-		size+=sizeof(double);//valOld_
-		size+=nbytes(obj.x());//x
-		size+=nbytes(obj.xOld());//xOld
-		size+=nbytes(obj.grad());//grad
-		size+=nbytes(obj.gradOld());//gradOld
-	//algorithm
-		size+=sizeof(OPT_METHOD::type);//optMethod_
-		size+=sizeof(OPT_VAL::type);//optVal_
+		size+=nbytes(obj.p());
+		size+=nbytes(obj.pOld());
+		size+=nbytes(obj.g());
+		size+=nbytes(obj.gOld());
 	//return the size
 		return size;
 }
-template <> unsigned int nbytes(const SGD& obj){
+template <> unsigned int nbytes(const Opt::Model& obj){
 	unsigned int size=0;
-	size+=nbytes(static_cast<const Opt&>(obj));
-	size+=sizeof(unsigned int);//period_
-	size+=sizeof(unsigned int);//decay_
-	size+=sizeof(double);//gamma_
+	size+=sizeof(unsigned int);//dim_
+	size+=sizeof(Opt::ALGO::type);//algo_
 	return size;
 }
-template <> unsigned int nbytes(const SDM& obj){
+template <> unsigned int nbytes(const Opt::SGD& obj){
 	unsigned int size=0;
-	size+=nbytes(static_cast<const Opt&>(obj));
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
 	size+=sizeof(double);//gamma_
+	size+=sizeof(double);//decay_
+	return size;
+}
+template <> unsigned int nbytes(const Opt::SDM& obj){
+	unsigned int size=0;
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
+	size+=sizeof(double);//gamma_
+	size+=sizeof(double);//decay_
 	size+=sizeof(double);//eta_
 	return size;
 }
-template <> unsigned int nbytes(const NAG& obj){
+template <> unsigned int nbytes(const Opt::NAG& obj){
 	unsigned int size=0;
-	size+=nbytes(static_cast<const Opt&>(obj));
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
+	size+=sizeof(double);//gamma_
+	size+=sizeof(double);//decay_
+	size+=sizeof(double);//eta_
+	size+=nbytes(obj.dx());//dx_
+	return size;
+}
+template <> unsigned int nbytes(const Opt::ADAGRAD& obj){
+	unsigned int size=0;
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
+	size+=sizeof(double);//gamma_
+	size+=nbytes(obj.mgrad2());
+	return size;
+}
+template <> unsigned int nbytes(const Opt::ADADELTA& obj){
+	unsigned int size=0;
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
 	size+=sizeof(double);//gamma_
 	size+=sizeof(double);//eta_
+	size+=nbytes(obj.mgrad2());//mgrad2_
+	size+=nbytes(obj.mdx2());//mdx2_
+	size+=nbytes(obj.dx());//dx_
 	return size;
 }
-template <> unsigned int nbytes(const ADAGRAD& obj){
+template <> unsigned int nbytes(const Opt::RMSPROP& obj){
 	unsigned int size=0;
-	size+=nbytes(static_cast<const Opt&>(obj));
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
 	size+=sizeof(double);//gamma_
-	size+=nbytes(obj.mgrad2());
+	size+=nbytes(obj.mgrad2());//mgrad2_
 	return size;
 }
-template <> unsigned int nbytes(const ADADELTA& obj){
+template <> unsigned int nbytes(const Opt::ADAM& obj){
 	unsigned int size=0;
-	size+=nbytes(static_cast<const Opt&>(obj));
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
 	size+=sizeof(double);//gamma_
-	size+=sizeof(double);//eta_
-	size+=nbytes(obj.mgrad2());
-	size+=nbytes(obj.mdx2());
-	size+=nbytes(obj.dxv());
-	return size;
-}
-template <> unsigned int nbytes(const RMSPROP& obj){
-	unsigned int size=0;
-	size+=nbytes(static_cast<const Opt&>(obj));
-	size+=sizeof(double);//gamma_
-	size+=nbytes(obj.mgrad2());
-	return size;
-}
-template <> unsigned int nbytes(const ADAM& obj){
-	unsigned int size=0;
-	size+=nbytes(static_cast<const Opt&>(obj));
-	size+=sizeof(double);//gamma_
-	size+=nbytes(obj.mgrad());
-	size+=nbytes(obj.mgrad2());
 	size+=sizeof(double);//beta1i
 	size+=sizeof(double);//beta2i
+	size+=nbytes(obj.mgrad());//mgrad_
+	size+=nbytes(obj.mgrad2());//mgrad2_
 	return size;
 }
-template <> unsigned int nbytes(const BFGS& obj){
+template <> unsigned int nbytes(const Opt::NADAM& obj){
 	unsigned int size=0;
-	size+=nbytes(static_cast<const Opt&>(obj));
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
+	size+=sizeof(double);//gamma_
+	size+=sizeof(double);//beta1i_
+	size+=sizeof(double);//beta2i_
+	size+=nbytes(obj.mgrad());//mgrad_
+	size+=nbytes(obj.mgrad2());//mgrad2_
+	return size;
+}
+template <> unsigned int nbytes(const Opt::BFGS& obj){
+	unsigned int size=0;
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
 	size+=sizeof(double);//gamma_
 	return size;
 }
-template <> unsigned int nbytes(const LM& obj){
+template <> unsigned int nbytes(const Opt::RPROP& obj){
 	unsigned int size=0;
-	size+=nbytes(static_cast<const Opt&>(obj));
-	size+=sizeof(unsigned int);//period_
-	size+=sizeof(unsigned int);//decay_
-	size+=sizeof(double);//gamma_
-	size+=sizeof(double);//lambda_
-	size+=sizeof(double);//damp_
-	size+=sizeof(double);//min_
-	size+=sizeof(double);//max_
-	return size;
-}
-template <> unsigned int nbytes(const RPROP& obj){
-	unsigned int size=0;
-	size+=nbytes(static_cast<const Opt&>(obj));
-	size+=sizeof(unsigned int);
-	size+=sizeof(unsigned int);
-	size+=nbytes(obj.delta());
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
+	size+=nbytes(obj.delta());//delta_
+	size+=nbytes(obj.dx());//dx_
 	return size;
 }
 
@@ -1074,188 +1105,210 @@ template <> unsigned int nbytes(const RPROP& obj){
 // packing
 //**********************************************
 
-template <> void pack(const Opt& obj, char* arr){
+template <> void pack(const Opt::Data& obj, char* arr){
 	unsigned int pos=0;
+	//count
+		std::memcpy(arr+pos,&obj.nPrint(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//nPrint_
+		std::memcpy(arr+pos,&obj.nWrite(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//nWrite_
+		std::memcpy(arr+pos,&obj.step(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//step_
+	//stopping
+		std::memcpy(arr+pos,&obj.max(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//max_
+		std::memcpy(arr+pos,&obj.tol(),sizeof(double)); pos+=sizeof(double);//tol_
 	//status
-		std::memcpy(arr+pos,&obj.nStep(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//nStep_
-		std::memcpy(arr+pos,&obj.nEval(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//nEval_
-	//paramters
-		std::memcpy(arr+pos,&obj.dim(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//dim_
 		std::memcpy(arr+pos,&obj.val(),sizeof(double)); pos+=sizeof(double);//val_
 		std::memcpy(arr+pos,&obj.valOld(),sizeof(double)); pos+=sizeof(double);//valOld_
-		pack(obj.x(),arr+pos); pos+=nbytes(obj.x());//x_
-		pack(obj.xOld(),arr+pos); pos+=nbytes(obj.xOld());//xOld_
-		pack(obj.grad(),arr+pos); pos+=nbytes(obj.grad());//grad_
-		pack(obj.gradOld(),arr+pos); pos+=nbytes(obj.gradOld());//gradOld_
+		std::memcpy(arr+pos,&obj.dv(),sizeof(double)); pos+=sizeof(double);//dv_
+		std::memcpy(arr+pos,&obj.dp(),sizeof(double)); pos+=sizeof(double);//dp_
 	//algorithm
-		std::memcpy(arr+pos,&obj.algo(),sizeof(OPT_METHOD::type)); pos+=sizeof(OPT_METHOD::type);//optMethod_
-		std::memcpy(arr+pos,&obj.optVal(),sizeof(OPT_VAL::type)); pos+=sizeof(OPT_VAL::type);//optVal_
+		std::memcpy(arr+pos,&obj.algo(),sizeof(Opt::ALGO::type)); pos+=sizeof(Opt::ALGO::type);//algo_
+		std::memcpy(arr+pos,&obj.optVal(),sizeof(Opt::VAL::type)); pos+=sizeof(Opt::VAL::type);//optVal_
+	//parameters
+		std::memcpy(arr+pos,&obj.dim(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//dim_
+		pack(obj.p(),arr+pos); pos+=nbytes(obj.p());//p_
+		pack(obj.pOld(),arr+pos); pos+=nbytes(obj.pOld());//pOld_
+		pack(obj.g(),arr+pos); pos+=nbytes(obj.g());//g_
+		pack(obj.gOld(),arr+pos); pos+=nbytes(obj.gOld());//gOld_
 }
-template <> void pack(const SGD& obj, char* arr){
+template <> void pack(const Opt::Model& obj, char* arr){
 	unsigned int pos=0;
-	pack(static_cast<const Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
-	std::memcpy(arr+pos,&obj.period(),sizeof(unsigned int)); pos+=sizeof(unsigned int);
-	std::memcpy(arr+pos,&obj.decay(),sizeof(unsigned int)); pos+=sizeof(unsigned int);
-	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);
+	std::memcpy(arr+pos,&obj.dim(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//dim_
+	std::memcpy(arr+pos,&obj.algo(),sizeof(Opt::ALGO::type)); pos+=sizeof(Opt::ALGO::type);//algo_
 }
-template <> void pack(const SDM& obj, char* arr){
+template <> void pack(const Opt::SGD& obj, char* arr){
 	unsigned int pos=0;
-	pack(static_cast<const Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
-	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);
-	std::memcpy(arr+pos,&obj.eta(),sizeof(double)); pos+=sizeof(double);
+	pack(static_cast<const Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
+	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);//gamma
+	std::memcpy(arr+pos,&obj.decay(),sizeof(double)); pos+=sizeof(double);//decay
 }
-template <> void pack(const NAG& obj, char* arr){
+template <> void pack(const Opt::SDM& obj, char* arr){
 	unsigned int pos=0;
-	pack(static_cast<const Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
-	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);
-	std::memcpy(arr+pos,&obj.eta(),sizeof(double)); pos+=sizeof(double);
+	pack(static_cast<const Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
+	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);//gamma
+	std::memcpy(arr+pos,&obj.decay(),sizeof(double)); pos+=sizeof(double);//decay
+	std::memcpy(arr+pos,&obj.eta(),sizeof(double)); pos+=sizeof(double);//eta
 }
-template <> void pack(const ADAGRAD& obj, char* arr){
+template <> void pack(const Opt::NAG& obj, char* arr){
 	unsigned int pos=0;
-	pack(static_cast<const Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
+	pack(static_cast<const Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
+	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);//gamma
+	std::memcpy(arr+pos,&obj.decay(),sizeof(double)); pos+=sizeof(double);//decay
+	std::memcpy(arr+pos,&obj.eta(),sizeof(double)); pos+=sizeof(double);//eta
+	pack(obj.dx(),arr+pos); pos+=nbytes(obj.dx());//dx_
+}
+template <> void pack(const Opt::ADAGRAD& obj, char* arr){
+	unsigned int pos=0;
+	pack(static_cast<const Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);
 	pack(obj.mgrad2(),arr+pos); pos+=nbytes(obj.mgrad2());
 }
-template <> void pack(const ADADELTA& obj, char* arr){
+template <> void pack(const Opt::ADADELTA& obj, char* arr){
 	unsigned int pos=0;
-	pack(static_cast<const Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
+	pack(static_cast<const Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);
 	std::memcpy(arr+pos,&obj.eta(),sizeof(double)); pos+=sizeof(double);
 	pack(obj.mgrad2(),arr+pos); pos+=nbytes(obj.mgrad2());
 	pack(obj.mdx2(),arr+pos); pos+=nbytes(obj.mdx2());
-	pack(obj.dxv(),arr+pos); pos+=nbytes(obj.dxv());
+	pack(obj.dx(),arr+pos); pos+=nbytes(obj.dx());
 }
-template <> void pack(const RMSPROP& obj, char* arr){
+template <> void pack(const Opt::RMSPROP& obj, char* arr){
 	unsigned int pos=0;
-	pack(static_cast<const Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
+	pack(static_cast<const Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);
 	pack(obj.mgrad2(),arr+pos); pos+=nbytes(obj.mgrad2());
 }
-template <> void pack(const ADAM& obj, char* arr){
+template <> void pack(const Opt::ADAM& obj, char* arr){
 	unsigned int pos=0;
-	pack(static_cast<const Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
+	pack(static_cast<const Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);
 	std::memcpy(arr+pos,&obj.beta1i(),sizeof(double)); pos+=sizeof(double);
 	std::memcpy(arr+pos,&obj.beta2i(),sizeof(double)); pos+=sizeof(double);
 	pack(obj.mgrad(),arr+pos); pos+=nbytes(obj.mgrad());
 	pack(obj.mgrad2(),arr+pos); pos+=nbytes(obj.mgrad2());
 }
-template <> void pack(const BFGS& obj, char* arr){
+template <> void pack(const Opt::NADAM& obj, char* arr){
 	unsigned int pos=0;
-	pack(static_cast<const Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
+	pack(static_cast<const Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
+	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);//gamma_
+	std::memcpy(arr+pos,&obj.beta1i(),sizeof(double)); pos+=sizeof(double);//beta1i_
+	std::memcpy(arr+pos,&obj.beta2i(),sizeof(double)); pos+=sizeof(double);//beta2i_
+	pack(obj.mgrad(),arr+pos); pos+=nbytes(obj.mgrad());//mgrad_
+	pack(obj.mgrad2(),arr+pos); pos+=nbytes(obj.mgrad2());//mgrad2_
+}
+template <> void pack(const Opt::BFGS& obj, char* arr){
+	unsigned int pos=0;
+	pack(static_cast<const Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);
 }
-template <> void pack(const LM& obj, char* arr){
+template <> void pack(const Opt::RPROP& obj, char* arr){
 	unsigned int pos=0;
-	pack(static_cast<const Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
-	std::memcpy(arr+pos,&obj.period(),sizeof(unsigned int)); pos+=sizeof(unsigned int);
-	std::memcpy(arr+pos,&obj.decay(),sizeof(unsigned int)); pos+=sizeof(unsigned int);
-	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);
-	std::memcpy(arr+pos,&obj.lambda(),sizeof(double)); pos+=sizeof(double);
-	std::memcpy(arr+pos,&obj.damp(),sizeof(double)); pos+=sizeof(double);
-	std::memcpy(arr+pos,&obj.min(),sizeof(double)); pos+=sizeof(double);
-	std::memcpy(arr+pos,&obj.max(),sizeof(double)); pos+=sizeof(double);
-}
-template <> void pack(const RPROP& obj, char* arr){
-	unsigned int pos=0;
-	pack(static_cast<const Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
-	std::memcpy(arr+pos,&obj.period(),sizeof(unsigned int)); pos+=sizeof(unsigned int);
-	std::memcpy(arr+pos,&obj.decay(),sizeof(unsigned int)); pos+=sizeof(unsigned int);
+	pack(static_cast<const Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	pack(obj.delta(),arr+pos); pos+=nbytes(obj.delta());
+	pack(obj.dx(),arr+pos); pos+=nbytes(obj.dx());
 }
 
 //**********************************************
 // unpacking
 //**********************************************
 
-template <> void unpack(Opt& obj, const char* arr){
+template <> void unpack(Opt::Data& obj, const char* arr){
 	unsigned int pos=0;
+	//count
+		std::memcpy(&obj.nPrint(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//nPrint_
+		std::memcpy(&obj.nWrite(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//nWrite_
+		std::memcpy(&obj.step(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//step_
+	//stopping
+		std::memcpy(&obj.max(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//max_
+		std::memcpy(&obj.tol(),arr+pos,sizeof(double)); pos+=sizeof(double);//tol_
 	//status
-		std::memcpy(&obj.nStep(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//nStep_
-		std::memcpy(&obj.nEval(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//nEval_
-	//paramters
-		std::memcpy(&obj.dim(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//dim_
 		std::memcpy(&obj.val(),arr+pos,sizeof(double)); pos+=sizeof(double);//val_
 		std::memcpy(&obj.valOld(),arr+pos,sizeof(double)); pos+=sizeof(double);//valOld_
-		unpack(obj.x(),arr+pos); pos+=nbytes(obj.x());//x_
-		unpack(obj.xOld(),arr+pos); pos+=nbytes(obj.xOld());//xOld_
-		unpack(obj.grad(),arr+pos); pos+=nbytes(obj.grad());//grad_
-		unpack(obj.gradOld(),arr+pos); pos+=nbytes(obj.gradOld());//gradOld_
+		std::memcpy(&obj.dv(),arr+pos,sizeof(double)); pos+=sizeof(double);//dv_
+		std::memcpy(&obj.dp(),arr+pos,sizeof(double)); pos+=sizeof(double);//dp_
 	//algorithm
-		std::memcpy(&obj.algo(),arr+pos,sizeof(OPT_METHOD::type)); pos+=sizeof(OPT_METHOD::type);//optMethod_
-		std::memcpy(&obj.optVal(),arr+pos,sizeof(OPT_VAL::type)); pos+=sizeof(OPT_VAL::type);//optVal_
+		std::memcpy(&obj.algo(),arr+pos,sizeof(Opt::ALGO::type)); pos+=sizeof(Opt::ALGO::type);//algo_
+		std::memcpy(&obj.optVal(),arr+pos,sizeof(Opt::VAL::type)); pos+=sizeof(Opt::VAL::type);//optVal_
+	//parameters
+		std::memcpy(&obj.dim(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//dim_
+		unpack(obj.p(),arr+pos); pos+=nbytes(obj.p());//p_
+		unpack(obj.pOld(),arr+pos); pos+=nbytes(obj.pOld());//pOld_
+		unpack(obj.g(),arr+pos); pos+=nbytes(obj.g());//g_
+		unpack(obj.gOld(),arr+pos); pos+=nbytes(obj.gOld());//gOld_
 }
-template <> void unpack(SGD& obj, const char* arr){
+template <> void unpack(Opt::Model& obj, const char* arr){
 	unsigned int pos=0;
-	unpack(static_cast<Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
-	std::memcpy(&obj.period(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
-	std::memcpy(&obj.decay(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
-	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);
+	std::memcpy(&obj.dim(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//dim_
+	std::memcpy(&obj.algo(),arr+pos,sizeof(Opt::ALGO::type)); pos+=sizeof(Opt::ALGO::type);//algo_
 }
-template <> void unpack(SDM& obj, const char* arr){
+template <> void unpack(Opt::SGD& obj, const char* arr){
 	unsigned int pos=0;
-	unpack(static_cast<Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
-	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);
-	std::memcpy(&obj.eta(),arr+pos,sizeof(double)); pos+=sizeof(double);
+	unpack(static_cast<Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
+	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);//gamma
+	std::memcpy(&obj.decay(),arr+pos,sizeof(double)); pos+=sizeof(double);//decay
 }
-template <> void unpack(NAG& obj, const char* arr){
+template <> void unpack(Opt::SDM& obj, const char* arr){
 	unsigned int pos=0;
-	unpack(static_cast<Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
-	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);
-	std::memcpy(&obj.eta(),arr+pos,sizeof(double)); pos+=sizeof(double);
+	unpack(static_cast<Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
+	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);//gamma
+	std::memcpy(&obj.decay(),arr+pos,sizeof(double)); pos+=sizeof(double);//decay
+	std::memcpy(&obj.eta(),arr+pos,sizeof(double)); pos+=sizeof(double);//eta
 }
-template <> void unpack(ADAGRAD& obj, const char* arr){
+template <> void unpack(Opt::NAG& obj, const char* arr){
 	unsigned int pos=0;
-	unpack(static_cast<Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
+	unpack(static_cast<Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
+	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);//gamma
+	std::memcpy(&obj.decay(),arr+pos,sizeof(double)); pos+=sizeof(double);//decay
+	std::memcpy(&obj.eta(),arr+pos,sizeof(double)); pos+=sizeof(double);//eta
+	unpack(obj.dx(),arr+pos); pos+=nbytes(obj.dx());//dx
+}
+template <> void unpack(Opt::ADAGRAD& obj, const char* arr){
+	unsigned int pos=0;
+	unpack(static_cast<Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);
 	unpack(obj.mgrad2(),arr+pos); pos+=nbytes(obj.mgrad2());
 }
-template <> void unpack(ADADELTA& obj, const char* arr){
+template <> void unpack(Opt::ADADELTA& obj, const char* arr){
 	unsigned int pos=0;
-	unpack(static_cast<Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
+	unpack(static_cast<Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);
 	std::memcpy(&obj.eta(),arr+pos,sizeof(double)); pos+=sizeof(double);
 	unpack(obj.mgrad2(),arr+pos); pos+=nbytes(obj.mgrad2());
 	unpack(obj.mdx2(),arr+pos); pos+=nbytes(obj.mdx2());
-	unpack(obj.dxv(),arr+pos); pos+=nbytes(obj.dxv());
+	unpack(obj.dx(),arr+pos); pos+=nbytes(obj.dx());
 }
-template <> void unpack(RMSPROP& obj, const char* arr){
+template <> void unpack(Opt::RMSPROP& obj, const char* arr){
 	unsigned int pos=0;
-	unpack(static_cast<Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
+	unpack(static_cast<Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);
 	unpack(obj.mgrad2(),arr+pos); pos+=nbytes(obj.mgrad2());
 }
-template <> void unpack(ADAM& obj, const char* arr){
+template <> void unpack(Opt::ADAM& obj, const char* arr){
 	unsigned int pos=0;
-	unpack(static_cast<Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
+	unpack(static_cast<Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);
 	std::memcpy(&obj.beta1i(),arr+pos,sizeof(double)); pos+=sizeof(double);
 	std::memcpy(&obj.beta2i(),arr+pos,sizeof(double)); pos+=sizeof(double);
 	unpack(obj.mgrad(),arr+pos); pos+=nbytes(obj.mgrad());
 	unpack(obj.mgrad2(),arr+pos); pos+=nbytes(obj.mgrad2());
 }
-template <> void unpack(BFGS& obj, const char* arr){
+template <> void unpack(Opt::NADAM& obj, const char* arr){
 	unsigned int pos=0;
-	unpack(static_cast<Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
+	unpack(static_cast<Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
+	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);//gamma_
+	std::memcpy(&obj.beta1i(),arr+pos,sizeof(double)); pos+=sizeof(double);//beta1i_
+	std::memcpy(&obj.beta2i(),arr+pos,sizeof(double)); pos+=sizeof(double);//beta2i_
+	unpack(obj.mgrad(),arr+pos); pos+=nbytes(obj.mgrad());//mgrad_
+	unpack(obj.mgrad2(),arr+pos); pos+=nbytes(obj.mgrad2());//mgrad2_
+}
+template <> void unpack(Opt::BFGS& obj, const char* arr){
+	unsigned int pos=0;
+	unpack(static_cast<Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);
 }
-template <> void unpack(LM& obj, const char* arr){
+template <> void unpack(Opt::RPROP& obj, const char* arr){
 	unsigned int pos=0;
-	unpack(static_cast<Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
-	std::memcpy(&obj.period(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
-	std::memcpy(&obj.decay(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
-	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);
-	std::memcpy(&obj.lambda(),arr+pos,sizeof(double)); pos+=sizeof(double);
-	std::memcpy(&obj.damp(),arr+pos,sizeof(double)); pos+=sizeof(double);
-	std::memcpy(&obj.min(),arr+pos,sizeof(double)); pos+=sizeof(double);
-	std::memcpy(&obj.max(),arr+pos,sizeof(double)); pos+=sizeof(double);
-}
-template <> void unpack(RPROP& obj, const char* arr){
-	unsigned int pos=0;
-	unpack(static_cast<Opt&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt&>(obj));
-	std::memcpy(&obj.period(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
-	std::memcpy(&obj.decay(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
+	unpack(static_cast<Opt::Model&>(obj),arr+pos); pos+=nbytes(static_cast<const Opt::Model&>(obj));
 	unpack(obj.delta(),arr+pos); pos+=nbytes(obj.delta());
+	unpack(obj.dx(),arr+pos); pos+=nbytes(obj.dx());
 }
 
 }
