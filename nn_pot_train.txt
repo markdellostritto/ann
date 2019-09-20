@@ -1,68 +1,76 @@
 # GENERAL PARAMETERS
-	seed		0 # seed for random number generator
-	#mode		train # training mode
-	mode		test # test mode
-# training data
-	#data_train		data_super.txt
-	#data_train		data_cubic.txt
-	#data_train		data_md_nvt_test.txt
-	data_train		data_md_nvt.txt
-# validation data
-	data_val		data_md_nve_test.txt
-# test data
-	data_test		data_md_nvt_test.txt
+	# execution mode
+		mode			train # train nn
+		#mode			test # test nn 
+	# training data
+		data_train		data_deform_iso_train.txt
+	# validation data
+		data_val		data_md_nve.txt
+	# test data
+		#data_test		data_md_nve.txt
+	# format
+		#format			VASP_XML # file format - vasp xml
+		format			QE # file format - qe standard output
+		#format			AME # file format - ame format
+	# units
+		units			metal # same as LAMMPS units
 
-# ATOM DATA
-	energy		Si -10.6286687998 # wB97xD - Aug-cc-pVTZ - Gaussian16
+# ATOMS
+	atom 			Ar 39.948 -574.641 # atom name mass energy
+
+# READING
+	#read_pot		Ar ann_Ar
+	read_basis_radial	Ar basis_radial_Ar
+	read_basis_angular	Ar Ar basis_angular_Ar_Ar
+	#read_restart		nn_pot_train
+
+# WRITING
+	write_basis		true            # print basis (radial and angular)
+	write_energy		true            # print energies
+	write_energy_pair	true            # print pair energy
+	write_force		true            # print forces
+	#write_corr		false           # write correlation (not implemented)
 	
-# READ/WRITE
-	read		Si ann_Si
-
 # OPTIMIZATION
-	#algo		sdg			# steepest-descent - gradient only
-	#algo		sdm			# steepest-descent - momentum
-	#algo		nag			# Nesterov accelerated gradient
-	#algo		adagrad		# Adagrad
-	#algo		adadelta	# AdaDelta
-	#algo		adam		# Adam
-	#algo		rmsprop		# RMSprop
-	algo		rprop		# irprop+ (Igel, C.; Hüsken, M. Improving the Rprop Learning Algorithm; 2000)
-	#algo		bfgsg		# BFGS - gradient only
-	opt_val		ftol_abs	# type of break condition
-	tol			1e-14		# break condition - training data
-	tol_val		1e-4		# break condition - validation data
-	max_iter	10000		# max number of iterations
-	n_print		100			# print n optimization steps
-	n_write		1000		# write n optimization steps
-	gamma		0.001		# step size for gradient descent
-	eta			0.9			# memory term (NAG,Adaagrad,Adam)
-	period		0			# period of oscillation of gamma (in steps)
-	decay		0			# exponential decay parameter of gamma (in steps)
+	#algo			sdg		# steepest-descent
+	#algo			sdm		# steepest-descent - momentum
+	#algo			nag		# Nesterov accelerated gradient
+	#algo			adagrad		# Adagrad
+	#algo			adadelta	# AdaDelta
+	#algo			adam		# Adam
+	algo			nadam		# Nesterov-Adam
+	#algo			rmsprop		# RMSprop
+	#algo			rprop		# irprop+ (Igel, C.; Hüsken, M. Improving the Rprop Learning Algorithm; 2000)
+	#algo			bfgs		# BFGS conjugate gradient
+	opt_val			ftol_abs	# type of break condition
+	tol			1e-14		# break condition - make small
+	max_iter		1000000		# max number of iterations
+	n_print			10000		# print - status - every n optimization steps
+	n_write			100000		# write - restart - every n optimization steps
+	gamma			1e-3		# step size for gradient descent (1e-3)
+	eta			0.9		# memory term (nag,adagrad,adam)
+	decay			1000000		# decay term
+	seed			0		# random seed
 
 # NN POTENTIAL
-	nr			6			# number of radial basis functions
-	na			6			# number of angular basis functions
-	phirn		G2			# type of radial function
-	phian		G4			# type of angular function
-	r_min		0.5			# cutoff distance (distance units)
-	r_cut		6			# cutoff distance (distance units)
-	cutoff		cos			# cutoff function
-	lambda		0			# regularization parameter
-	n_hidden	15 15		# number of hidden layers and nodes
-	transfer	tanh		# transfer function
-	n_batch		0			# number of systems in batch (superceded by p_batch)
-	p_batch		1			# percentage of system in batch
-	pre_cond	0			# whether to pre-condition the network inputs
-	post_cond	0			# whehter to post-condition the network outputs
-
+	r_cut			10		# max cutoff distance (distance units)
+	n_hidden		12 12		# number of hidden layers and nodes
+	lambda			1e-5 		# regularization parameter (0)
+	transfer		tanh		# transfer function
+	n_batch			0		# number of systems in batch (superceded by p_batch)
+	p_batch			1		# percentage of system in batch (1)
+	pre_cond		0		# whether to pre-condition the network inputs
+	#post_cond		0		# whehter to post-condition the network outputs (deprecated)
+	calc_force		false
+	
 # algorithm performance (gamma=0.001,eta=0.9,t=10000)
-# (more * means faster/better convergence)
-	# sdg		**
-	# sdm		***
-	# nag		****
-	# adagrad	*
-	# adadelta	*
-	# adam		****
-	# rmsprop	**
-	# rprop		******
-	# bfgsg		***
+# more * implies better performance
+	# sdg		**	# simple, slow, reliable (gamma=1e-3)
+	# sdm		***	# better than sdg, (gamma=1e-3)
+	# nag		****	# better than sdm, (gamma=1-e3,eta=0.9)
+	# adagrad	*	# typically unstable, sensitive to gamma
+	# adadelta	*	# typically unstable, sensitive to gamma
+	# adam		****	# more robust than nag, no eta
+	# rmsprop	**	# similar but worse than adam
+	# rprop		******	# slow near minimum, but extremely stable, no parameters
+	# bfgsg		***	# poor stability (gamma=1e-3)
