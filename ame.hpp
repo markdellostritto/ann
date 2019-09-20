@@ -1,3 +1,4 @@
+#pragma once
 #ifndef AME_HPP
 #define AME_HPP
 

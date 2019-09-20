@@ -19,7 +19,6 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 	//file i/o
 		FILE* reader=NULL;
 		char* input=new char[string::M];
-		char* temp=new char[string::M];
 	//simulation flags
 		bool frac;//fractiona/Cartesian coordinates
 	//time info
@@ -56,14 +55,14 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		if(reader==NULL) throw std::runtime_error(std::string("I/O Error: Could not open file: \"")+std::string(file)+std::string("\"\n"));
 		
 		//read in the timestep
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading timestep...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading timestep\n";
 		fgets(input,string::M,reader);
 		std::strtok(input,string::WS);
 		double ts=std::atof(std::strtok(NULL,string::WS));
 		if(DEBUG_AME_PRINT_DATA>0) std::cout<<"TIMESTEP = "<<ts<<"\n";
 		
 		//read in number of frames
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading number of frames...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading number of frames\n";
 		fgets(input,string::M,reader);
 		std::strtok(input,string::WS);
 		unsigned int N=std::atof(std::strtok(NULL,string::WS));
@@ -71,7 +70,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		if(DEBUG_AME_PRINT_DATA>0) std::cout<<"N        = "<<N<<"\n";
 		
 		//read in the cell
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading lattice vectors...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading lattice vectors\n";
 		fgets(input,string::M,reader);
 		std::strtok(input,string::WS);
 		lv(0,0)=std::atof(std::strtok(NULL,string::WS));
@@ -88,7 +87,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		struc.cell().init(lv);
 		
 		//read in atom names
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading species names...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading species names\n";
 		fgets(input,string::M,reader);
 		string::split(input,string::WS,strlist);
 		nspecies=strlist.size()-1;
@@ -100,7 +99,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		if(DEBUG_AME_PRINT_DATA>0){std::cout<<"NAMES = "; for(unsigned int i=0; i<nspecies; ++i) std::cout<<names[i]<<" "; std::cout<<"\n";}
 		
 		//read in atom numbers
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading species numbers...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading species numbers\n";
 		fgets(input,string::M,reader);
 		string::split(input,string::WS,strlist);
 		if(strlist.size()-1!=nspecies) throw std::invalid_argument("Invalid number of species.");
@@ -111,7 +110,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		if(DEBUG_AME_PRINT_DATA>0){std::cout<<"NUMBERS = "; for(unsigned int i=0; i<nspecies; ++i) std::cout<<numbers[i]<<" "; std::cout<<"\n";}
 		
 		//read in coordinate
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading coordinate...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading coordinate\n";
 		fgets(input,string::M,reader);
 		string::split(input,string::WS,strlist);
 		if(string::to_upper(strlist[1])=="FRAC") frac=true;
@@ -120,18 +119,19 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		if(DEBUG_AME_PRINT_DATA>0) std::cout<<"COORD = "<<frac<<"\n";
 		
 		//resize structure
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Resizing structure...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"resizing structure\n";
 		struc.resize(numbers,names,atomT);
 		
 		//read in energy
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading energy...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading energy\n";
 		fgets(input,string::M,reader);
 		std::strtok(input,string::WS);
 		struc.energy()=std::atof(std::strtok(NULL,string::WS))*s_energy;
 		
 		//read in positions
 		if(atomT.posn){
-			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading positions...\n";
+			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading positions\n";
+			fgets(input,string::M,reader);
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
 				fgets(input,string::M,reader);
 				struc.posn(i)[0]=std::atof(std::strtok(input,string::WS));
@@ -152,7 +152,8 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		
 		//read in forces
 		if(atomT.force){
-			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading forces...\n";
+			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading forces\n";
+			fgets(input,string::M,reader);
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
 				fgets(input,string::M,reader);
 				struc.force(i)[0]=std::atof(std::strtok(input,string::WS));
@@ -170,6 +171,10 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 				}
 			}
 		}
+		
+		//close the file
+		fclose(reader);
+		reader=NULL;
 	}catch(std::exception& e){
 		std::cout<<"ERROR in "<<NAMESPACE<<"::"<<funcName<<":\n";
 		std::cout<<e.what()<<"\n";
@@ -179,9 +184,8 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 	//==== free all local variables ====
 	if(reader!=NULL) fclose(reader);
 	delete[] input;
-	delete[] temp;
 	
-	if(error) throw std::runtime_error("I/O Exception Occurred.");
+	if(error) throw std::runtime_error("I/O Exception: Could not read data.");
 }
 
 void write(const char* file, const AtomType& atomT, const Structure& struc){
@@ -192,8 +196,6 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 		FILE* writer=NULL;
 	//misc
 		bool error=false;
-		std::string str;
-		std::stringstream buffer;
 	//units
 		double s_posn=0.0,s_energy=0.0;
 		if(units::consts::system()==units::System::AU){
@@ -218,7 +220,7 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 		fprintf(writer,"N 1\n");
 		
 		//write the cell
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing lattice vectors...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing lattice vectors\n";
 		fprintf(writer,"CELL ");
 		fprintf(writer,"%f ",struc.cell().R()(0,0)*s_posn);
 		fprintf(writer,"%f ",struc.cell().R()(1,0)*s_posn);
@@ -232,32 +234,32 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 		fprintf(writer,"\n");
 		
 		//write atom names
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing species names...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing species names\n";
 		fprintf(writer,"ATOMS ");
 		for(unsigned int i=0; i<struc.nSpecies(); ++i) fprintf(writer,"%s ",struc.atomNames(i).c_str());
 		fprintf(writer,"\n");
 		
 		//write atom numbers
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing species numbers...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing species numbers\n";
 		fprintf(writer,"NUMBERS ");
 		for(unsigned int i=0; i<struc.nSpecies(); ++i) fprintf(writer,"%i ",struc.nAtoms(i));
 		fprintf(writer,"\n");
 		
 		//write coordinates
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing coordinate...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing coordinate\n";
 		fprintf(writer,"COORD FRAC\n");
 		
 		//write energy
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing energy...\n";
-		fprintf(writer,"ENERGY %f\n",struc.energy()*s_energy);
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing energy\n";
+		fprintf(writer,"ENERGY %.8f\n",struc.energy()*s_energy);
 		
 		//write positions
 		fprintf(writer,"POSNS\n");
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing positions...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing positions\n";
 		if(atomT.posn){
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
 				Eigen::Vector3d posn=struc.cell().RInv()*struc.posn(i);
-				fprintf(writer,"\t%f %f %f\n",posn[0],posn[1],posn[2]);
+				fprintf(writer,"\t%14.12f %14.12f %14.12f\n",posn[0],posn[1],posn[2]);
 			}
 		} else {
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
@@ -267,12 +269,12 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 		}
 		
 		//write forces
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing forces...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing forces\n";
 		fprintf(writer,"FORCES\n");
 		if(atomT.force){
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
 				Eigen::Vector3d force=struc.cell().R()*struc.force(i)*s_energy;
-				fprintf(writer,"\t%f %f %f\n",force[0],force[1],force[2]);
+				fprintf(writer,"\t%14.12f %14.12f %14.12f\n",force[0],force[1],force[2]);
 			}
 		} else {
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
@@ -280,6 +282,11 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 				fprintf(writer,"\t0.0 0.0 0.0\n",posn[0],posn[1],posn[2]);
 			}
 		}
+		
+		//close the file
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"closing the file\n";
+		fclose(writer);
+		writer=NULL;
 	}catch(std::exception& e){
 		std::cout<<"ERROR in "<<NAMESPACE<<"::"<<funcName<<":\n";
 		std::cout<<e.what()<<"\n";
@@ -289,7 +296,7 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 	//==== free all local variables ====
 	if(writer!=NULL) fclose(writer);
 	
-	if(error) throw std::runtime_error("I/O Exception Occurred.");
+	if(error) throw std::runtime_error("I/O Exception: Could not write data.");
 }
 
 void read(const char* file, const Interval& interval, const AtomType& atomT, Simulation& sim){
@@ -299,7 +306,6 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 	//file i/o
 		FILE* reader=NULL;
 		char* input=new char[string::M];
-		char* temp=new char[string::M];
 	//simulation flags
 		bool frac;//fractiona/Cartesian coordinates
 	//cell info
@@ -332,14 +338,14 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 		if(reader==NULL) throw std::runtime_error(std::string("I/O Error: Could not open file: \"")+std::string(file)+std::string("\"\n"));
 		
 		//read in the timestep
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading timestep...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading timestep\n";
 		fgets(input,string::M,reader);
 		std::strtok(input,string::WS);
 		sim.timestep()=std::atof(std::strtok(NULL,string::WS));
 		if(DEBUG_AME_PRINT_DATA>0) std::cout<<"TIMESTEP = "<<sim.timestep()<<"\n";
 		
 		//read in number of frames
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading number of frames...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading number of frames\n";
 		fgets(input,string::M,reader);
 		std::strtok(input,string::WS);
 		unsigned int N=std::atof(std::strtok(NULL,string::WS));
@@ -347,7 +353,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 		if(N==0) throw std::invalid_argument("Invalid number of frames.");
 		
 		//read in the cell
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading lattice vectors...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading lattice vectors\n";
 		fgets(input,string::M,reader);
 		std::strtok(input,string::WS);
 		lv(0,0)=std::atof(std::strtok(NULL,string::WS));
@@ -363,7 +369,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 		if(DEBUG_AME_PRINT_DATA>0) std::cout<<"LV = "<<lv<<"\n";
 		
 		//read in atom names
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading species names...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading species names\n";
 		fgets(input,string::M,reader);
 		string::split(input,string::WS,strlist);
 		nspecies=strlist.size()-1;
@@ -375,7 +381,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 		if(DEBUG_AME_PRINT_DATA>0){std::cout<<"NAMES = "; for(unsigned int i=0; i<nspecies; ++i) std::cout<<names[i]<<" "; std::cout<<"\n";}
 		
 		//read in atom numbers
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading species numbers...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading species numbers\n";
 		fgets(input,string::M,reader);
 		string::split(input,string::WS,strlist);
 		if(strlist.size()-1!=nspecies) throw std::invalid_argument("Invalid number of species.");
@@ -386,7 +392,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 		if(DEBUG_AME_PRINT_DATA>0){std::cout<<"NUMBERS = "; for(unsigned int i=0; i<nspecies; ++i) std::cout<<numbers[i]<<" "; std::cout<<"\n";}
 		
 		//read in coordinate
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading coordinate...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading coordinate\n";
 		fgets(input,string::M,reader);
 		string::split(input,string::WS,strlist);
 		if(string::to_upper(strlist[1])=="FRAC") frac=true;
@@ -395,7 +401,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 		if(DEBUG_AME_PRINT_DATA>0) std::cout<<"COORD = "<<frac<<"\n";
 		
 		//resize structure
-		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Resizing structure...\n";
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"resizing structure\n";
 		sim.resize(N,numbers,names,atomT);
 		
 		//reset file pointer
@@ -422,7 +428,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 			else if(t%1000==0) std::cout<<"t = "<<t<<"\n";
 			
 			//read in the cell
-			if(DEBUG_AME_PRINT_STATUS>1) std::cout<<"Reading lattice vectors...\n";
+			if(DEBUG_AME_PRINT_STATUS>1) std::cout<<"reading lattice vectors\n";
 			fgets(input,string::M,reader);
 			std::strtok(input,string::WS);
 			lv(0,0)=std::atof(std::strtok(NULL,string::WS));
@@ -439,22 +445,22 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 			sim.frame(t).cell().init(lv);
 			
 			//read in atom names
-			if(DEBUG_AME_PRINT_STATUS>1) std::cout<<"Reading species names...\n";
+			if(DEBUG_AME_PRINT_STATUS>1) std::cout<<"reading species names\n";
 			fgets(input,string::M,reader);
 			
 			//read in atom numbers
-			if(DEBUG_AME_PRINT_STATUS>1) std::cout<<"Reading species numbers...\n";
+			if(DEBUG_AME_PRINT_STATUS>1) std::cout<<"reading species numbers\n";
 			fgets(input,string::M,reader);
 			
 			//read in energy
-			if(DEBUG_AME_PRINT_STATUS>1) std::cout<<"Reading energy...\n";
+			if(DEBUG_AME_PRINT_STATUS>1) std::cout<<"reading energy\n";
 			fgets(input,string::M,reader);
 			std::strtok(input,string::WS);
 			sim.frame(t).energy()=s_energy*std::atof(std::strtok(NULL,string::WS));
 			
 			//read in positions
 			if(atomT.posn){
-				if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading positions...\n";
+				if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading positions\n";
 				fgets(input,string::M,reader);
 				for(unsigned int i=0; i<sim.frame(t).nAtoms(); ++i){
 					fgets(input,string::M,reader);
@@ -479,7 +485,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 			
 			//read in forces
 			if(atomT.force){
-				if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Reading forces...\n";
+				if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading forces\n";
 				fgets(input,string::M,reader);
 				for(unsigned int i=0; i<sim.frame(t).nAtoms(); ++i){
 					fgets(input,string::M,reader);
@@ -503,6 +509,11 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 			}
 		
 		}
+		
+		//close the file
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"closing the file\n";
+		fclose(reader);
+		reader=NULL;
 	}catch(std::exception& e){
 		std::cout<<"ERROR in "<<NAMESPACE<<"::"<<funcName<<":\n";
 		std::cout<<e.what()<<"\n";
@@ -512,9 +523,8 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 	//==== free all local variables ====
 	if(reader!=NULL) fclose(reader);
 	delete[] input;
-	delete[] temp;
 	
-	if(error) throw std::runtime_error("I/O Exception Occurred.");
+	if(error) throw std::runtime_error("I/O Exception: Could not read data.");
 }
 
 void write(const char* file, const Interval& interval, const AtomType& atomT, const Simulation& sim){
@@ -529,8 +539,6 @@ void write(const char* file, const Interval& interval, const AtomType& atomT, co
 		unsigned int tsint=0;
 	//misc
 		bool error=false;
-		std::string str;
-		std::stringstream buffer;
 	//units
 		double s_posn=0.0,s_energy=0.0;
 		if(units::consts::system()==units::System::AU){
@@ -565,7 +573,7 @@ void write(const char* file, const Interval& interval, const AtomType& atomT, co
 		
 		for(unsigned int t=beg; t<=end; ++t){
 			//write the cell
-			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing lattice vectors...\n";
+			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing lattice vectors\n";
 			fprintf(writer,"CELL ");
 			fprintf(writer,"%f ",sim.frame(t).cell().R()(0,0)*s_posn);
 			fprintf(writer,"%f ",sim.frame(t).cell().R()(1,0)*s_posn);
@@ -579,27 +587,27 @@ void write(const char* file, const Interval& interval, const AtomType& atomT, co
 			fprintf(writer,"\n");
 			
 			//write atom names
-			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing species names...\n";
+			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing species names\n";
 			fprintf(writer,"ATOMS ");
 			for(unsigned int i=0; i<sim.frame(t).nSpecies(); ++i) fprintf(writer,"%s ",sim.frame(t).atomNames(i).c_str());
 			fprintf(writer,"\n");
 			
 			//write atom numbers
-			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing species numbers...\n";
+			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing species numbers\n";
 			fprintf(writer,"NUMBERS ");
 			for(unsigned int i=0; i<sim.frame(t).nSpecies(); ++i) fprintf(writer,"%i ",sim.frame(t).nAtoms(i));
 			fprintf(writer,"\n");
 			
 			//write coordinates
-			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing coordinate...\n";
+			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing coordinate\n";
 			fprintf(writer,"COORD FRAC\n");
 			
 			//write energy
-			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing coordinate...\n";
+			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing coordinate\n";
 			fprintf(writer,"ENERGY %f\n",sim.frame(t).energy()*s_energy);
 			
 			//write positions
-			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing positions...\n";
+			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing positions\n";
 			fprintf(writer,"POSNS\n");
 			if(atomT.posn){
 				for(unsigned int i=0; i<sim.frame(t).nAtoms(); ++i){
@@ -613,7 +621,7 @@ void write(const char* file, const Interval& interval, const AtomType& atomT, co
 			}
 			
 			//write forces
-			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"Writing forces...\n";
+			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing forces\n";
 			fprintf(writer,"FORCES\n");
 			if(atomT.force){
 				for(unsigned int i=0; i<sim.frame(t).nAtoms(); ++i){
@@ -627,6 +635,11 @@ void write(const char* file, const Interval& interval, const AtomType& atomT, co
 			}
 		}
 		
+		//close the file
+		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"closing the file\n";
+		fclose(writer);
+		writer=NULL;
+		
 	}catch(std::exception& e){
 		std::cout<<"ERROR in "<<NAMESPACE<<"::"<<funcName<<":\n";
 		std::cout<<e.what()<<"\n";
@@ -636,7 +649,7 @@ void write(const char* file, const Interval& interval, const AtomType& atomT, co
 	//==== free all local variables ====
 	if(writer!=NULL) fclose(writer);
 	
-	if(error) throw std::runtime_error("I/O Exception Occurred.");
+	if(error) throw std::runtime_error("I/O Exception: Could not write data.");
 }
 
 }
