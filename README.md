@@ -58,6 +58,8 @@ for molecular dynamics simulations.
 * qe.hpp   - read/write structures - QE (https://www.quantum-espresso.org/)
 * ame.hpp  - read/write structures - AME
 
+![Code Layout](/code_layout.png)
+
 ## INSTALLATION
 
 This code requires the Eigen Matrix Library (http://eigen.tuxfamily.org)
@@ -116,15 +118,13 @@ The basis can be the same for all atoms, as the neural networks for each element
 completely independent.  Since the energy is basis + network, the basis can be the 
 same for all elements.  The basis can of course vary per element, reflecting different local environments for each element.
 
-It is not recommended to build a potential file manually.  Rather, use a parameter
-file to specify the dimensions of the basis and network, and then optimize the network 
-on a small dataset for only a few iterations (~5).  Once the potential file is printed, 
-one can then alter the parameters of the file.
-
 If no basis is provided, an automatically generated basis will be used. 
 It is not recommended to use the automatically generated parameters of the atomic basis. 
-Rather, after automatic generation, it is recommended to alter the parameters of the 
-radial and angular basis to best reflect the bonding charateristics of the target systems.
+Instead, one should specify a set of symmetry functions which best reflect the atomic forces.
+Essentially, one should ensure that there are a large number of symmetry functions with large gradients
+at the interatomic distances and angles where the gradient of the energy is greatest.
+As the interatomic forces are constrained to be sums of the gradients of the symmetry functions,
+the symmetry functions should also resemble the expected interatomic forces in these regions.
 
 ## NEURAL NETWORK POTENTIAL - TRAINING
 
@@ -132,28 +132,26 @@ The data can be organized in any number of data files. These data files are simp
 lists of file names which will be loaded into memory. Each data file can contain any number of structure files. 
 The file format specifies the format of the data files.  The same format must be used for all files.
 
-The units specify the physical units used to interpret the input variables and data.
+The units define the physical constants used to interpret the input variables and data.
 The unit systems follow the same conventions as the LAMMPS unit systems. 
 Currently, only AU and METAL units are implemented.
 
 If no files are provided for reading the potential or restart, an automatically generated 
 basis set and randomly initialized neural network is created. If a neural network potential 
-file is provided, the potential will be read from file. If a restart file is provided, 
+file is provided, the potential will be read from file. If only the basis for a given set of
+atoms is provided, the basis will be read for those atoms and the neural network will be
+randomlly initialized.  If a restart file is provided, 
 the potential and optimization parameters will be read from the restart file. (Note: 
 the restart file does not store structures, and so any set of structures can be used when 
-restarting, though changing the structures provided may affect the results.) If both a 
-neural network potential file and a restart file is provided, I'm not sure what will 
-happen as I haven't tried that, do at your own risk.
+restarting, though changing the structures may affect the results.) 
 
 The cutoff radius sets the distance at which the potential goes to zero. The batch size 
 specifies the size of the random collection of items in the training data used for training. 
-While this speeds up training for large datasets (>10000), using batches is generally 
-not recommended for neural network potentials. It is instead recommended to use the entire 
-training data set for training. Pre-conditioning shifts and normalizes the inputs of the 
-neural network using the average and standard deviation of the inputs.  These values are 
-then incorporated into the neural network, implemented as "scaling" layers modifying the 
-input and output layers.  It is generally _not_ recommended to pre-scale the nodes, as they are 
-already normalized by half the volume of the cutoff sphere (sphere formed by cutoff radius).
+Pre-conditioning shifts and normalizes the inputs of the neural network using the average 
+and standard deviation of the inputs.  These values are then incorporated into the neural network, 
+implemented as "scaling" layers modifying the input and output layers.  It is generally _not_ 
+recommended to pre-scale the nodes, as they are already normalized by half the volume of the 
+cutoff sphere (sphere formed by cutoff radius).
 
 ## OPTIMIZATION
 
@@ -165,14 +163,46 @@ There are three basic types of optimization:
 
 All gradient descent algorithms require a descent parameter (gamma).  Most also require 
 a memory parameter (eta) which adds different forms of momentum to the descent by 
-combining the current gradient with past gradients.
+combining the current gradient with past gradients.  All gradient descent algorithms also
+offer a decay parameter which decreases the descent parameter (gamma) over time.  The decay
+parameter should be an integer which sets the time constant of the exponential decay of
+the step.  At step n, the optimization step will thus be reduced by a factor of exp(-n/T), where
+T is the number specified in the parameter file.  When using a gradient descent method,
+it is recommended to use a relatively large but non-zero decay parameter, typically on the order
+of the number of steps taking before stopping (max_iter).
 
 The RPROP algorithm uses the sign of the gradient only, with the step sized determined by 
-the sign of the change in the objective function. The RPROP algorithms is highly recommended, 
+the sign of the change in the objective function. The RPROP algorithms is recommended, 
 as it is extremently stable, exhibiting a monotonic decrease in the objective function 
-for essentially any parameter values. The ADAM algorithm is also effective, though it requires 
-a good choice of gamma. The NAG algorithm is similar to ADAM, though slighly less effective. 
+for essentially any parameter values. That being said, the RPROP algorithm can severely overfit
+the training data, and generally requires a large regulation parameter (lambda).
+
+The ADAM algorithm is also effective, though it requires a good choice of gamma, and is 
+the best gradient descent method available. It is recommended that one use a small gamma (around 1e-3) 
+and a small batch size (~25% of the total number of training structures), as the smaller 
+batch sizes introduces a randomness to the gradient direction which tends to benifit 
+training performance. Though ADAM is less prone to overfitting, it is still recommended that 
+one use a non-zero regularization parameter.
+
 All other algorithms work to some degree, but are not recommended.
+
+An important aspect of optimization is the regularization parameter (lambda). This parameter is a 
+Lagrange multiplier which enforces small weights. When lambda is non-zero, a term is added to the 
+error which is proportional to the average squared magnitude of the weights, and a corresponding 
+term is added to the gradients. This regularization term thus prevents the weights of the newtork 
+from becoming too large. Generally speaking, the order of magnitude of lambda will set the maximum order 
+of magnitude of the weights of the network, independent of the size of the network itself.  For example, 
+if lambda is of the order 1e-3 the largest weights of the network will typically be on the order of 1e2 and 
+will not exceed 1e3. The regularization parameter (lambda) is very important for optimization as it 
+is an excellent tool for preventing overfitting. If lambda is zero, the network may yield very good 
+training and validation errors, but will generally yield an unphysical potential. A non-zero lambda, typically 
+on the order of 1e-3, will yield slightly worse training and validation errors, but will yield a
+more accurate and more general potential.
+
+When restarting, all optimization parameters (lambda, gamma, decay, etc.) are overwritten by the 
+values provided in the parameter file. There are times when this is not desirable, i.e. when restarting 
+the optimization with a using a decay schedule for the optimization step (gamma). In this case, if one removes
+or comments out a given parameter, then the optimization parameters are taken from the restart file.
 
 ## WRITING
 
