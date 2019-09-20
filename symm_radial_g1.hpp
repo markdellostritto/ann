@@ -1,3 +1,4 @@
+#pragma once
 #ifndef SYMM_RADIAL_G1_HPP
 #define SYMM_RADIAL_G1_HPP
 
@@ -13,12 +14,12 @@
 //Behler G1
 struct PhiR_G1: public PhiR{
 	PhiR_G1():PhiR(){};
-	PhiR_G1(CutoffN::type tcut_, double rc_):PhiR(tcut_,rc_){};
-	double operator()(double r)const noexcept;
-	inline double val(double r)const noexcept final{return CutoffF::funcs[tcut](r,rc);};
-	inline double grad(double r)const noexcept final{return CutoffFD::funcs[tcut](r,rc);};
+	inline double val(double r, double cut)const noexcept final{return cut;}
+	inline double grad(double r, double cut, double gcut)const noexcept final{return gcut;}
 };
 std::ostream& operator<<(std::ostream& out, const PhiR_G1& f);
+bool operator==(const PhiR_G1& phi1, const PhiR_G1& phi2);
+inline bool operator!=(const PhiR_G1& phi1, const PhiR_G1& phi2){return !(phi1==phi2);};
 
 namespace serialize{
 	

@@ -1,8 +1,13 @@
+#pragma once
 #ifndef SYMM_RADIAL_G2_HPP
 #define SYMM_RADIAL_G2_HPP
 
 // c libraries
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
 #include <cmath>
+#elif defined __ICC || defined __INTEL_COMPILER
+#include <mathimf.h> //intel math library
+#endif
 // c++ libaries
 #include <iostream>
 // local libraries
@@ -15,12 +20,13 @@ struct PhiR_G2: public PhiR{
 	double eta;//radial exponential width 
 	double rs;//center of radial window
 	PhiR_G2():PhiR(),eta(0.0),rs(0.0){};
-	PhiR_G2(CutoffN::type tcut_, double rc_, double rs_, double eta_):PhiR(tcut_,rc_),rs(rs_),eta(eta_){};
-	double operator()(double r)const noexcept final;
-	inline double val(double r)const noexcept final{return std::exp(-eta*(r-rs)*(r-rs))*CutoffF::funcs[tcut](r,rc);};
-	inline double grad(double r)const noexcept final{return std::exp(-eta*(r-rs)*(r-rs))*(-2.0*eta*(r-rs)*CutoffF::funcs[tcut](r,rc)+CutoffFD::funcs[tcut](r,rc));};
+	PhiR_G2(double rs_, double eta_):PhiR(),eta(eta_),rs(rs_){};
+	double val(double r, double cut)const noexcept final;
+	double grad(double r, double cut, double gcut)const noexcept final;
 };
 std::ostream& operator<<(std::ostream& out, const PhiR_G2& f);
+bool operator==(const PhiR_G2& phir1, const PhiR_G2& phir2);
+inline bool operator!=(const PhiR_G2& phir1, const PhiR_G2& phir2){return !(phir1==phir2);};
 
 namespace serialize{
 	

@@ -1,11 +1,13 @@
 #include "symm_radial_g1.hpp"
 
 //Behler G1
-double PhiR_G1::operator()(double r)const noexcept{
-	return CutoffF::funcs[tcut](r,rc);
-}
+
 std::ostream& operator<<(std::ostream& out, const PhiR_G1& f){
-	return out<<static_cast<const PhiR&>(f)<<" G1";
+	return out<<"G1";
+}
+
+bool operator==(const PhiR_G1& phir1, const PhiR_G1& phir2){
+	return static_cast<const PhiR&>(phir1)==static_cast<const PhiR&>(phir2);
 }
 
 namespace serialize{
