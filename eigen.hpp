@@ -1,5 +1,8 @@
+#pragma once
 #ifndef EIGEN_HPP
 #define EIGEN_HPP
+
+#define EIGEN_NO_DEBUG
 
 #include <iostream>
 #include <cstdio>
