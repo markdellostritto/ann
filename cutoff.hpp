@@ -1,14 +1,15 @@
+#pragma once
 #ifndef CUTOFF_HPP
 #define CUTOFF_HPP
 
 // c libraries
-#include <cmath>
 #include <cstring>
+#include <cmath>
 // c ++libraries
 #include <iostream> 
-#include <functional> 
-// local libraries
+// ann - math
 #include "math_const.hpp"
+#include "math_special.hpp"
 
 //************************************************************
 // CUTOFF NAMES
@@ -21,12 +22,12 @@ struct CutoffN{
 		COS=0,
 		TANH=1
 	};
-	static type load(const char* str);
+	static type read(const char* str);
 };
 std::ostream& operator<<(std::ostream& out, const CutoffN::type& cutt);
 
 //typedefs
-typedef std::function<double(double, double)> FCutT;
+typedef double (*FCutT)(double,double);
 
 //************************************************************
 // CUTOFF FUNCTIONS
@@ -35,21 +36,22 @@ typedef std::function<double(double, double)> FCutT;
 //cutoff functions
 struct CutoffF{
 	static const unsigned int N_CUT_F=2;
-	static double cut_cos(double r, double rc)noexcept{return 0.5*(std::cos(num_const::PI*r/rc)+1.0)*(r<=rc);};
-	static double cut_tanh(double r, double rc)noexcept{double f=std::tanh(1.0-r/rc); return f*f*f*(r<=rc);};
-	static FCutT funcs[N_CUT_F];
+	static inline double cut_cos(double r, double rc)noexcept{return (r>rc)?0:0.5*(special::cos(num_const::PI*r/rc)+1.0);}
+	static inline double cut_tanh(double r, double rc)noexcept{const double f=(r>rc)?0:std::tanh(1.0-r/rc); return f*f*f;}
+	static const FCutT funcs[N_CUT_F];
 };
 
 //cutoff functions
 struct CutoffFD{
 	static const unsigned int N_CUT_F=2;
-	static double cut_cos(double r, double rc)noexcept{return -0.5*num_const::PI/rc*std::sin(num_const::PI*r/rc)*(r<=rc);};
-	static double cut_tanh(double r, double rc)noexcept{
-		double cosh=std::cosh(1.0-r/rc);
-		double tanh=std::tanh(1.0-r/rc);
-		return -3.0*tanh*tanh/(rc*cosh*cosh)*(r<=rc);
+	static inline double cut_cos(double r, double rc)noexcept{return (r>rc)?0:-0.5*num_const::PI/rc*special::sin(num_const::PI*r/rc);}
+	static inline double cut_tanh(double r, double rc)noexcept{
+		if(r<=rc){
+			const double tanh=std::tanh(1.0-r/rc);
+			return -3.0*tanh*tanh*(1.0-tanh*tanh)/rc;
+		} else return 0;
 	};
-	static FCutT funcs[N_CUT_F];
+	static const FCutT funcs[N_CUT_F];
 };
 
 #endif
