@@ -8,6 +8,12 @@ omp: CXX = g++
 # mpi
 mpi: CXXFLAGS = -std=gnu++11 -w -O3 -mavx $(foreach d, $(INC), -I$d)
 mpi: CXX = mpic++
+# intel openmp
+iomp: CXXFLAGS = -qopenmp -std=c++11 -w -O3 $(foreach d, $(INC), -I$d)
+iomp: CXX = icpc
+# intel mpi
+impi: CXXFLAGS = -std=c++11 -w -O3 -mavx $(foreach d, $(INC), -I$d)
+impi: CXX = mpiicpc
 # test
 test: CXXFLAGS = -fopenmp -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
 test: CXX = g++
@@ -17,9 +23,9 @@ convert: CXX = g++
 
 # objects for final executable
 objects = nn_pot.o nn.o \
-		basis_radial.o symm_radial.o symm_radial_g1.o symm_radial_g2.o \
+		basis_radial.o symm_radial.o symm_radial_g1.o symm_radial_g2.o symm_radial_t1.o \
 		basis_angular.o symm_angular.o symm_angular_g3.o symm_angular_g4.o \
-		structure.o cell.o qe.o vasp.o ame.o \
+		structure.o cell.o qe.o vasp.o ame.o atom.o \
 		math_func.o math_special.o \
 		ewald3D.o \
 		units.o eigen.o parallel.o ptable.o string.o compiler.o \
@@ -59,6 +65,8 @@ symm_radial_g1.o: symm_radial_g1.cpp symm_radial.hpp
 	$(CXX) $(CXXFLAGS) -c symm_radial_g1.cpp
 symm_radial_g2.o: symm_radial_g2.cpp symm_radial.hpp
 	$(CXX) $(CXXFLAGS) -c symm_radial_g2.cpp
+symm_radial_t1.o: symm_radial_t1.cpp symm_radial.hpp
+	$(CXX) $(CXXFLAGS) -c symm_radial_t1.cpp
 symm_angular.o: symm_angular.cpp cutoff.hpp
 	$(CXX) $(CXXFLAGS) -c symm_angular.cpp
 symm_angular_g3.o: symm_angular_g3.cpp symm_angular.hpp
@@ -73,10 +81,14 @@ cell.o: cell.cpp math_const.hpp math_special.hpp eigen.hpp serialize.hpp
 	$(CXX) $(CXXFLAGS) -c cell.cpp
 structure.o: structure.cpp cell.hpp string.hpp ptable.hpp
 	$(CXX) $(CXXFLAGS) -c structure.cpp
+atom.o: atom.cpp
+	$(CXX) $(CXXFLAGS) -c atom.cpp
 ewald3D.o: ewald3D.cpp structure.hpp cell.hpp math_const.hpp
 	$(CXX) $(CXXFLAGS) -c ewald3D.cpp
 vasp.o: vasp.cpp structure.hpp cell.hpp string.hpp 
 	$(CXX) $(CXXFLAGS) -c vasp.cpp
+lammps.o: lammps.cpp structure.hpp cell.hpp string.hpp
+	$(CXX) $(CXXFLAGS) -c lammps.cpp
 qe.o: qe.cpp structure.hpp cell.hpp string.hpp
 	$(CXX) $(CXXFLAGS) -c qe.cpp
 ame.o: ame.cpp structure.hpp cell.hpp string.hpp
@@ -86,17 +98,25 @@ nn.o: nn.cpp math_const.hpp math_special.hpp string.hpp
 nn_pot.o: nn_pot.cpp cell.hpp structure.hpp nn.hpp ptable.hpp parallel.hpp optimize.hpp map.hpp basis_radial.hpp basis_angular.hpp
 	$(CXX) $(CXXFLAGS) -c nn_pot.cpp 
 
+# targets
+
 clean: 
 	rm $(objects)
 
-test: $(objects)
-	$(CXX) $(CXXFLAGS) -o nn_pot_test.exe nn_pot_test.cpp $(objects)
+omp: $(objects)
+	$(CXX) $(CXXFLAGS) -o nn_pot_train_omp.exe nn_pot_train_omp.cpp $(objects)
 
 mpi: $(objects)
 	$(CXX) $(CXXFLAGS) -o nn_pot_train_mpi.exe nn_pot_train_mpi.cpp $(objects)
 
-omp: $(objects)
+iomp: $(objects)
 	$(CXX) $(CXXFLAGS) -o nn_pot_train_omp.exe nn_pot_train_omp.cpp $(objects)
+
+impi: $(objects)
+	$(CXX) $(CXXFLAGS) -o nn_pot_train_mpi.exe nn_pot_train_mpi.cpp $(objects)
+
+test: $(objects)
+	$(CXX) $(CXXFLAGS) -o nn_pot_test.exe nn_pot_test.cpp $(objects)
 
 convert: convert.cpp structure.o eigen.o serialize.o units.o ptable.o vasp.o qe.o ame.o string.o cell.o
 	$(CXX) $(CXXFLAGS) -o convert.exe convert.cpp structure.o cell.o string.o eigen.o serialize.o units.o ptable.o vasp.o qe.o ame.o
