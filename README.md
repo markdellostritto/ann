@@ -8,9 +8,16 @@ for molecular dynamics simulations.
 
 ## CODE ORGANIZATION
 
+**SYSTEM**
+* compiler.hpp - utitilties for printing compiler information
+
 **MEMORY**
 * serialize.hpp - serialization of complex objects
 * map.hpp       - mapping two different objects to each other
+
+**MULTITHREADING**
+* parallel.hpp - utilities for thread distribution
+* mpi_util.hpp - utilities for mpi communication
 
 **MATH**
 * math_const.hpp   - mathematical constants
@@ -19,6 +26,7 @@ for molecular dynamics simulations.
 * math_cmp.hpp     - comparison functions
 * accumulator.hpp  - statistical accumulator
 * eigen.hpp        - Eigen utilities
+* lmat.hpp         - lower triangular matrix
 
 **OPTIMIZATION**
 * optimize.hpp - optimization
@@ -29,6 +37,7 @@ for molecular dynamics simulations.
 **CHEMISTRY**
 * units.hpp  - physical units
 * ptable.hpp - physical constants
+* atom.hpp   - aggregate of data for different types of atoms
 
 **NEURAL NETWORK**
 * nn.hpp - neural network implementation
@@ -38,6 +47,7 @@ for molecular dynamics simulations.
 * symm_radial.hpp     - radial symmetry function header
 * symm_radial_g1.hpp  - "G1" symmetry function [1]
 * symm_radial_g2.hpp  - "G2" symmetry function [1]
+* symm_radial_t1.hpp  - "T1" symmetry function (tanh)
 * symm_angular.hpp    - angular symmetry function header
 * symm_angular_g3.hpp - "G3" symmetry function [1]
 * symm_angular_g4.hpp - "G4" symmetry function [1]
@@ -48,6 +58,7 @@ for molecular dynamics simulations.
 **TRAINING**
 * nn_pot_train_omp.hpp - nn pot - training - OpenMP
 * nn_pot_train_mpi.hpp - nn pot - training - MPI
+* nn_train.hpp - neural network training (testing)
 
 **STRUCTURE**
 * cell.hpp      - unit cell
@@ -68,8 +79,9 @@ The Eigen library is a header library, and thus does not need to be compiled.
 In the makefile, the location of the Eigen library must be specified in the indicated line.
 
 **Makefile options:**
-* make omp     - makes training binary - parallelized - OMP
-* make mpi     - makes training binary - parallelized - MPI
+* make omp     - makes training binary - parallelized - OMP - gnu (deprecated)
+* make mpi     - makes training binary - parallelized - MPI - gnu
+* make impi    - makes training binary - parallelized - MPI - intel
 * make test    - makes testing binary
 * make convert - makes conversion binary
 * make clean   - removes all object files
@@ -158,7 +170,7 @@ cutoff sphere (sphere formed by cutoff radius).
 There are three basic types of optimization:
 
 * stochastic descent (rprop)
-* gradient descent (sdg,sdm,nag,adagrad,adadelta,adam)
+* gradient descent (sdg,sdm,nag,adagrad,adadelta,adam,nadam)
 * conjugate-gradient (bfgs)
 
 All gradient descent algorithms require a descent parameter (gamma).  Most also require 
@@ -182,7 +194,9 @@ the best gradient descent method available. It is recommended that one use a sma
 and a small batch size (~25% of the total number of training structures), as the smaller 
 batch sizes introduces a randomness to the gradient direction which tends to benifit 
 training performance. Though ADAM is less prone to overfitting, it is still recommended that 
-one use a non-zero regularization parameter.
+one use a non-zero regularization parameter.  For more difficult systems, one might consider using 
+the NADAM algorithm, with is ADAM with a Nesterov-style momentum term which results in a more stable 
+gradient in the optimization step.
 
 All other algorithms work to some degree, but are not recommended.
 
@@ -232,23 +246,23 @@ Installation of the package is documented in the README files in USER-ANN
 
 A conversion utility is included.  The arguments are as follows:
 
-* format-in "format-in" = input format
-* format-out "format-out" = output format
-* frac = fractional coordinate ouput
-* cart = Cartesian coordinate output
-* offset x:y:z = uniform position offset
-* interval beg : end : stride = interval to load trajectory
-* sep = seperate the output into separate files for each timestep
-* poscar "file" = poscar file
-* xdatcar "file" = xdatcar file
-* xml "file" = xml file
-* qeout "file" = qe output 
-* pos "file" = qe pos file
-* evp "file" = qe evp file
-* cel "file" = qe cel file
-* in "file" = qe input file
-* ame "file" = ame file
-* out "file" = output file
+* -format-in "format-in" = input format
+* -format-out "format-out" = output format
+* -frac = fractional coordinate ouput
+* -cart = Cartesian coordinate output
+* -offset x:y:z = uniform position offset
+* -interval beg : end : stride = interval to load trajectory
+* -sep = seperate the output into separate files for each timestep
+* -poscar "file" = poscar file
+* -xdatcar "file" = xdatcar file
+* -xml "file" = xml file
+* -qeout "file" = qe output 
+* -pos "file" = qe pos file
+* -evp "file" = qe evp file
+* -cel "file" = qe cel file
+* -in "file" = qe input file
+* -ame "file" = ame file
+* -out "file" = output file
 
 ## REFERENCES
 
