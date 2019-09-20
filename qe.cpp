@@ -36,7 +36,7 @@ namespace CEL{
 
 void read_cell(FILE* reader, Simulation& sim){
 	const char* func_name="read_cell(const char*,SimI&)";
-	if(DEBUG_QE>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
 	/* local function variables */
 	//file i/o
 		char* input=new char[string::M];
@@ -52,17 +52,20 @@ void read_cell(FILE* reader, Simulation& sim){
 		
 	try{
 		//rewind the reader
+		std::cout<<"rewinding reader...\n";
 		std::rewind(reader);
 		
 		//skip to the beginning
+		std::cout<<"skipping to beginning...\n";
 		for(unsigned int t=0; t<sim.beg(); ++t){
-			if(DEBUG_QE>1) std::cout<<"t = "<<t<<"\n";
+			if(QE_PRINT_STATUS>1) std::cout<<"t = "<<t<<"\n";
 			fgets(input,string::M,reader);//header
 			for(unsigned int n=0; n<3; ++n) fgets(input,string::M,reader);
 		}
 		//read in the data
+		std::cout<<"reading data...\n";
 		for(unsigned int t=0; t<sim.timesteps(); ++t){
-			if(DEBUG_QE>1) std::cout<<"t = "<<t<<"\n";
+			if(QE_PRINT_STATUS>1) std::cout<<"t = "<<t<<"\n";
 			fgets(input,string::M,reader);//header
 			//first line
 			fgets(input,string::M,reader);
@@ -89,7 +92,8 @@ void read_cell(FILE* reader, Simulation& sim){
 		}
 		
 		lv=sim.frame(0).cell().R();
-		for(unsigned int t=0; t<sim.timesteps(); ++t){
+		sim.cell_fixed()=true;
+		for(unsigned int t=1; t<sim.timesteps(); ++t){
 			if((lv-sim.frame(t).cell().R()).norm()>num_const::ZERO){
 				sim.cell_fixed()=false; break;
 			}
@@ -99,6 +103,8 @@ void read_cell(FILE* reader, Simulation& sim){
 		std::cout<<e.what()<<"\n";
 		error=true;
 	}
+	
+	delete[] input;
 }
 	
 }
@@ -111,7 +117,7 @@ namespace IN{
 
 Cell& read_cell(FILE* reader, Cell& cell){
 	const char* func_name="read_cell(const char*,SimAtomic<AtomT>&)";
-	if(DEBUG_QE>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
 	/* local function variables */
 	//file i/o
 		char* input=new char[string::M];
@@ -142,7 +148,7 @@ Cell& read_cell(FILE* reader, Cell& cell){
 				break;
 			}
 		}
-		if(DEBUG_QE>1) std::cout<<"IBRAV = "<<ibrav<<"\n";
+		if(QE_PRINT_STATUS>1) std::cout<<"IBRAV = "<<ibrav<<"\n";
 		
 		//rewind the reader
 		std::rewind(reader);
@@ -166,7 +172,7 @@ Cell& read_cell(FILE* reader, Cell& cell){
 							else if(std::strcmp(option,"BOHR")==0) s_posn=1.0;
 						} else throw std::runtime_error("Invalid units.");
 					}
-					if(DEBUG_QE>1) std::cout<<"option = "<<option<<"\n";
+					if(QE_PRINT_STATUS>1) std::cout<<"option = "<<option<<"\n";
 					//first lattice vector
 					fgets(input,string::M,reader);
 					lv(0,0)=std::atof(std::strtok(input,string::WS));
@@ -237,7 +243,7 @@ Cell& read_cell(FILE* reader, Cell& cell){
 			lv*=s_posn;
 		}
 		
-		if(DEBUG_QE>1) std::cout<<"lv = \n"<<lv<<"\n";
+		if(QE_PRINT_STATUS>1) std::cout<<"lv = \n"<<lv<<"\n";
 		
 		//initialize the cell
 		cell.init(lv);
@@ -258,13 +264,12 @@ Cell& read_cell(FILE* reader, Cell& cell){
 
 void load_atoms(FILE* reader, std::vector<std::string>& atomNames, std::vector<unsigned int>& atomNumbers){
 	const char* func_name="load_atoms(FILE*,std::vector<std::string>&,std::vector<std::string>&)";
-	if(DEBUG_QE>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
 	/* local function variables */
 	//file i/o
 		char* input=new char[string::M];
 		char* temp=new char[string::M];
 		char* tag=new char[string::M];
-		char* option=new char[string::M];
 	//atoms
 		unsigned int nAtoms=0;
 		unsigned int nTypes=0;
@@ -320,12 +325,12 @@ void load_atoms(FILE* reader, std::vector<std::string>& atomNames, std::vector<u
 		unsigned int nAtomsList=0;
 		for(unsigned int i=0; i<atomNumbers.size(); ++i) nAtomsList+=atomNumbers[i];
 		
-		if(DEBUG_QE>0){
-			std::cout<<"nTypes = "<<nTypes<<"\n";
+		if(QE_PRINT_STATUS>0){
+			std::cout<<"nTypes     = "<<nTypes<<"\n";
 			std::cout<<"nAtomNames = "<<atomNames.size()<<"\n";
-			std::cout<<"nAtoms = "<<nAtoms<<"\n";
+			std::cout<<"nAtoms     = "<<nAtoms<<"\n";
 			std::cout<<"nAtomsList = "<<nAtomsList<<"\n";
-			std::cout<<"atomNames = \n";
+			std::cout<<"atomNames  = \n";
 			for(unsigned int i=0; i<atomNames.size(); ++i){
 				std::cout<<"\t"<<atomNames[i]<<"\n";
 			}
@@ -343,14 +348,13 @@ void load_atoms(FILE* reader, std::vector<std::string>& atomNames, std::vector<u
 	delete[] input;
 	delete[] temp;
 	delete[] tag;
-	delete[] option;
 	
 	if(error) throw std::runtime_error("I/O Error: Failed to read.");
 }
 
 double load_timestep(FILE* reader){
 	const char* func_name="load_timestep(FILE*)";
-	if(DEBUG_QE>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
 	/* local function variables */
 	//file i/o
 		char* input=new char[string::M];
@@ -366,7 +370,7 @@ double load_timestep(FILE* reader){
 		std::rewind(reader);
 		
 		//read in the cell
-		if(DEBUG_QE>0) std::cout<<"Reading in the timestep...\n";
+		if(QE_PRINT_STATUS>0) std::cout<<"reading the timestep\n";
 		while(fgets(input,string::M,reader)!=NULL){
 			string::trim_all(string::trim_right(input,","));
 			string::copy_left(temp,input,"=");
@@ -377,9 +381,9 @@ double load_timestep(FILE* reader){
 			}
 		}
 		
-		if(DEBUG_QE>0){
-			std::cout<<"ts = "<<ts<<"\n";
-			std::cout<<"print = "<<print<<"\n";
+		if(QE_PRINT_STATUS>0){
+			std::cout<<"timestep = "<<ts<<"\n";
+			std::cout<<"print    = "<<print<<"\n";
 		}
 	}catch(std::exception& e){
 		std::cout<<"Error in "<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
@@ -405,7 +409,7 @@ namespace POS{
 
 unsigned int load_timesteps(FILE* reader){
 	const char* func_name="load_timesteps(const char*)";
-	if(DEBUG_QE>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
 	/* local function variables */
 	//file i/o
 		char* input=new char[string::M];
@@ -423,7 +427,7 @@ unsigned int load_timesteps(FILE* reader){
 			if(string::substrN(input,string::WS)==2) ++ts;
 		}
 		
-		if(DEBUG_QE>0){
+		if(QE_PRINT_STATUS>0){
 			std::cout<<"ts = "<<ts<<"\n";
 		}
 	}catch(std::exception& e){
@@ -440,11 +444,10 @@ unsigned int load_timesteps(FILE* reader){
 
 void load_posns(FILE* reader, Simulation& sim){
 	const char* func_name="load_posns(const char*,Simulation&)";
-	if(DEBUG_QE>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
 	/* local function variables */
 	//file i/o
 		char* input=new char[string::M];
-		char* temp=new char[string::M];
 	//misc
 		bool error=false;
 	//units
@@ -459,14 +462,14 @@ void load_posns(FILE* reader, Simulation& sim){
 		
 		//skip to the beginning
 		for(unsigned int t=0; t<sim.beg(); ++t){
-			if(DEBUG_QE>1) std::cout<<"T = "<<t<<"\n";
+			if(QE_PRINT_STATUS>1) std::cout<<"T = "<<t<<"\n";
 			else if(t%1000==0) std::cout<<"T = "<<t<<"\n";
 			fgets(input,string::M,reader);//header
 			for(unsigned int n=0; n<sim.frame(t).nAtoms(); ++n) fgets(input,string::M,reader);
 		}
 		//read in the data
 		for(unsigned int t=0; t<sim.timesteps(); ++t){
-			if(DEBUG_QE>1) std::cout<<"T = "<<t<<"\n";
+			if(QE_PRINT_STATUS>1) std::cout<<"T = "<<t<<"\n";
 			else if(t%1000==0) std::cout<<"T = "<<t<<"\n";
 			fgets(input,string::M,reader);//header
 			for(unsigned int n=0; n<sim.frame(t).nAtoms(); ++n){
@@ -500,7 +503,108 @@ void load_posns(FILE* reader, Simulation& sim){
 	
 	//free local variables
 	delete[] input;
-	delete[] temp;
+	
+	if(error) throw std::runtime_error("I/O Error: Failed to read.");
+}
+
+}
+
+//*****************************************************
+//FOR format
+//*****************************************************
+
+namespace FOR{
+
+unsigned int load_timesteps(FILE* reader){
+	const char* func_name="load_timesteps(const char*)";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+	/* local function variables */
+	//file i/o
+		char* input=new char[string::M];
+	//timesteps
+		unsigned int ts=0;
+	//misc
+		bool error=false;
+		
+	try{
+		//rewind the reader
+		std::rewind(reader);
+		
+		//read in the timesteps
+		while(fgets(input,string::M,reader)!=NULL){
+			if(string::substrN(input,string::WS)==2) ++ts;
+		}
+		
+		if(QE_PRINT_STATUS>0){
+			std::cout<<"ts = "<<ts<<"\n";
+		}
+	}catch(std::exception& e){
+		std::cout<<"Error in "<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+		std::cout<<e.what()<<"\n";
+		error=true;
+	}
+	
+	delete[] input;
+	
+	if(error) throw std::runtime_error("I/O Error: Failed to read.");
+	return ts;
+}
+
+void read_forces(FILE* reader, Simulation& sim){
+	const char* func_name="read_forces(const char*,Simulation&)";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+	/* local function variables */
+	//file i/o
+		char* input=new char[string::M];
+	//misc
+		bool error=false;
+	//units
+		double s_energy=0.0,s_posn=0.0;
+		if(units::consts::system()==units::System::AU){
+			s_posn=1.0;
+			s_energy=1.0;
+		} else if(units::consts::system()==units::System::METAL){
+			s_posn=units::ANGpBOHR;
+			s_energy=units::HARTREEpEV;
+		} else throw std::runtime_error("Invalid units.");
+		
+	try{
+		//rewind to beginning of file
+		std::rewind(reader);
+		
+		//skip to the beginning
+		for(unsigned int t=0; t<sim.beg(); ++t){
+			if(QE_PRINT_STATUS>1) std::cout<<"T = "<<t<<"\n";
+			else if(t%1000==0) std::cout<<"T = "<<t<<"\n";
+			fgets(input,string::M,reader);//header
+			for(unsigned int n=0; n<sim.frame(t).nAtoms(); ++n) fgets(input,string::M,reader);
+		}
+		//read in the data
+		for(unsigned int t=0; t<sim.timesteps(); ++t){
+			if(QE_PRINT_STATUS>1) std::cout<<"T = "<<t<<"\n";
+			else if(t%1000==0) std::cout<<"T = "<<t<<"\n";
+			fgets(input,string::M,reader);//header
+			for(unsigned int n=0; n<sim.frame(t).nAtoms(); ++n){
+				fgets(input,string::M,reader);
+				sim.frame(t).force(n)[0]=s_energy/s_posn*std::atof(std::strtok(input,string::WS));
+				sim.frame(t).force(n)[1]=s_energy/s_posn*std::atof(std::strtok(NULL,string::WS));
+				sim.frame(t).force(n)[2]=s_energy/s_posn*std::atof(std::strtok(NULL,string::WS));
+			}
+			for(unsigned int tt=1; tt<sim.stride(); ++tt){
+				fgets(input,string::M,reader);//header
+				for(unsigned int n=0; n<sim.frame(t).nAtoms(); ++n){
+					fgets(input,string::M,reader);
+				}
+			}
+		}
+	}catch(std::exception& e){
+		std::cout<<"Error in "<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+		std::cout<<e.what()<<"\n";
+		error=true;
+	}
+	
+	//free local variables
+	delete[] input;
 	
 	if(error) throw std::runtime_error("I/O Error: Failed to read.");
 }
@@ -513,9 +617,9 @@ void load_posns(FILE* reader, Simulation& sim){
 
 namespace EVP{
 	
-void load_energy(FILE* reader, Simulation& sim){
-	const char* func_name="load_energy(FILE*,SimAtomic<AtomT>&)";
-	if(DEBUG_QE>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+void read_energy(FILE* reader, Simulation& sim){
+	const char* func_name="read_energy(FILE*,SimAtomic<AtomT>&)";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
 	/* local function variables */
 	//file i/o
 		char* input=new char[string::M];
@@ -531,11 +635,12 @@ void load_energy(FILE* reader, Simulation& sim){
 		
 	try{
 		//rewind the reader
+		if(QE_PRINT_STATUS>1) std::cout<<"rewinding reader\n";
 		std::rewind(reader);
 		
-		//read in the timesteps
 		fgets(input,string::M,reader);//skip the header
 		//skip to beginning
+		if(QE_PRINT_STATUS>1) std::cout<<"moving to beginning\n";
 		while(fgets(input,string::M,reader)!=NULL){
 			if(std::strpbrk(input,"#")!=NULL) continue;//skip any lines with "#"
 			if(ts==sim.beg()){
@@ -550,6 +655,7 @@ void load_energy(FILE* reader, Simulation& sim){
 			} else ++ts;
 		}
 		ts=1;
+		if(QE_PRINT_STATUS>1) std::cout<<"reading energy\n";
 		while(fgets(input,string::M,reader)!=NULL){
 			if(std::strpbrk(input,"#")!=NULL) continue;//skip any lines with "#"
 			if(string::empty(input)) continue;//skip any empty lines
@@ -582,13 +688,12 @@ void load_energy(FILE* reader, Simulation& sim){
 namespace OUT{
 	
 void read(const char* file, const AtomType& atomT, Structure& struc){
-	const char* func_name="read(FILE*,SimAtomic<AtomT>&)";
-	if(DEBUG_QE>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
+	const char* func_name="read(FILE*,const AtomType&,Structure&)";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
 	/*local variables*/
 	//file i/o
 		FILE* reader=NULL;
 		char* input=new char[string::M];
-		char* temp=new char[string::M];
 	//structure
 		unsigned int natomst=0;
 		std::vector<unsigned int> natoms;
@@ -602,7 +707,8 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		const char* str_lv="crystal axes";
 		const char* str_alat="lattice parameter";
 		const char* str_posn="site n.";
-		const char* str_force="Force";
+		const char* str_force="Forces";
+		const char* str_stress="total   stress";
 		const char* str_natoms="number of atoms/cell";
 		const char* str_nspecies="number of atomic types";
 		const char* str_species="atomic species  ";
@@ -617,13 +723,16 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 			s_energy=0.5*units::EVpHARTREE;//QE energy: Rydberg
 		}
 		else throw std::runtime_error("Invalid units.");
+	//misc
+		bool error=false;
 	
 	try{
 		//open the file
+		if(QE_PRINT_STATUS>0) std::cout<<"opening the file: "<<file<<"\n";
 		reader=fopen(file,"r");
-		if(file==NULL) throw std::runtime_error(std::string("ERROR: Could not open file: \"")+std::string(file)+std::string("\"\n"));
+		if(reader==NULL) throw std::runtime_error(std::string("ERROR: Could not open file: \"")+std::string(file)+std::string("\"\n"));
 		
-		if(DEBUG_QE>0) std::cout<<"Reading in simulation info...\n";
+		if(QE_PRINT_STATUS>0) std::cout<<"reading simulation info\n";
 		while(fgets(input,string::M,reader)!=NULL){
 			if(std::strstr(input,str_energy)!=NULL){
 				struc.energy()=s_energy*std::atof(string::trim_right(string::trim_left(input,"="),"Ry"));
@@ -670,7 +779,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		}
 		
 		//print parameters
-		if(DEBUG_QE>0){
+		if(QE_PRINT_STATUS>0){
 			std::cout<<"ATOM    = "<<atomT<<"\n";
 			std::cout<<"NATOMST = "<<natomst<<"\n";
 			std::cout<<"SPECIES = "; for(unsigned int i=0; i<species.size(); ++i) std::cout<<species[i]<<" "; std::cout<<"\n";
@@ -689,16 +798,41 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		if(std::fabs(lv.determinant())<num_const::ZERO) throw std::runtime_error("Invalid lattice vector matrix.");
 		
 		//resize the structure
-		if(DEBUG_QE>0) std::cout<<"Resizing structure...\n";
+		if(QE_PRINT_STATUS>0) std::cout<<"resizing structure\n";
 		struc.resize(natoms,species,atomT);
 		struc.cell().init(alat*lv);
 		
-		//rewind file pointer
+		//read in stress
+		#ifdef INCLUDE_VIRIAL
+		if(QE_PRINT_STATUS>0) std::cout<<"reading virial\n";
 		std::rewind(reader);
+		while(fgets(input,string::M,reader)!=NULL){
+			if(std::strstr(input,str_stress)!=NULL){
+				std::vector<std::string> strlist;
+				const double scale=s_energy/(s_posn*s_posn*s_posn);
+				fgets(input,string::M,reader);
+				string::split(input,string::WS,strlist);
+				struc.virial()(0,0)=std::atof(strlist[0].c_str())*scale;
+				struc.virial()(0,1)=std::atof(strlist[1].c_str())*scale;
+				struc.virial()(0,2)=std::atof(strlist[2].c_str())*scale;
+				fgets(input,string::M,reader);
+				string::split(input,string::WS,strlist);
+				struc.virial()(1,0)=std::atof(strlist[0].c_str())*scale;
+				struc.virial()(1,1)=std::atof(strlist[1].c_str())*scale;
+				struc.virial()(1,2)=std::atof(strlist[2].c_str())*scale;
+				fgets(input,string::M,reader);
+				string::split(input,string::WS,strlist);
+				struc.virial()(2,0)=std::atof(strlist[0].c_str())*scale;
+				struc.virial()(2,1)=std::atof(strlist[1].c_str())*scale;
+				struc.virial()(2,2)=std::atof(strlist[2].c_str())*scale;
+			}
+		}
+		#endif
 		
 		//read in positions
 		if(atomT.posn){
-			if(DEBUG_QE>0) std::cout<<"Reading positions...\n";
+			if(QE_PRINT_STATUS>0) std::cout<<"reading positions\n";
+			std::rewind(reader);
 			while(fgets(input,string::M,reader)!=NULL){
 				if(std::strstr(input,str_posn)!=NULL){
 					std::vector<std::string> strlist;
@@ -721,22 +855,23 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 				}
 			}
 			//convert to cartesian coordinates
-			for(unsigned int i=0; i<natomst; ++i){
-				struc.posn(i)=struc.cell().R()*struc.posn(i);
-			}
+			for(unsigned int i=0; i<natomst; ++i) struc.posn(i)*=alat;
 		}
 		
 		//read in forces
 		if(atomT.force){
-			if(DEBUG_QE>0) std::cout<<"Reading forces...\n";
+			if(QE_PRINT_STATUS>0) std::cout<<"reading forces\n";
+			std::rewind(reader);
 			while(fgets(input,string::M,reader)!=NULL){
-				if(std::strstr(input,str_posn)!=NULL){
+				if(std::strstr(input,str_force)!=NULL){
 					std::vector<std::string> strlist;
+					fgets(input,string::M,reader);
 					for(unsigned int i=0; i<natomst; ++i){
 						fgets(input,string::M,reader);
 						string::split(input,string::WS,strlist);
-						unsigned int atom=std::atoi(strlist.at(1).c_str());
-						unsigned int type=std::atoi(strlist.at(3).c_str());
+						unsigned int atom=std::atoi(strlist.at(1).c_str())-1;
+						unsigned int type=std::atoi(strlist.at(3).c_str())-1;
+						for(unsigned int j=0; j<type; ++j) atom-=struc.nAtoms(j);
 						struc.force(type,atom)[0]=std::atof(strlist.at(6).c_str())*s_energy/s_posn;
 						struc.force(type,atom)[1]=std::atof(strlist.at(7).c_str())*s_energy/s_posn;
 						struc.force(type,atom)[2]=std::atof(strlist.at(8).c_str())*s_energy/s_posn;
@@ -744,20 +879,27 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 				}
 			}
 		}
+		
+		//close the file
+		fclose(reader);
+		reader=NULL;
 	}catch(std::exception& e){
 		std::cout<<"Error in "<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
 		std::cout<<e.what()<<"\n";
+		error=true;
 	}
 	
 	//free local variables
 	delete[] input;
+	
+	if(error) throw std::runtime_error("I/O Exception: Could not read data.");
 }
 
 }
 
 Simulation& read(const Format& format, const Interval& interval, const AtomType& atomT, Simulation& sim){
 	const char* func_name="read(const Format&,const Interval&,const AtomType&,Simulation&)";
-	if(DEBUG_QE>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<func_name<<":\n";
+	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<func_name<<":\n";
 	/* local function variables */
 	//file i/o
 		FILE* reader=NULL;
@@ -829,9 +971,8 @@ Simulation& read(const Format& format, const Interval& interval, const AtomType&
 			//resize the simulation
 			sim.resize(tsint/interval.stride,atomNumbers,atomNames,atomT);
 			sim.stride()=interval.stride;
-			if(DEBUG_QE>0) std::cout<<"ts = "<<ts<<"\n";
-			if(DEBUG_QE>0) std::cout<<"interval = "<<interval.beg<<":"<<interval.end<<":"<<interval.stride<<"\n";
-			if(DEBUG_QE>0) std::cout<<"SIM = \n"<<sim<<"\n";
+			if(QE_PRINT_STATUS>0) std::cout<<"interval = "<<interval.beg<<":"<<interval.end<<":"<<interval.stride<<"\n";
+			if(QE_PRINT_STATUS>0) std::cout<<"SIM = \n"<<sim<<"\n";
 			
 			if(!format.fileCel.empty()){
 				//open the "cel" file
@@ -848,7 +989,7 @@ Simulation& read(const Format& format, const Interval& interval, const AtomType&
 				reader=fopen(format.fileEvp.c_str(),"r");
 				if(reader==NULL) throw std::runtime_error("I/O Error: Could not open \"evp\" file.");
 				//read the energy
-				EVP::load_energy(reader,sim);
+				EVP::read_energy(reader,sim);
 				//close the "evp" file
 				fclose(reader); reader=NULL;
 			}
@@ -860,6 +1001,16 @@ Simulation& read(const Format& format, const Interval& interval, const AtomType&
 				//read the positions
 				POS::load_posns(reader,sim);
 				//close the "pos" file
+				fclose(reader); reader=NULL;
+			}
+			
+			if(!format.fileFor.empty()){
+				//open the "for" file
+				reader=fopen(format.fileFor.c_str(),"r");
+				if(reader==NULL) throw std::runtime_error("I/O Error: Could not open \"for\" file.");
+				//read the positions
+				FOR::read_forces(reader,sim);
+				//close the "for" file
 				fclose(reader); reader=NULL;
 			}
 			

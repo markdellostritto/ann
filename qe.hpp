@@ -7,8 +7,12 @@
 #include "cell.hpp"
 #include "units.hpp"
 
-#ifndef DEBUG_QE
-#define DEBUG_QE 0
+#ifndef QE_PRINT_FUNC
+#define QE_PRINT_FUNC 0
+#endif
+
+#ifndef QE_PRINT_STATUS
+#define QE_PRINT_STATUS 0
 #endif
 
 namespace QE{
@@ -23,6 +27,7 @@ static const char* NAMESPACE_GLOBAL="QE";
 struct Format{
 	std::string fileIn;//input
 	std::string filePos;//position
+	std::string fileFor;//force
 	std::string fileCel;//cell
 	std::string fileEvp;//energy/volume/pressure
 	std::string fileOut;//std output file
@@ -71,13 +76,26 @@ void load_posns(FILE* reader, Simulation& sim);
 }
 
 //*****************************************************
+//FOR format
+//*****************************************************
+
+namespace FOR{
+
+//static variables
+static const char* NAMESPACE_LOCAL="FOR";
+unsigned int load_timesteps(FILE* reader);
+void read_forces(FILE* reader, Simulation& sim);
+
+}
+
+//*****************************************************
 //EVP format
 //*****************************************************
 
 namespace EVP{
 	
 static const char* NAMESPACE_LOCAL="EVP";
-void load_energy(FILE* reader, Simulation& sim);
+void read_energy(FILE* reader, Simulation& sim);
 
 }
 
