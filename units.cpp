@@ -4,7 +4,7 @@ namespace units{
 
 //System
 
-System::type System::load(const char* str){
+System::type System::read(const char* str){
 	if(std::strcmp(str,"AU")==0) return System::AU;
 	else if(std::strcmp(str,"METAL")==0) return System::METAL;
 	else if(std::strcmp(str,"IDENTITY")==0) return System::IDENTITY;
@@ -72,6 +72,7 @@ const double metal::mp=1.007276466879;
 const double metal::qe=1.0;
 const double metal::hbar=0.6582119514;
 const double metal::ke=ANGpBOHR*EVpHARTREE;
+
 const double metal::kb=8.6173303e-5;
 
 //"identity units"

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef UNITS_HPP
 #define UNITS_HPP
 
@@ -20,7 +21,7 @@ namespace units{
 			IDENTITY,
 			UNKNOWN
 		};
-		static System::type load(const char* str);
+		static System::type read(const char* str);
 	};
 	std::ostream& operator<<(std::ostream& out, const System::type& t);
 	
