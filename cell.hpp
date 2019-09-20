@@ -1,3 +1,4 @@
+#pragma once
 #ifndef CELL_HPP
 #define CELL_HPP
 
@@ -7,7 +8,7 @@
 #include <Eigen/Dense>
 // local libraries - math
 #include "math_const.hpp"
-#include "math_function.hpp"
+#include "math_special.hpp"
 // local libraries - eigen
 #include "eigen.hpp"
 // local libraries - serialization
@@ -31,11 +32,11 @@ private:
 	Eigen::Matrix3d KInv_;//the inverse of the reciprocal lattice vector matrix
 public:	
 	//constructors/destructors
-	Cell(){defaults();};
-	Cell(const Eigen::Matrix3d& R){init(R,1);};
-	Cell(const Eigen::Matrix3d& R, double scale){init(R,scale);};
-	Cell(const Eigen::Vector3d& R1,const Eigen::Vector3d& R2,const Eigen::Vector3d& R3):scale_(1){init(R1,R2,R3);};
-	Cell(const Eigen::Vector3d& R1,const Eigen::Vector3d& R2,const Eigen::Vector3d& R3, double scale):scale_(1){init(R1,R2,R3);};
+	Cell(){defaults();}
+	Cell(const Eigen::Matrix3d& R){init(R,1);}
+	Cell(const Eigen::Matrix3d& R, double scale){init(R,scale);}
+	Cell(const Eigen::Vector3d& R1,const Eigen::Vector3d& R2,const Eigen::Vector3d& R3):scale_(1){init(R1,R2,R3);}
+	Cell(const Eigen::Vector3d& R1,const Eigen::Vector3d& R2,const Eigen::Vector3d& R3, double scale):scale_(1){init(R1,R2,R3);}
 	~Cell(){};
 	
 	//operators
@@ -43,14 +44,14 @@ public:
 	friend std::ostream& operator<<(std::ostream& out, const Cell& cell);
 	
 	//access
-	double& scale(){return scale_;};
-	const double& scale()const{return scale_;};
-	double& vol(){return vol_;};
-	const double& vol()const{return vol_;};
-	const Eigen::Matrix3d& R()const{return R_;};
-	const Eigen::Matrix3d& RInv()const{return RInv_;};
-	const Eigen::Matrix3d& K()const{return K_;};
-	const Eigen::Matrix3d& KInv()const{return KInv_;};
+	double& scale(){return scale_;}
+	const double& scale()const{return scale_;}
+	double& vol(){return vol_;}
+	const double& vol()const{return vol_;}
+	const Eigen::Matrix3d& R()const{return R_;}
+	const Eigen::Matrix3d& RInv()const{return RInv_;}
+	const Eigen::Matrix3d& K()const{return K_;}
+	const Eigen::Matrix3d& KInv()const{return KInv_;}
 	
 	//static vector functions
 	static Eigen::Vector3d& sum(const Eigen::Vector3d& v1, const Eigen::Vector3d& v2, Eigen::Vector3d& sum, const Eigen::Matrix3d& R, const Eigen::Matrix3d& RInv);
@@ -60,6 +61,9 @@ public:
 	static Eigen::Vector3d& fracToCart(const Eigen::Vector3d& vFrac, Eigen::Vector3d& vCart, const Eigen::Matrix3d& R);
 	static Eigen::Vector3d& cartToFrac(const Eigen::Vector3d& vCart, Eigen::Vector3d& vFrac, const Eigen::Matrix3d& RInv);
 	static Eigen::Vector3d& returnToCell(const Eigen::Vector3d& v1, Eigen::Vector3d& v2, const Eigen::Matrix3d& R, const Eigen::Matrix3d& RInv);
+	
+	//static functions - modification
+	static Cell& super(const Eigen::Vector3i& f, Cell& cell);
 	
 	//member functions
 	void defaults();

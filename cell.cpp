@@ -3,15 +3,15 @@
 //operators
 
 Cell& Cell::operator=(const Cell& cell){
-	init(cell.R(),cell.scale());
+	init(cell.R(),1.0);
 	return *this;
 }
 
 std::ostream& operator<<(std::ostream& out, const Cell& cell){
-	out<<"Scale = "<<cell.scale_<<"\n";
-	out<<"Cell Volume = "<<cell.vol_<<"\n";
-	out<<"LV = \n"<<cell.R_<<"\n";
-	out<<"LVK = \n"<<cell.K_;
+	out<<"scale  = "<<cell.scale_<<"\n";
+	out<<"volume = "<<cell.vol_<<"\n";
+	out<<"R      = \n"<<cell.R_<<"\n";
+	out<<"K      = \n"<<cell.K_;
 	return out;
 }
 
@@ -45,7 +45,7 @@ void Cell::init(const Eigen::Matrix3d& R, double scale){
 	K_.col(1)=2*num_const::PI*R_.col(2).cross(R_.col(0))/(R_.col(1).dot(R_.col(2).cross(R_.col(0))));
 	K_.col(2)=2*num_const::PI*R_.col(0).cross(R_.col(1))/(R_.col(2).dot(R_.col(0).cross(R_.col(1))));
 	KInv_.noalias()=K_.inverse();
-	vol_=R_.determinant();
+	vol_=std::fabs(R_.determinant());
 }
 
 void Cell::init(const Eigen::Vector3d& R1,const Eigen::Vector3d& R2,const Eigen::Vector3d& R3, double scale){
@@ -58,16 +58,18 @@ void Cell::init(const Eigen::Vector3d& R1,const Eigen::Vector3d& R2,const Eigen:
 	K_.col(1)=2*num_const::PI*R_.col(2).cross(R_.col(0))/(R_.col(1).dot(R_.col(2).cross(R_.col(0))));
 	K_.col(2)=2*num_const::PI*R_.col(0).cross(R_.col(1))/(R_.col(2).dot(R_.col(0).cross(R_.col(1))));
 	KInv_.noalias()=K_.inverse();
-	vol_=R_.determinant();
+	vol_=std::fabs(R_.determinant());
 }
+
+//static functions - vectors
 
 Eigen::Vector3d& Cell::sum(const Eigen::Vector3d& v1, const Eigen::Vector3d& v2, Eigen::Vector3d& sum, const Eigen::Matrix3d& R, const Eigen::Matrix3d& RInv){
 	//find sum (in fractional coordinates)
 	sum.noalias()=RInv*(v1+v2);
 	//return to cell
-	sum[0]=function::mod(sum[0],-0.5,0.5);
-	sum[1]=function::mod(sum[1],-0.5,0.5);
-	sum[2]=function::mod(sum[2],-0.5,0.5);
+	sum[0]=special::mod(sum[0],-0.5,0.5);
+	sum[1]=special::mod(sum[1],-0.5,0.5);
+	sum[2]=special::mod(sum[2],-0.5,0.5);
 	//switch back to Cartesian coordinates
 	sum=R*sum;
 	return sum;
@@ -77,9 +79,9 @@ Eigen::Vector3d& Cell::diff(const Eigen::Vector3d& v1, const Eigen::Vector3d& v2
 	//find difference (in fractional coordinates)
 	diff.noalias()=RInv*(v1-v2);
 	//return to cell
-	diff[0]=function::mod(diff[0],-0.5,0.5);
-	diff[1]=function::mod(diff[1],-0.5,0.5);
-	diff[2]=function::mod(diff[2],-0.5,0.5);
+	diff[0]=special::mod(diff[0],-0.5,0.5);
+	diff[1]=special::mod(diff[1],-0.5,0.5);
+	diff[2]=special::mod(diff[2],-0.5,0.5);
 	//switch back to Cartesian coordinates
 	diff=R*diff;
 	return diff;
@@ -89,9 +91,9 @@ double Cell::dist(const Eigen::Vector3d& v1, const Eigen::Vector3d& v2, Eigen::V
 	//find difference (in fractional coordinates)
 	temp.noalias()=RInv*(v1-v2);
 	//return to cell
-	temp[0]=function::mod(temp[0],-0.5,0.5);
-	temp[1]=function::mod(temp[1],-0.5,0.5);
-	temp[2]=function::mod(temp[2],-0.5,0.5);
+	temp[0]=special::mod(temp[0],-0.5,0.5);
+	temp[1]=special::mod(temp[1],-0.5,0.5);
+	temp[2]=special::mod(temp[2],-0.5,0.5);
 	//return the modulus (in Cartesian coordinates)
 	return (R*temp).norm();
 }
@@ -100,9 +102,9 @@ double Cell::dist(const Eigen::Vector3d& v1, const Eigen::Vector3d& v2, const Ei
 	//find difference (in fractional coordinates)
 	Eigen::Vector3d temp=RInv*(v1-v2);
 	//return to cell
-	temp[0]=function::mod(temp[0],-0.5,0.5);
-	temp[1]=function::mod(temp[1],-0.5,0.5);
-	temp[2]=function::mod(temp[2],-0.5,0.5);
+	temp[0]=special::mod(temp[0],-0.5,0.5);
+	temp[1]=special::mod(temp[1],-0.5,0.5);
+	temp[2]=special::mod(temp[2],-0.5,0.5);
 	//return the modulus (in Cartesian coordinates)
 	return (R*temp).norm();
 }
@@ -111,9 +113,9 @@ Eigen::Vector3d& Cell::returnToCell(const Eigen::Vector3d& v1, Eigen::Vector3d& 
 	//convert the vector to fractional coordinates
 	v2=RInv*v1;
 	//use the method of images to return the vector to the cell
-	v2[0]=function::mod(v2[0],0.0,1.0);
-	v2[1]=function::mod(v2[1],0.0,1.0);
-	v2[2]=function::mod(v2[2],0.0,1.0);
+	v2[0]=special::mod(v2[0],0.0,1.0);
+	v2[1]=special::mod(v2[1],0.0,1.0);
+	v2[2]=special::mod(v2[2],0.0,1.0);
 	//return the vector in cartesian coordinates
 	v2=R*v2;
 	return v2;
@@ -127,6 +129,17 @@ Eigen::Vector3d& Cell::fracToCart(const Eigen::Vector3d& vFrac, Eigen::Vector3d&
 Eigen::Vector3d& Cell::cartToFrac(const Eigen::Vector3d& vCart, Eigen::Vector3d& vFrac, const Eigen::Matrix3d& RInv){
 	vFrac=RInv*vCart;//not assuming vCart!=vFrac
 	return vFrac;
+}
+
+//static functions - modification
+
+Cell& Cell::super(const Eigen::Vector3i& f, Cell& cell){
+	Eigen::Matrix3d R=cell.R();
+	R.col(0)*=f[0];
+	R.col(1)*=f[1];
+	R.col(2)*=f[2];
+	cell.init(R);
+	return cell;
 }
 
 namespace serialize{
