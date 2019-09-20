@@ -3,6 +3,44 @@
 namespace string{
 
 //******************************************************
+//Hash
+//******************************************************
+
+unsigned int hash(const char* str){
+	const unsigned int p=31;
+	const unsigned int m=2147483647;//mersenne prime 31
+	unsigned int val=0;
+	unsigned int pow=1;
+	while(*str){
+		val=(val+(*str-'a'+1)*pow)%m;
+		pow=(pow*p)%m;
+		++str;
+	}
+	return val;
+}
+
+unsigned int hash(const std::string& name){
+	return hash(name.c_str());
+}
+
+unsigned short hash_s(const char* str){
+	const unsigned short p=31;
+	const unsigned short m=65497;//prime
+	unsigned short val=0;
+	unsigned short pow=1;
+	while(*str){
+		val=(val+(*str-'a'+1)*pow)%m;
+		pow=(pow*p)%m;
+		++str;
+	}
+	return val;
+}
+
+unsigned short hash_s(const std::string& name){
+	return hash(name.c_str());
+}
+
+//******************************************************
 //Case
 //******************************************************
 
@@ -25,12 +63,12 @@ char* to_lower(char* str){
 }
 
 std::string& to_upper(std::string& str){
-	for(unsigned int i=0; i<str.size(); ++i) str[i]=std::toupper(str[i]);
+	for(int i=str.size()-1; i>=0; --i) str[i]=std::toupper(str[i]);
 	return str;
 }
 
 std::string& to_lower(std::string& str){
-	for(unsigned int i=0; i<str.size(); ++i) str[i]=std::tolower(str[i]);
+	for(int i=str.size()-1; i>=0; --i) str[i]=std::tolower(str[i]);
 	return str;
 }
 
@@ -65,26 +103,26 @@ char* trim_right(char* str){
 }
 
 char* trim_all(char* str){
-	char* temp=(char*)malloc(sizeof(char)*std::strlen(str));
+	char* temp=new char[std::strlen(str)];
 	unsigned int count=0;
 	for(unsigned int i=0; i<std::strlen(str); ++i){
 		if(!std::isspace(str[i])) temp[count++]=str[i];
 	}
 	temp[count]='\0';
 	std::strcpy(str,temp);
-	free(temp);
+	delete[] temp;
 	return str;
 }
 
 char* trim_left(char* str, const char* delim){
 	char* s=std::strpbrk(str,delim);
-	if(s!=NULL) std::memmove(str,s+1,std::strlen(s)*sizeof(char));
+	if(s!=NULL) std::memmove(str,s+1,(std::strlen(s))*sizeof(char));
 	return str;
 }
 
 char* trim_right(char* str, const char* delim){
 	char* s=std::strpbrk(str,delim);
-	if(s!=NULL) str[s-str]='\0';
+	if(s!=NULL) *s='\0';
 	return str;
 }
 
