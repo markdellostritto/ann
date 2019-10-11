@@ -295,8 +295,8 @@ structure and removed, allowing one to train on the remainder.
 ### PARAMETERS - DATA
 
 * __data_train__ (string) Data file containing files for training.
-* __data_train__ (string) Data file containing files for validation.
-* __data_train__ (string) Data file containing files for testing.
+* __data_val__ (string) Data file containing files for validation.
+* __data_test__ (string) Data file containing files for testing.
 
 ### PARAMETERS - ATOMS
 
@@ -341,11 +341,11 @@ Each __atom__ entry (atom name mass (charge)) lists the properties of a given at
 * __transfer__ - (string) The name of the transfer function. Possible values:
 	* __tanh__ - hyperbolic tanh function
 	* __sigmoid__ - sigmoid function
-	* __softplue__ - softplus function
+	* __softplus__ - softplus function
 	* __relu__ - rectified linear function
 	* __lin__ - linear function
-* __n_batch__ - (int) Number of structures in the batch used by each process, must be less than the total number of structures owned by a process, superceded by __p_batch__.
-* __p_batch__ - (float) Percentage of structures in the batch used by each process, must be between zero and one.
+* __n_batch__ - (int) Number of structures in the batch, must be less than the total number of structures owned by a process, superceded by __p_batch__.
+* __p_batch__ - (float) Percentage of structures in the batch, must be between zero and one.
 * __pre_cond__ - (bool) Whether to precondition the inputs by shifting to zero using the average and scaling the magnitude by the inverse of the standard deviation.
 * __calc_force__ - (bool) Whether to compute the forces on the atoms at the end of optimization. An expensive calculation that is often unnecessary, though useful for testing purposes.
 
