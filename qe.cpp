@@ -37,7 +37,7 @@ namespace CEL{
 void read_cell(FILE* reader, Simulation& sim){
 	const char* func_name="read_cell(const char*,SimI&)";
 	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
-	/* local function variables */
+	//==== local function variables ====
 	//file i/o
 		char* input=new char[string::M];
 	//cell
@@ -84,17 +84,17 @@ void read_cell(FILE* reader, Simulation& sim){
 			lv(2,2)=std::atof(std::strtok(NULL,string::WS));
 			//set the cell
 			lv*=s_posn;
-			sim.frame(t).cell().init(lv);
+			sim.frame(t).init(lv);
 			for(unsigned int tt=1; tt<sim.stride(); ++tt){
 				fgets(input,string::M,reader);//header
 				for(unsigned int n=0; n<3; ++n) fgets(input,string::M,reader);
 			}
 		}
 		
-		lv=sim.frame(0).cell().R();
+		lv=sim.frame(0).R();
 		sim.cell_fixed()=true;
 		for(unsigned int t=1; t<sim.timesteps(); ++t){
-			if((lv-sim.frame(t).cell().R()).norm()>num_const::ZERO){
+			if((lv-sim.frame(t).R()).norm()>num_const::ZERO){
 				sim.cell_fixed()=false; break;
 			}
 		}
@@ -262,7 +262,7 @@ Cell& read_cell(FILE* reader, Cell& cell){
 	else return cell;
 }
 
-void load_atoms(FILE* reader, std::vector<std::string>& atomNames, std::vector<unsigned int>& atomNumbers){
+void load_atoms(FILE* reader, std::vector<std::string>& species, std::vector<unsigned int>& atomNumbers){
 	const char* func_name="load_atoms(FILE*,std::vector<std::string>&,std::vector<std::string>&)";
 	if(QE_PRINT_FUNC>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
 	/* local function variables */
@@ -295,7 +295,7 @@ void load_atoms(FILE* reader, std::vector<std::string>& atomNames, std::vector<u
 		std::rewind(reader);
 		
 		//read in the atom types
-		atomNames.clear();
+		species.clear();
 		atomNumbers.clear();
 		while(fgets(input,string::M,reader)!=NULL){
 			string::trim(input);//remove all spaces
@@ -307,14 +307,14 @@ void load_atoms(FILE* reader, std::vector<std::string>& atomNames, std::vector<u
 					//read in the name
 					std::string name=std::string(std::strtok(input,string::WS));
 					bool match=false;
-					for(unsigned int i=0; i<atomNames.size(); ++i){
-						if(name==atomNames[i]){
+					for(unsigned int i=0; i<species.size(); ++i){
+						if(name==species[i]){
 							match=true;
 							++atomNumbers[i];
 						}
 					}
 					if(!match){
-						atomNames.push_back(name);
+						species.push_back(name);
 						atomNumbers.push_back(1);
 					}
 				}
@@ -327,16 +327,16 @@ void load_atoms(FILE* reader, std::vector<std::string>& atomNames, std::vector<u
 		
 		if(QE_PRINT_STATUS>0){
 			std::cout<<"nTypes     = "<<nTypes<<"\n";
-			std::cout<<"nAtomNames = "<<atomNames.size()<<"\n";
+			std::cout<<"nAtomNames = "<<species.size()<<"\n";
 			std::cout<<"nAtoms     = "<<nAtoms<<"\n";
 			std::cout<<"nAtomsList = "<<nAtomsList<<"\n";
-			std::cout<<"atomNames  = \n";
-			for(unsigned int i=0; i<atomNames.size(); ++i){
-				std::cout<<"\t"<<atomNames[i]<<"\n";
+			std::cout<<"species  = \n";
+			for(unsigned int i=0; i<species.size(); ++i){
+				std::cout<<"\t"<<species[i]<<"\n";
 			}
 		}
 		
-		if(atomNames.size()!=nTypes) throw std::runtime_error("Incompatible number of types and atom specification.");
+		if(species.size()!=nTypes) throw std::runtime_error("Incompatible number of types and atom specification.");
 		if(nAtoms!=nAtomsList) throw std::runtime_error("Incompatible number of atoms and atom specification.");
 	}catch(std::exception& e){
 		std::cout<<"Error in "<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<func_name<<":\n";
@@ -491,7 +491,7 @@ void load_posns(FILE* reader, Simulation& sim){
 			for(unsigned int n=0; n<sim.frame(t).nAtoms(); ++n){
 				Cell::returnToCell(
 					sim.frame(t).posn(n),sim.frame(t).posn(n),
-					sim.frame(t).cell().R(),sim.frame(t).cell().RInv()
+					sim.frame(t).R(),sim.frame(t).RInv()
 				);
 			}
 		}
@@ -586,9 +586,10 @@ void read_forces(FILE* reader, Simulation& sim){
 			fgets(input,string::M,reader);//header
 			for(unsigned int n=0; n<sim.frame(t).nAtoms(); ++n){
 				fgets(input,string::M,reader);
-				sim.frame(t).force(n)[0]=s_energy/s_posn*std::atof(std::strtok(input,string::WS));
-				sim.frame(t).force(n)[1]=s_energy/s_posn*std::atof(std::strtok(NULL,string::WS));
-				sim.frame(t).force(n)[2]=s_energy/s_posn*std::atof(std::strtok(NULL,string::WS));
+				sim.frame(t).force(n)[0]=std::atof(std::strtok(input,string::WS));
+				sim.frame(t).force(n)[1]=std::atof(std::strtok(NULL,string::WS));
+				sim.frame(t).force(n)[2]=std::atof(std::strtok(NULL,string::WS));
+				sim.frame(t).force(n)*=s_energy/s_posn;
 			}
 			for(unsigned int tt=1; tt<sim.stride(); ++tt){
 				fgets(input,string::M,reader);//header
@@ -738,21 +739,21 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 				struc.energy()=s_energy*std::atof(string::trim_right(string::trim_left(input,"="),"Ry"));
 			} else if(std::strstr(input,str_lv)!=NULL){
 				std::vector<std::string> strlist;
-				string::trim_right(string::trim_left(string::trim_left(fgets(input,string::M,reader),"="),"("),")");
+				fgets(input,string::M,reader); string::replace(input,')',' '); string::replace(input,'(',' ');
 				string::split(input,string::WS,strlist);
-				lv(0,0)=std::atof(strlist.at(0).c_str());
-				lv(1,0)=std::atof(strlist.at(1).c_str());
-				lv(2,0)=std::atof(strlist.at(2).c_str());
-				string::trim_right(string::trim_left(string::trim_left(fgets(input,string::M,reader),"="),"("),")");
+				lv(0,0)=std::atof(strlist.at(3).c_str());
+				lv(1,0)=std::atof(strlist.at(4).c_str());
+				lv(2,0)=std::atof(strlist.at(5).c_str());
+				fgets(input,string::M,reader); string::replace(input,')',' '); string::replace(input,'(',' ');
 				string::split(input,string::WS,strlist);
-				lv(0,1)=std::atof(strlist.at(0).c_str());
-				lv(1,1)=std::atof(strlist.at(1).c_str());
-				lv(2,1)=std::atof(strlist.at(2).c_str());
-				string::trim_right(string::trim_left(string::trim_left(fgets(input,string::M,reader),"="),"("),")");
+				lv(0,1)=std::atof(strlist.at(3).c_str());
+				lv(1,1)=std::atof(strlist.at(4).c_str());
+				lv(2,1)=std::atof(strlist.at(5).c_str());
+				fgets(input,string::M,reader); string::replace(input,')',' '); string::replace(input,'(',' ');
 				string::split(input,string::WS,strlist);
-				lv(0,2)=std::atof(strlist.at(0).c_str());
-				lv(1,2)=std::atof(strlist.at(1).c_str());
-				lv(2,2)=std::atof(strlist.at(2).c_str());
+				lv(0,2)=std::atof(strlist.at(3).c_str());
+				lv(1,2)=std::atof(strlist.at(4).c_str());
+				lv(2,2)=std::atof(strlist.at(5).c_str());
 			} else if(std::strstr(input,str_alat)!=NULL){
 				alat=s_posn*std::atof(string::trim_right(string::trim_left(input,"="),"a"));
 			} else if(std::strstr(input,str_natoms)!=NULL){
@@ -800,7 +801,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		//resize the structure
 		if(QE_PRINT_STATUS>0) std::cout<<"resizing structure\n";
 		struc.resize(natoms,species,atomT);
-		struc.cell().init(alat*lv);
+		static_cast<Cell&>(struc).init(alat*lv);
 		
 		//read in stress
 		#ifdef INCLUDE_VIRIAL
@@ -829,7 +830,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		}
 		#endif
 		
-		//read in positions
+		//read positions
 		if(atomT.posn){
 			if(QE_PRINT_STATUS>0) std::cout<<"reading positions\n";
 			std::rewind(reader);
@@ -839,17 +840,18 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 					for(unsigned int i=0; i<natoms.size(); ++i) natoms[i]=0;
 					for(unsigned int i=0; i<natomst; ++i){
 						fgets(input,string::M,reader);
+						string::replace(input,'(',' ');
+						string::replace(input,')',' ');
 						string::split(input,string::WS,strlist);
 						std::string name=strlist.at(1);
 						int si=-1;
-						for(unsigned int j=0; j<species.size(); ++j){
+						for(int j=species.size()-1; j>=0; --j){
 							if(name==species[j]){si=j;break;}
 						}
 						if(si<0) throw std::runtime_error("Invalid species.");
-						string::trim_right(string::trim_left(string::trim_left(input,"="),"("),")");
-						struc.posn(si,natoms[si])[0]=std::atof(std::strtok(input,string::WS));
-						struc.posn(si,natoms[si])[1]=std::atof(std::strtok(NULL,string::WS));
-						struc.posn(si,natoms[si])[2]=std::atof(std::strtok(NULL,string::WS));
+						struc.posn(si,natoms[si])[0]=std::atof(strlist[5].c_str());
+						struc.posn(si,natoms[si])[1]=std::atof(strlist[6].c_str());
+						struc.posn(si,natoms[si])[2]=std::atof(strlist[7].c_str());
 						++natoms[si];
 					}
 				}
@@ -870,11 +872,12 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 						fgets(input,string::M,reader);
 						string::split(input,string::WS,strlist);
 						unsigned int atom=std::atoi(strlist.at(1).c_str())-1;
-						unsigned int type=std::atoi(strlist.at(3).c_str())-1;
+						const unsigned int type=std::atoi(strlist.at(3).c_str())-1;
 						for(unsigned int j=0; j<type; ++j) atom-=struc.nAtoms(j);
-						struc.force(type,atom)[0]=std::atof(strlist.at(6).c_str())*s_energy/s_posn;
-						struc.force(type,atom)[1]=std::atof(strlist.at(7).c_str())*s_energy/s_posn;
-						struc.force(type,atom)[2]=std::atof(strlist.at(8).c_str())*s_energy/s_posn;
+						struc.force(type,atom)[0]=std::atof(strlist.at(6).c_str());
+						struc.force(type,atom)[1]=std::atof(strlist.at(7).c_str());
+						struc.force(type,atom)[2]=std::atof(strlist.at(8).c_str());
+						struc.force(type,atom)*=s_energy/s_posn;
 					}
 				}
 			}
@@ -907,7 +910,7 @@ Simulation& read(const Format& format, const Interval& interval, const AtomType&
 		Cell cell;
 		unsigned int ts=0;
 		int tsint=0;
-		std::vector<std::string> atomNames;
+		std::vector<std::string> species;
 		std::vector<unsigned int> atomNumbers;
 	//timing
 		clock_t start,stop;
@@ -923,7 +926,7 @@ Simulation& read(const Format& format, const Interval& interval, const AtomType&
 			
 			Structure struc;
 			OUT::read(format.fileOut.c_str(),atomT,struc);
-			sim.resize(1,struc.nAtomsVec(),struc.atomNames(),atomT);
+			sim.resize(1,struc.nAtomsV(),struc.species(),atomT);
 			sim.frame(0)=struc;
 			sim.timesteps()=1;
 			sim.cell_fixed()=true;
@@ -940,7 +943,7 @@ Simulation& read(const Format& format, const Interval& interval, const AtomType&
 				//read the cell
 				IN::read_cell(reader,cell);
 				//read the atom info
-				IN::load_atoms(reader,atomNames,atomNumbers);
+				IN::load_atoms(reader,species,atomNumbers);
 				//read the timestep
 				sim.timestep()=IN::load_timestep(reader);
 				//close the "in" file
@@ -969,7 +972,7 @@ Simulation& read(const Format& format, const Interval& interval, const AtomType&
 			tsint=sim.end()-sim.beg()+1;
 			
 			//resize the simulation
-			sim.resize(tsint/interval.stride,atomNumbers,atomNames,atomT);
+			sim.resize(tsint/interval.stride,atomNumbers,species,atomT);
 			sim.stride()=interval.stride;
 			if(QE_PRINT_STATUS>0) std::cout<<"interval = "<<interval.beg<<":"<<interval.end<<":"<<interval.stride<<"\n";
 			if(QE_PRINT_STATUS>0) std::cout<<"SIM = \n"<<sim<<"\n";

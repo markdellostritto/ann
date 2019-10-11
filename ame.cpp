@@ -84,7 +84,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		lv(2,2)=std::atof(std::strtok(NULL,string::WS));
 		lv*=s_posn;
 		if(DEBUG_AME_PRINT_DATA>0) std::cout<<"LV = "<<lv<<"\n";
-		struc.cell().init(lv);
+		static_cast<Cell&>(struc).init(lv);
 		
 		//read in atom names
 		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"reading species names\n";
@@ -141,7 +141,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 			}
 			if(frac){
 				for(unsigned int i=0; i<struc.nAtoms(); ++i){
-					struc.posn(i)=struc.cell().R()*struc.posn(i);
+					struc.posn(i)=struc.R()*struc.posn(i);
 				}
 			} else {
 				for(unsigned int i=0; i<struc.nAtoms(); ++i){
@@ -163,7 +163,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 			}
 			if(frac){
 				for(unsigned int i=0; i<struc.nAtoms(); ++i){
-					struc.force(i)=struc.cell().RInv()*struc.force(i)*s_energy;
+					struc.force(i)=struc.RInv()*struc.force(i)*s_energy;
 				}
 			} else {
 				for(unsigned int i=0; i<struc.nAtoms(); ++i){
@@ -222,21 +222,21 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 		//write the cell
 		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing lattice vectors\n";
 		fprintf(writer,"CELL ");
-		fprintf(writer,"%f ",struc.cell().R()(0,0)*s_posn);
-		fprintf(writer,"%f ",struc.cell().R()(1,0)*s_posn);
-		fprintf(writer,"%f ",struc.cell().R()(2,0)*s_posn);
-		fprintf(writer,"%f ",struc.cell().R()(0,1)*s_posn);
-		fprintf(writer,"%f ",struc.cell().R()(1,1)*s_posn);
-		fprintf(writer,"%f ",struc.cell().R()(2,1)*s_posn);
-		fprintf(writer,"%f ",struc.cell().R()(0,2)*s_posn);
-		fprintf(writer,"%f ",struc.cell().R()(1,2)*s_posn);
-		fprintf(writer,"%f ",struc.cell().R()(2,2)*s_posn);
+		fprintf(writer,"%f ",struc.R()(0,0)*s_posn);
+		fprintf(writer,"%f ",struc.R()(1,0)*s_posn);
+		fprintf(writer,"%f ",struc.R()(2,0)*s_posn);
+		fprintf(writer,"%f ",struc.R()(0,1)*s_posn);
+		fprintf(writer,"%f ",struc.R()(1,1)*s_posn);
+		fprintf(writer,"%f ",struc.R()(2,1)*s_posn);
+		fprintf(writer,"%f ",struc.R()(0,2)*s_posn);
+		fprintf(writer,"%f ",struc.R()(1,2)*s_posn);
+		fprintf(writer,"%f ",struc.R()(2,2)*s_posn);
 		fprintf(writer,"\n");
 		
 		//write atom names
 		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing species names\n";
 		fprintf(writer,"ATOMS ");
-		for(unsigned int i=0; i<struc.nSpecies(); ++i) fprintf(writer,"%s ",struc.atomNames(i).c_str());
+		for(unsigned int i=0; i<struc.nSpecies(); ++i) fprintf(writer,"%s ",struc.species(i).c_str());
 		fprintf(writer,"\n");
 		
 		//write atom numbers
@@ -258,12 +258,12 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 		if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing positions\n";
 		if(atomT.posn){
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
-				Eigen::Vector3d posn=struc.cell().RInv()*struc.posn(i);
+				Eigen::Vector3d posn=struc.RInv()*struc.posn(i);
 				fprintf(writer,"\t%14.12f %14.12f %14.12f\n",posn[0],posn[1],posn[2]);
 			}
 		} else {
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
-				Eigen::Vector3d posn=struc.cell().RInv()*struc.posn(i);
+				Eigen::Vector3d posn=struc.RInv()*struc.posn(i);
 				fprintf(writer,"\t0.0 0.0 0.0\n",posn[0],posn[1],posn[2]);
 			}
 		}
@@ -273,12 +273,12 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 		fprintf(writer,"FORCES\n");
 		if(atomT.force){
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
-				Eigen::Vector3d force=struc.cell().R()*struc.force(i)*s_energy;
+				Eigen::Vector3d force=struc.R()*struc.force(i)*s_energy;
 				fprintf(writer,"\t%14.12f %14.12f %14.12f\n",force[0],force[1],force[2]);
 			}
 		} else {
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
-				Eigen::Vector3d posn=struc.cell().RInv()*struc.posn(i);
+				Eigen::Vector3d posn=struc.RInv()*struc.posn(i);
 				fprintf(writer,"\t0.0 0.0 0.0\n",posn[0],posn[1],posn[2]);
 			}
 		}
@@ -307,7 +307,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 		FILE* reader=NULL;
 		char* input=new char[string::M];
 	//simulation flags
-		bool frac;//fractiona/Cartesian coordinates
+		bool frac;//fractional/Cartesian coordinates
 	//cell info
 		Eigen::Matrix3d lv;
 		Cell cell;
@@ -442,7 +442,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 			lv(2,2)=std::atof(std::strtok(NULL,string::WS));
 			lv*=s_posn;
 			if(DEBUG_AME_PRINT_DATA>1) std::cout<<"LV = "<<lv<<"\n";
-			sim.frame(t).cell().init(lv);
+			sim.frame(t).init(lv);
 			
 			//read in atom names
 			if(DEBUG_AME_PRINT_STATUS>1) std::cout<<"reading species names\n";
@@ -471,7 +471,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 				}
 				if(frac){
 					for(unsigned int i=0; i<sim.frame(t).nAtoms(); ++i){
-						sim.frame(t).posn(i)=sim.frame(t).cell().R()*sim.frame(t).posn(i);
+						sim.frame(t).posn(i)=sim.frame(t).R()*sim.frame(t).posn(i);
 					}
 				} else {
 					for(unsigned int i=0; i<sim.frame(t).nAtoms(); ++i){
@@ -496,7 +496,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 				}
 				if(frac){
 					for(unsigned int i=0; i<sim.frame(t).nAtoms(); ++i){
-						sim.frame(t).force(i)=sim.frame(t).cell().RInv()*sim.frame(t).force(i)*s_energy;
+						sim.frame(t).force(i)=sim.frame(t).RInv()*sim.frame(t).force(i)*s_energy;
 					}
 				} else {
 					for(unsigned int i=0; i<sim.frame(t).nAtoms(); ++i){
@@ -575,21 +575,21 @@ void write(const char* file, const Interval& interval, const AtomType& atomT, co
 			//write the cell
 			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing lattice vectors\n";
 			fprintf(writer,"CELL ");
-			fprintf(writer,"%f ",sim.frame(t).cell().R()(0,0)*s_posn);
-			fprintf(writer,"%f ",sim.frame(t).cell().R()(1,0)*s_posn);
-			fprintf(writer,"%f ",sim.frame(t).cell().R()(2,0)*s_posn);
-			fprintf(writer,"%f ",sim.frame(t).cell().R()(0,1)*s_posn);
-			fprintf(writer,"%f ",sim.frame(t).cell().R()(1,1)*s_posn);
-			fprintf(writer,"%f ",sim.frame(t).cell().R()(2,1)*s_posn);
-			fprintf(writer,"%f ",sim.frame(t).cell().R()(0,2)*s_posn);
-			fprintf(writer,"%f ",sim.frame(t).cell().R()(1,2)*s_posn);
-			fprintf(writer,"%f ",sim.frame(t).cell().R()(2,2)*s_posn);
+			fprintf(writer,"%f ",sim.frame(t).R()(0,0)*s_posn);
+			fprintf(writer,"%f ",sim.frame(t).R()(1,0)*s_posn);
+			fprintf(writer,"%f ",sim.frame(t).R()(2,0)*s_posn);
+			fprintf(writer,"%f ",sim.frame(t).R()(0,1)*s_posn);
+			fprintf(writer,"%f ",sim.frame(t).R()(1,1)*s_posn);
+			fprintf(writer,"%f ",sim.frame(t).R()(2,1)*s_posn);
+			fprintf(writer,"%f ",sim.frame(t).R()(0,2)*s_posn);
+			fprintf(writer,"%f ",sim.frame(t).R()(1,2)*s_posn);
+			fprintf(writer,"%f ",sim.frame(t).R()(2,2)*s_posn);
 			fprintf(writer,"\n");
 			
 			//write atom names
 			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing species names\n";
 			fprintf(writer,"ATOMS ");
-			for(unsigned int i=0; i<sim.frame(t).nSpecies(); ++i) fprintf(writer,"%s ",sim.frame(t).atomNames(i).c_str());
+			for(unsigned int i=0; i<sim.frame(t).nSpecies(); ++i) fprintf(writer,"%s ",sim.frame(t).species(i).c_str());
 			fprintf(writer,"\n");
 			
 			//write atom numbers
@@ -611,7 +611,7 @@ void write(const char* file, const Interval& interval, const AtomType& atomT, co
 			fprintf(writer,"POSNS\n");
 			if(atomT.posn){
 				for(unsigned int i=0; i<sim.frame(t).nAtoms(); ++i){
-					Eigen::Vector3d posn=sim.frame(t).cell().RInv()*sim.frame(t).posn(i);
+					Eigen::Vector3d posn=sim.frame(t).RInv()*sim.frame(t).posn(i);
 					fprintf(writer,"\t%f %f %f\n",posn[0],posn[1],posn[2]);
 				}
 			} else {
@@ -625,7 +625,7 @@ void write(const char* file, const Interval& interval, const AtomType& atomT, co
 			fprintf(writer,"FORCES\n");
 			if(atomT.force){
 				for(unsigned int i=0; i<sim.frame(t).nAtoms(); ++i){
-					Eigen::Vector3d force=sim.frame(t).cell().R()*sim.frame(t).force(i)*s_energy;
+					Eigen::Vector3d force=sim.frame(t).R()*sim.frame(t).force(i)*s_energy;
 					fprintf(writer,"\t%f %f %f\n",force[0],force[1],force[2]);
 				}
 			} else {
