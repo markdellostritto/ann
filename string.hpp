@@ -1,12 +1,8 @@
 #pragma once
-#ifndef STRING_OPS_H
-#define STRING_OPS_H
+#ifndef STRING_HPP
+#define STRING_HPP
 
-#include <cstdlib>
-#include <cstring>
-#include <cctype>
-#include <iostream>
-#include <stdexcept>
+//c++ libraries
 #include <string>
 #include <vector>
 
@@ -50,6 +46,12 @@ namespace string{
 	char* trim_left(char* str, const char* delim);
 	char* trim_right(char* str, const char* delim);
 	char* trim(char* str, const char* delim);
+	
+	//******************************************************
+	//Modifying
+	//******************************************************
+	
+	char* replace(char* str, char c1, char c2);
 	
 	//******************************************************
 	//Copying

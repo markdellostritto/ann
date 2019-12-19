@@ -1,3 +1,10 @@
+// c libraries
+#include <cstring>
+#include <cctype>
+// c++ libraries
+#include <ostream>
+#include <string>
+// ann - string
 #include "string.hpp"
 
 namespace string{
@@ -129,6 +136,18 @@ char* trim_right(char* str, const char* delim){
 char* trim(char* str, const char* delim){
 	trim_left(str,delim);
 	trim_right(str,delim);
+	return str;
+}
+
+//******************************************************
+//Modifying
+//******************************************************
+
+char* replace(char* str, char c1, char c2){
+	while(*str){
+		if(*str==c1) *str=c2;
+		++str;
+	}
 	return str;
 }
 
