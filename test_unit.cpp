@@ -1,3 +1,38 @@
+// c libaries
+#include <ctime>
+// c++ libaries
+#include <iostream>
+#include <iomanip>
+// ann - math
+#include "math_const.hpp"
+#include "math_special.hpp"
+// ann - eigen
+#include "eigen.hpp"
+// ann - string
+#include "string.hpp"
+// ann - optimization
+#include "optimize.hpp"
+// ann - ewald
+#include "ewald3D.hpp"
+// ann - cutoff
+#include "cutoff.hpp"
+// ann - symmetry functions
+#include "symm_radial_t1.hpp"
+#include "symm_radial_g1.hpp"
+#include "symm_radial_g2.hpp"
+#include "symm_angular_g3.hpp"
+#include "symm_angular_g4.hpp"
+// ann - neural network
+#include "nn.hpp"
+// ann - structure
+#include "structure.hpp"
+// ann - units
+#include "units.hpp"
+// ann - compiler
+#include "compiler.hpp"
+// ann - print
+#include "print.hpp"
+// ann - test - unit
 #include "test_unit.hpp"
 
 //**********************************************
@@ -40,15 +75,17 @@ void test_math_special_cos(){
 	time_approx*=1e9/N;
 	
 	//print results
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - MATH - SPECIAL - COS\n";
 	std::cout<<"N             = "<<N<<"\n";
 	std::cout<<"interval      = "<<xmin<<" "<<xmax<<"\n";
 	std::cout<<"error - avg   = "<<err_avg<<"\n";
 	std::cout<<"error - max   = "<<err_max<<"\n";
-	std::cout<<"time - exact  = "<<time_exact<<"\n";
-	std::cout<<"time - approx = "<<time_approx<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<"time - exact  = "<<time_exact<<" ns\n";
+	std::cout<<"time - approx = "<<time_approx<<" ns\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_math_special_sin(){
@@ -87,15 +124,17 @@ void test_math_special_sin(){
 	time_approx*=1e9/N;
 	
 	//print results
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - MATH - SPECIAL - SIN\n";
 	std::cout<<"N             = "<<N<<"\n";
 	std::cout<<"interval      = "<<xmin<<" "<<xmax<<"\n";
 	std::cout<<"error - avg   = "<<err_avg<<"\n";
 	std::cout<<"error - max   = "<<err_max<<"\n";
-	std::cout<<"time - exact  = "<<time_exact<<"\n";
-	std::cout<<"time - approx = "<<time_approx<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<"time - exact  = "<<time_exact<<" ns\n";
+	std::cout<<"time - approx = "<<time_approx<<" ns\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_math_special_logp1(){
@@ -134,15 +173,17 @@ void test_math_special_logp1(){
 	time_approx*=1e9/N;
 	
 	//print results
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - MATH - SPECIAL - LOGP1\n";
 	std::cout<<"N             = "<<N<<"\n";
 	std::cout<<"interval      = "<<xmin<<" "<<xmax<<"\n";
 	std::cout<<"error - avg   = "<<err_avg<<"\n";
 	std::cout<<"error - max   = "<<err_max<<"\n";
-	std::cout<<"time - exact  = "<<time_exact<<"\n";
-	std::cout<<"time - approx = "<<time_approx<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<"time - exact  = "<<time_exact<<" ns\n";
+	std::cout<<"time - approx = "<<time_approx<<" ns\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 //**********************************************
@@ -153,6 +194,7 @@ void test_cutoff_cos(){
 	const double rc=6.0;
 	const int N=100;
 	const double dr=rc/(N-1.0);
+	//compute error
 	double integral=0.5*(CutoffF::cut_cos(0.0,rc)+CutoffF::cut_cos(rc,rc));
 	for(int i=N-2; i>=1; --i){
 		integral+=CutoffF::cut_cos(i/(N-1.0)*rc,rc);
@@ -164,11 +206,29 @@ void test_cutoff_cos(){
 		errg+=std::fabs(g-CutoffFD::cut_cos(i/(N-1.0)*rc,rc));
 	}
 	errg/=(N-1.0);
-	std::cout<<"====================================================\n";
+	//compute time
+	double timef,timed;
+	clock_t start,stop;
+	const int Nt=1e5;
+	std::srand(std::time(NULL));
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--) volatile double val=CutoffF::cut_cos(std::rand()/RAND_MAX*rc,rc);
+	stop=std::clock();
+	timef=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--) volatile double val=CutoffFD::cut_cos(std::rand()/RAND_MAX*rc,rc);
+	stop=std::clock();
+	timed=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
+	//print
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - CUTOFF - COS\n";
-	std::cout<<"err - integral = "<<std::fabs(0.5*rc-integral)<<"\n";
-	std::cout<<"err - gradient = "<<errg<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<"err - integral  = "<<std::fabs(0.5*rc-integral)<<"\n";
+	std::cout<<"err - gradient  = "<<errg<<"\n";
+	std::cout<<"time - function = "<<timef<<" ns\n";
+	std::cout<<"time - gradient = "<<timed<<" ns\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 //**********************************************
@@ -179,6 +239,7 @@ void test_symm_t1(){
 	const double rc=6.0;
 	const int N=100;
 	const double dr=rc/(N-1.0);
+	//compute error
 	double errg=0,r;
 	PhiR_T1 t1(1.4268,0.56278905);
 	for(int i=N-2; i>=1; --i){
@@ -193,18 +254,45 @@ void test_symm_t1(){
 		errg+=std::fabs(g-t1.grad(r,cut,gcut));
 	}
 	errg/=(N-1.0);
-	std::cout<<"====================================================\n";
+	//compute time
+	double timef,timed;
+	clock_t start,stop;
+	const int Nt=1e5;
+	std::srand(std::time(NULL));
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--){
+		r=std::rand()/RAND_MAX*rc;
+		volatile double val=t1.val(r,CutoffF::cut_cos(r,rc));
+	}
+	stop=std::clock();
+	timef=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--){
+		r=std::rand()/RAND_MAX*rc;
+		const double cut=CutoffF::cut_cos(r,rc);
+		const double gcut=CutoffFD::cut_cos(r,rc);
+		volatile double val=t1.grad(r,cut,gcut);
+	}
+	stop=std::clock();
+	timed=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
+	//print
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - SYMM - T1\n";
 	std::cout<<"N  = "<<N<<"\n";
 	std::cout<<"rc = "<<rc<<"\n";
 	std::cout<<"err - grad = "<<errg<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<"time - function = "<<timef<<" ns\n";
+	std::cout<<"time - gradient = "<<timed<<" ns\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_symm_g1(){
 	const double rc=6.0;
 	const int N=100;
 	const double dr=rc/(N-1.0);
+	//compute error
 	double errg=0,r;
 	PhiR_G1 g1;
 	for(int i=N-2; i>=1; --i){
@@ -219,17 +307,44 @@ void test_symm_g1(){
 		errg+=std::fabs(g-g1.grad(r,cut,gcut));
 	}
 	errg/=(N-1.0);
-	std::cout<<"====================================================\n";
+	//compute time
+	double timef,timed;
+	clock_t start,stop;
+	const int Nt=1e5;
+	std::srand(std::time(NULL));
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--){
+		r=std::rand()/RAND_MAX*rc;
+		volatile double val=g1.val(r,CutoffF::cut_cos(r,rc));
+	}
+	stop=std::clock();
+	timef=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--){
+		r=std::rand()/RAND_MAX*rc;
+		const double cut=CutoffF::cut_cos(r,rc);
+		const double gcut=CutoffFD::cut_cos(r,rc);
+		volatile double val=g1.grad(r,cut,gcut);
+	}
+	stop=std::clock();
+	timed=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
+	//print
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - SYMM - G1\n";
 	std::cout<<"N  = "<<N<<"\n";
 	std::cout<<"rc = "<<rc<<"\n";
 	std::cout<<"err - grad = "<<errg<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<"time - function = "<<timef<<" ns\n";
+	std::cout<<"time - gradient = "<<timed<<" ns\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_symm_g2(){
 	const double rc=6.0;
 	const int N=100;
+	//compute error
 	const double dr=rc/(N-1.0);
 	double errg=0,r;
 	PhiR_G2 g2(1.4268,0.56278905);
@@ -245,12 +360,38 @@ void test_symm_g2(){
 		errg+=std::fabs(g-g2.grad(r,cut,gcut));
 	}
 	errg/=(N-1.0);
-	std::cout<<"====================================================\n";
+	//compute time
+	double timef,timed;
+	clock_t start,stop;
+	const int Nt=1e5;
+	std::srand(std::time(NULL));
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--){
+		r=std::rand()/RAND_MAX*rc;
+		volatile double val=g2.val(r,CutoffF::cut_cos(r,rc));
+	}
+	stop=std::clock();
+	timef=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--){
+		r=std::rand()/RAND_MAX*rc;
+		const double cut=CutoffF::cut_cos(r,rc);
+		const double gcut=CutoffFD::cut_cos(r,rc);
+		volatile double val=g2.grad(r,cut,gcut);
+	}
+	stop=std::clock();
+	timed=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
+	//print
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - SYMM - G2\n";
 	std::cout<<"N  = "<<N<<"\n";
 	std::cout<<"rc = "<<rc<<"\n";
 	std::cout<<"err - grad = "<<errg<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<"time - function = "<<timef<<" ns\n";
+	std::cout<<"time - gradient = "<<timed<<" ns\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_symm_g3(){
@@ -344,8 +485,39 @@ void test_symm_g3(){
 		errga+=std::fabs(g-g3.grad_angle(cosv)*g3.dist(r,c));
 	}
 	errga/=(N-1.0);
+	//time - value
+	double timef,timed;
+	clock_t start,stop;
+	const int Nt=1e5;
+	std::srand(std::time(NULL));
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--){
+		r[0]=std::rand()/RAND_MAX*rc;
+		r[1]=std::rand()/RAND_MAX*rc;
+		r[2]=std::rand()/RAND_MAX*rc;
+		c[0]=CutoffF::cut_cos(r[0],rc);
+		c[1]=CutoffF::cut_cos(r[1],rc);
+		c[2]=CutoffF::cut_cos(r[2],rc);
+		volatile double val=g3.val(cos,r,c);
+	}
+	stop=std::clock();
+	timef=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--){
+		r[0]=std::rand()/RAND_MAX*rc;
+		r[1]=std::rand()/RAND_MAX*rc;
+		r[2]=std::rand()/RAND_MAX*rc;
+		c[0]=CutoffF::cut_cos(r[0],rc);
+		c[1]=CutoffF::cut_cos(r[1],rc);
+		c[2]=CutoffF::cut_cos(r[2],rc);
+		const double gcut=CutoffFD::cut_cos(r[0],rc);
+		volatile double val=g3.grad_dist_2(r,c,gcut)*g3.angle(cos);
+	}
+	stop=std::clock();
+	timed=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
 	//print
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - SYMM - G3\n";
 	std::cout<<"N  = "<<N<<"\n";
 	std::cout<<"rc = "<<rc<<"\n";
@@ -353,7 +525,10 @@ void test_symm_g3(){
 	std::cout<<"err - grad - dist[1] = "<<errgd[1]<<"\n";
 	std::cout<<"err - grad - dist[2] = "<<errgd[2]<<"\n";
 	std::cout<<"err - grad - angle   = "<<errga<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<"time - function = "<<timef<<" ns\n";
+	std::cout<<"time - gradient = "<<timed<<" ns\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_symm_g4(){
@@ -444,8 +619,39 @@ void test_symm_g4(){
 		errga+=std::fabs(g-g4.grad_angle(cosv)*g4.dist(r,c));
 	}
 	errga/=(N-1.0);
+	//time - value
+	double timef,timed;
+	clock_t start,stop;
+	const int Nt=1e5;
+	std::srand(std::time(NULL));
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--){
+		r[0]=std::rand()/RAND_MAX*rc;
+		r[1]=std::rand()/RAND_MAX*rc;
+		r[2]=std::rand()/RAND_MAX*rc;
+		c[0]=CutoffF::cut_cos(r[0],rc);
+		c[1]=CutoffF::cut_cos(r[1],rc);
+		c[2]=CutoffF::cut_cos(r[2],rc);
+		volatile double val=g4.val(cos,r,c);
+	}
+	stop=std::clock();
+	timef=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
+	start=std::clock();
+	for(int i=Nt-1; i>=0; i--){
+		r[0]=std::rand()/RAND_MAX*rc;
+		r[1]=std::rand()/RAND_MAX*rc;
+		r[2]=std::rand()/RAND_MAX*rc;
+		c[0]=CutoffF::cut_cos(r[0],rc);
+		c[1]=CutoffF::cut_cos(r[1],rc);
+		c[2]=CutoffF::cut_cos(r[2],rc);
+		const double gcut=CutoffFD::cut_cos(r[0],rc);
+		volatile double val=g4.grad_dist_2(r,c,gcut)*g4.angle(cos);
+	}
+	stop=std::clock();
+	timed=((double)(stop-start))/CLOCKS_PER_SEC*1e9/Nt;
 	//print
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - SYMM - G4\n";
 	std::cout<<"N  = "<<N<<"\n";
 	std::cout<<"rc = "<<rc<<"\n";
@@ -453,7 +659,10 @@ void test_symm_g4(){
 	std::cout<<"err - gradient - dist[1] = "<<errgd[1]<<"\n";
 	std::cout<<"err - gradient - dist[2] = "<<errgd[2]<<"\n";
 	std::cout<<"err - gradient - angle   = "<<errga<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<"time - function = "<<timef<<" ns\n";
+	std::cout<<"time - gradient = "<<timed<<" ns\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 //**********************************************
@@ -469,12 +678,14 @@ void test_unit_eigen_vec3d(){
 	memarr=new char[memsize];
 	serialize::pack(vec1,memarr);
 	serialize::unpack(vec2,memarr);
-	delete memarr;
+	delete[] memarr;
 	double err=(vec1-vec2).norm();
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - EIGEN - VECTOR3D\n";
 	std::cout<<"err - serialization = "<<err<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_unit_eigen_vecxd(){
@@ -486,12 +697,14 @@ void test_unit_eigen_vecxd(){
 	memarr=new char[memsize];
 	serialize::pack(vec1,memarr);
 	serialize::unpack(vec2,memarr);
-	delete memarr;
+	delete[] memarr;
 	double err=(vec1-vec2).norm();
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - EIGEN - VECTORXD\n";
 	std::cout<<"err - serialization = "<<err<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_unit_eigen_mat3d(){
@@ -503,12 +716,14 @@ void test_unit_eigen_mat3d(){
 	memarr=new char[memsize];
 	serialize::pack(vec1,memarr);
 	serialize::unpack(vec2,memarr);
-	delete memarr;
+	delete[] memarr;
 	double err=(vec1-vec2).norm();
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - EIGEN - MATRIX3D\n";
 	std::cout<<"err - serialization = "<<err<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_unit_eigen_matxd(){
@@ -520,12 +735,14 @@ void test_unit_eigen_matxd(){
 	memarr=new char[memsize];
 	serialize::pack(vec1,memarr);
 	serialize::unpack(vec2,memarr);
-	delete memarr;
+	delete[] memarr;
 	double err=(vec1-vec2).norm();
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - EIGEN - MATRIXXD\n";
 	std::cout<<"err - serialization = "<<err<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 //**********************************************
@@ -547,7 +764,8 @@ void test_unit_opt_sgd(){
 	data.tol()=1e-8;
 	//init optimizer
 	Opt::SGD sgd(data.dim());
-	sgd.decay()=1;
+	sgd.decay()=Opt::DECAY::CONST;
+	sgd.alpha()=1;
 	sgd.gamma()=1e-3;
 	//optimize
 	for(unsigned int i=0; i<data.max(); ++i){
@@ -559,9 +777,11 @@ void test_unit_opt_sgd(){
 		data.dv()=std::fabs(data.val()-data.valOld());
 		data.dp()=(data.p()-data.pOld()).norm();
 		//check the break condition
-		if(data.optVal()==Opt::VAL::FTOL_REL && data.dv()<data.tol()) break;
-		else if(data.optVal()==Opt::VAL::XTOL_REL && data.dp()<data.tol()) break;
-		else if(data.optVal()==Opt::VAL::FTOL_ABS && data.val()<data.tol()) break;
+		switch(data.optVal()){
+			case Opt::VAL::FTOL_REL: if(data.dv()<data.tol()) break;
+			case Opt::VAL::XTOL_REL: if(data.dp()<data.tol()) break;
+			case Opt::VAL::FTOL_ABS: if(data.val()<data.tol()) break;
+		}
 		//print the status
 		data.pOld().noalias()=data.p();//set "old" p value
 		data.gOld().noalias()=data.g();//set "old" g value
@@ -569,12 +789,14 @@ void test_unit_opt_sgd(){
 		//update step
 		++data.step();
 	}
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - OPTIMIZE - SGD\n";
 	std::cout<<"n_steps = "<<data.step()<<"\n";
 	std::cout<<"val     = "<<data.val()<<"\n";
 	std::cout<<"x       = "<<data.p().transpose()<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_unit_opt_sdm(){
@@ -592,7 +814,8 @@ void test_unit_opt_sdm(){
 	data.tol()=1e-8;
 	//init optimizer
 	Opt::SDM sdm(data.dim());
-	sdm.decay()=1;
+	sdm.decay()=Opt::DECAY::CONST;
+	sdm.alpha()=1;
 	sdm.gamma()=1e-3;
 	sdm.eta()=0.9;
 	//optimize
@@ -605,9 +828,11 @@ void test_unit_opt_sdm(){
 		data.dv()=std::fabs(data.val()-data.valOld());
 		data.dp()=(data.p()-data.pOld()).norm();
 		//check the break condition
-		if(data.optVal()==Opt::VAL::FTOL_REL && data.dv()<data.tol()) break;
-		else if(data.optVal()==Opt::VAL::XTOL_REL && data.dp()<data.tol()) break;
-		else if(data.optVal()==Opt::VAL::FTOL_ABS && data.val()<data.tol()) break;
+		switch(data.optVal()){
+			case Opt::VAL::FTOL_REL: if(data.dv()<data.tol()) break;
+			case Opt::VAL::XTOL_REL: if(data.dp()<data.tol()) break;
+			case Opt::VAL::FTOL_ABS: if(data.val()<data.tol()) break;
+		}
 		//print the status
 		data.pOld().noalias()=data.p();//set "old" p value
 		data.gOld().noalias()=data.g();//set "old" g value
@@ -615,12 +840,14 @@ void test_unit_opt_sdm(){
 		//update step
 		++data.step();
 	}
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - OPTIMIZE - SDM\n";
 	std::cout<<"n_steps = "<<data.step()<<"\n";
 	std::cout<<"val     = "<<data.val()<<"\n";
 	std::cout<<"x       = "<<data.p().transpose()<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_unit_opt_nag(){
@@ -638,7 +865,8 @@ void test_unit_opt_nag(){
 	data.tol()=1e-8;
 	//init optimizer
 	Opt::NAG nag(data.dim());
-	nag.decay()=1;
+	nag.decay()=Opt::DECAY::CONST;
+	nag.alpha()=1;
 	nag.gamma()=1e-3;
 	nag.eta()=0.9;
 	//optimize
@@ -651,9 +879,11 @@ void test_unit_opt_nag(){
 		data.dv()=std::fabs(data.val()-data.valOld());
 		data.dp()=(data.p()-data.pOld()).norm();
 		//check the break condition
-		if(data.optVal()==Opt::VAL::FTOL_REL && data.dv()<data.tol()) break;
-		else if(data.optVal()==Opt::VAL::XTOL_REL && data.dp()<data.tol()) break;
-		else if(data.optVal()==Opt::VAL::FTOL_ABS && data.val()<data.tol()) break;
+		switch(data.optVal()){
+			case Opt::VAL::FTOL_REL: if(data.dv()<data.tol()) break;
+			case Opt::VAL::XTOL_REL: if(data.dp()<data.tol()) break;
+			case Opt::VAL::FTOL_ABS: if(data.val()<data.tol()) break;
+		}
 		//print the status
 		data.pOld().noalias()=data.p();//set "old" p value
 		data.gOld().noalias()=data.g();//set "old" g value
@@ -661,12 +891,14 @@ void test_unit_opt_nag(){
 		//update step
 		++data.step();
 	}
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - OPTIMIZE - NAG\n";
 	std::cout<<"n_steps = "<<data.step()<<"\n";
 	std::cout<<"val     = "<<data.val()<<"\n";
 	std::cout<<"x       = "<<data.p().transpose()<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_unit_opt_adam(){
@@ -684,7 +916,8 @@ void test_unit_opt_adam(){
 	data.tol()=1e-8;
 	//init optimizer
 	Opt::ADAM adam(data.dim());
-	adam.decay()=1;
+	adam.decay()=Opt::DECAY::CONST;
+	adam.alpha()=1;
 	adam.gamma()=1e-3;
 	//optimize
 	for(unsigned int i=0; i<data.max(); ++i){
@@ -696,9 +929,11 @@ void test_unit_opt_adam(){
 		data.dv()=std::fabs(data.val()-data.valOld());
 		data.dp()=(data.p()-data.pOld()).norm();
 		//check the break condition
-		if(data.optVal()==Opt::VAL::FTOL_REL && data.dv()<data.tol()) break;
-		else if(data.optVal()==Opt::VAL::XTOL_REL && data.dp()<data.tol()) break;
-		else if(data.optVal()==Opt::VAL::FTOL_ABS && data.val()<data.tol()) break;
+		switch(data.optVal()){
+			case Opt::VAL::FTOL_REL: if(data.dv()<data.tol()) break;
+			case Opt::VAL::XTOL_REL: if(data.dp()<data.tol()) break;
+			case Opt::VAL::FTOL_ABS: if(data.val()<data.tol()) break;
+		}
 		//print the status
 		data.pOld().noalias()=data.p();//set "old" p value
 		data.gOld().noalias()=data.g();//set "old" g value
@@ -706,12 +941,14 @@ void test_unit_opt_adam(){
 		//update step
 		++data.step();
 	}
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - OPTIMIZE - ADAM\n";
 	std::cout<<"n_steps = "<<data.step()<<"\n";
 	std::cout<<"val     = "<<data.val()<<"\n";
 	std::cout<<"x       = "<<data.p().transpose()<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_unit_opt_nadam(){
@@ -729,7 +966,8 @@ void test_unit_opt_nadam(){
 	data.tol()=1e-8;
 	//init optimizer
 	Opt::NADAM nadam(data.dim());
-	nadam.decay()=1;
+	nadam.decay()=Opt::DECAY::CONST;
+	nadam.alpha()=1;
 	nadam.gamma()=1e-3;
 	//optimize
 	for(unsigned int i=0; i<data.max(); ++i){
@@ -741,9 +979,11 @@ void test_unit_opt_nadam(){
 		data.dv()=std::fabs(data.val()-data.valOld());
 		data.dp()=(data.p()-data.pOld()).norm();
 		//check the break condition
-		if(data.optVal()==Opt::VAL::FTOL_REL && data.dv()<data.tol()) break;
-		else if(data.optVal()==Opt::VAL::XTOL_REL && data.dp()<data.tol()) break;
-		else if(data.optVal()==Opt::VAL::FTOL_ABS && data.val()<data.tol()) break;
+		switch(data.optVal()){
+			case Opt::VAL::FTOL_REL: if(data.dv()<data.tol()) break;
+			case Opt::VAL::XTOL_REL: if(data.dp()<data.tol()) break;
+			case Opt::VAL::FTOL_ABS: if(data.val()<data.tol()) break;
+		}
 		//print the status
 		data.pOld().noalias()=data.p();//set "old" p value
 		data.gOld().noalias()=data.g();//set "old" g value
@@ -751,12 +991,14 @@ void test_unit_opt_nadam(){
 		//update step
 		++data.step();
 	}
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - OPTIMIZE - NADAM\n";
 	std::cout<<"n_steps = "<<data.step()<<"\n";
 	std::cout<<"val     = "<<data.val()<<"\n";
 	std::cout<<"x       = "<<data.p().transpose()<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 //**********************************************
@@ -808,12 +1050,67 @@ void test_unit_ewald_madelung(){
 	ewald.init(strucg,1e-6);
 	//compute the total energy
 	const double mce=-2*ewald.energy(strucg)/strucg.nAtoms()*rmin/units::consts::ke();
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - EWALD - MADELUNG\n";
 	std::cout<<"madelung constant = "<<mc<<"\n";
 	std::cout<<"madelung (ewald)  = "<<mce<<"\n";
 	std::cout<<"error (percent)   = "<<std::fabs((mce-mc)/mc*100.0)<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
+}
+
+void test_unit_ewald_potential(){
+	//generate NaCl crystal
+	units::System::type unitsys=units::System::AU;
+	units::consts::init(unitsys);
+	double a0=5.6199998856;
+	if(unitsys==units::System::AU) a0*=units::BOHRpANG;
+	AtomType atomT; 
+	atomT.name=true; atomT.an=true; atomT.index=true; atomT.type=true;
+	atomT.charge=true; atomT.posn=true;
+	Structure strucg;
+	const unsigned int nspecies=2;
+	std::vector<unsigned int> natoms(nspecies,4);
+	std::vector<std::string> names(nspecies);
+	names[0]="Na"; names[1]="Cl";
+	strucg.resize(natoms,names,atomT);
+	Eigen::Matrix3d lv=Eigen::Matrix3d::Identity()*a0;
+	strucg.init(lv);
+	strucg.posn(0)<<0.000000000,0.000000000,0.000000000;
+	strucg.posn(1)<<0.000000000,0.500000000,0.500000000;
+	strucg.posn(2)<<0.500000000,0.000000000,0.500000000;
+	strucg.posn(3)<<0.500000000,0.500000000,0.000000000;
+	strucg.posn(4)<<0.500000000,0.500000000,0.500000000;
+	strucg.posn(5)<<0.500000000,0.000000000,0.000000000;
+	strucg.posn(6)<<0.000000000,0.500000000,0.000000000;
+	strucg.posn(7)<<0.000000000,0.000000000,0.500000000;
+	for(unsigned int i=0; i<8; ++i) strucg.posn(i)*=a0;
+	for(unsigned int i=0; i<4; ++i) strucg.charge(i)=1;
+	for(unsigned int i=4; i<8; ++i) strucg.charge(i)=-1;
+	for(unsigned int i=0; i<4; ++i) strucg.name(i)="Na";
+	for(unsigned int i=4; i<8; ++i) strucg.name(i)="Cl";
+	//ewald
+	Ewald3D::Coulomb ewald;
+	//initialize the ewald object
+	ewald.init(strucg,1e-8);
+	//compute the potentials
+	double energy=0;
+	for(unsigned int i=0; i<strucg.nAtoms(); ++i){
+		const double pot=ewald.phi(strucg,i);
+		energy+=pot*strucg.charge(i);
+		std::cout<<"pot "<<strucg.name(i)<<" "<<pot<<" "<<strucg.charge(i)<<"\n";
+	}
+	energy*=0.5;
+	//compute the total energy
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	std::cout<<"TEST - UNIT - EWALD - POTENTIAL\n";
+	std::cout<<"energy/atom (ewald) = "<<ewald.energy(strucg)/strucg.nAtoms()<<"\n";
+	std::cout<<"energy/atom (pot)   = "<<energy/strucg.nAtoms()<<"\n";
+	std::cout<<"error (percent)     = "<<std::fabs((energy-ewald.energy(strucg))/ewald.energy(strucg)*100.0)<<"\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 //**********************************************
@@ -827,11 +1124,13 @@ void test_unit_string_hash(){
 	const unsigned int hash1=string::hash(str1);
 	const unsigned int hash2=string::hash(str2);
 	const unsigned int hash3=string::hash(str3);
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - STRING - HASH\n";
 	std::cout<<"err -     equal = "<<std::fabs(1.0*hash1-1.0*hash2)<<"\n";
 	std::cout<<"err - non-equal = "<<1.0/std::fabs(1.0*hash1-1.0*hash3)<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 //**********************************************
@@ -859,20 +1158,22 @@ void test_unit_nn_out(){
 		Eigen::VectorXd vec1,vec2,vec3;
 		Eigen::VectorXd grad1,grad2,grad3;
 		vec1=nn.edge(0)*nn.input()+nn.bias(0); grad1=vec1;
-		nn.tfdv(0)(vec1,grad1);
+		nn.tffdv(0)(vec1,grad1);
 		vec2=nn.edge(1)*vec1+nn.bias(1); grad2=vec2;
-		nn.tfdv(1)(vec2,grad2);
+		nn.tffdv(1)(vec2,grad2);
 		vec3=nn.edge(2)*vec2+nn.bias(2); grad3=vec3;
-		nn.tfdv(2)(vec3,grad3);
+		nn.tffdv(2)(vec3,grad3);
 		errv+=(vec3-nn.output()).norm();
 	}
 	errv/=N;
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - NN - OUT\n";
 	std::cout<<"transfer = "<<nn.tfType()<<"\n";
 	std::cout<<"config   = "<<nn.nInput()<<" "; for(unsigned int i=0; i<nh.size(); ++i) std::cout<<nh[i]<<" "; std::cout<<nn.nOutput()<<"\n";
 	std::cout<<"err      = "<<errv<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 void test_unit_nn_grad(){
@@ -917,12 +1218,77 @@ void test_unit_nn_grad(){
 		err+=(dOutExact-dOutApprox).norm();
 	}
 	err/=N;
-	std::cout<<"====================================================\n";
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - NN - GRAD\n";
 	std::cout<<"transfer = "<<nn.tfType()<<"\n";
 	std::cout<<"config   = "<<nn.nInput()<<" "; for(unsigned int i=0; i<nh.size(); ++i) std::cout<<nh[i]<<" "; std::cout<<nn.nOutput()<<"\n";
 	std::cout<<"err      = "<<err<<"\n";
-	std::cout<<"====================================================\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
+}
+
+void test_unit_nn_time(){
+	//local function variables
+	const unsigned int N=1000;
+	const unsigned int M=4;
+	std::vector<double> time_exec(M,0);
+	std::vector<double> time_grad(M,0);
+	clock_t start,stop;
+	std::vector<std::vector<unsigned int> > nh(M);
+	nh[1].resize(1,5);
+	nh[2].resize(2,5);
+	nh[3].resize(3,5);
+	std::srand(std::time(NULL));
+	for(unsigned int m=0; m<M; ++m){
+		NN::Network nn;
+		nn.tfType()=NN::TransferN::TANH;
+		if(nh[m].size()>=0) nn.resize(3,3);
+		else nn.resize(3,nh[m],3);
+		start=std::clock();
+		for(unsigned int n=0; n<N; ++n){
+			//initialize the input nodes
+			for(unsigned int i=0; i<nn.nInput(); ++i) nn.input(i)=std::rand()/RAND_MAX-0.5;
+			//execute the network
+			nn.execute();
+		}
+		stop=std::clock();
+		time_exec[m]=((double)(stop-start))/CLOCKS_PER_SEC*1e9/N;
+		start=std::clock();
+		for(unsigned int n=0; n<N; ++n){
+			//initialize the input nodes
+			for(unsigned int i=0; i<nn.nInput(); ++i) nn.input(i)=std::rand()/RAND_MAX-0.5;
+			Eigen::VectorXd grad=Eigen::VectorXd::Random(nn.size());
+			Eigen::VectorXd dcda=Eigen::VectorXd::Random(3);
+			//compute gradient
+			nn.grad_nol(dcda,grad);
+		}
+		stop=std::clock();
+		time_grad[m]=((double)(stop-start))/CLOCKS_PER_SEC*1e9/N;
+	}
+	std::vector<std::vector<unsigned int> > config(M);
+	config[0].resize(2,5); config[0].front()=3; config[0].back()=3;
+	config[1].resize(3,5); config[1].front()=3; config[1].back()=3;
+	config[2].resize(4,5); config[2].front()=3; config[2].back()=3;
+	config[3].resize(5,5); config[3].front()=3; config[3].back()=3;
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	std::cout<<"TEST - NN - TIME - EXECUTION\n";
+	std::cout<<"transfer = TANH\n";
+	std::cout<<"time - "<<time_exec[0]<<" ns - "; for(int i=0; i<config[0].size(); ++i) std::cout<<config[0][i]<<" "; std::cout<<"\n";
+	std::cout<<"time - "<<time_exec[1]<<" ns - "; for(int i=0; i<config[1].size(); ++i) std::cout<<config[1][i]<<" "; std::cout<<"\n";
+	std::cout<<"time - "<<time_exec[2]<<" ns - "; for(int i=0; i<config[2].size(); ++i) std::cout<<config[2][i]<<" "; std::cout<<"\n";
+	std::cout<<"time - "<<time_exec[3]<<" ns - "; for(int i=0; i<config[3].size(); ++i) std::cout<<config[3][i]<<" "; std::cout<<"\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	std::cout<<"TEST - NN - TIME - GRADIENT\n";
+	std::cout<<"transfer = TANH\n";
+	std::cout<<"time - "<<time_grad[0]<<" ns - "; for(int i=0; i<config[0].size(); ++i) std::cout<<config[0][i]<<" "; std::cout<<"\n";
+	std::cout<<"time - "<<time_grad[1]<<" ns - "; for(int i=0; i<config[1].size(); ++i) std::cout<<config[1][i]<<" "; std::cout<<"\n";
+	std::cout<<"time - "<<time_grad[2]<<" ns - "; for(int i=0; i<config[2].size(); ++i) std::cout<<config[2][i]<<" "; std::cout<<"\n";
+	std::cout<<"time - "<<time_grad[3]<<" ns - "; for(int i=0; i<config[3].size(); ++i) std::cout<<config[3][i]<<" "; std::cout<<"\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
 }
 
 //**********************************************
@@ -932,9 +1298,25 @@ void test_unit_nn_grad(){
 int main(int argc, char* argv[]){
 	
 	std::srand(std::time(NULL));
+	char* str=new char[print::len_buf];
 	
-	std::cout<<"*********************************************************\n";
-	std::cout<<"********************* MATH - CONST *********************\n";
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("COMPILER",str)<<"\n";
+	std::cout<<"date     = "<<compiler::date()<<"\n";
+	std::cout<<"time     = "<<compiler::time()<<"\n";
+	std::cout<<"compiler = "<<compiler::name()<<"\n";
+	std::cout<<"version  = "<<compiler::version()<<"\n";
+	std::cout<<"standard = "<<compiler::standard()<<"\n";
+	std::cout<<"arch     = "<<compiler::arch()<<"\n";
+	std::cout<<"instr    = "<<compiler::instr()<<"\n";
+	std::cout<<"os       = "<<compiler::os()<<"\n";
+	std::cout<<"omp      = "<<compiler::omp()<<"\n";
+	std::cout<<print::title("COMPILER",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
+	
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("MATH - CONST",str)<<"\n";
+	std::cout<<std::setprecision(14);
 	std::cout<<"ZERO  = "<<num_const::ZERO<<"\n";
 	std::cout<<"PI    = "<<num_const::PI<<"\n";
 	std::cout<<"RadPI = "<<num_const::RadPI<<"\n";
@@ -943,72 +1325,108 @@ int main(int argc, char* argv[]){
 	std::cout<<"E     = "<<num_const::E<<"\n";
 	std::cout<<"PHI   = "<<num_const::PHI<<"\n";
 	std::cout<<"LOG2  = "<<num_const::LOG2<<"\n";
-	std::cout<<"********************* MATH - CONST *********************\n";
-	std::cout<<"*********************************************************\n";
+	std::cout<<std::setprecision(6);
+	std::cout<<print::title("MATH - CONST",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
 	
-	std::cout<<"*********************************************************\n";
-	std::cout<<"******************** MATH - SPECIAL ********************\n";
+	//**********************************************
+	// math_special
+	//**********************************************
+	
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("MATH - SPECIAL",str)<<"\n";
 	test_math_special_cos();
 	test_math_special_sin();
 	test_math_special_logp1();
-	std::cout<<"******************** MATH - SPECIAL ********************\n";
-	std::cout<<"*********************************************************\n";
+	std::cout<<print::title("MATH - SPECIAL",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
 	
-	std::cout<<"*********************************************************\n";
-	std::cout<<"************************ CUTOFF ************************\n";
+	//**********************************************
+	// cutoff
+	//**********************************************
+	
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("CUTOFF",str)<<"\n";
 	test_cutoff_cos();
-	std::cout<<"************************ CUTOFF ************************\n";
-	std::cout<<"*********************************************************\n";
+	std::cout<<print::title("CUTOFF",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
 	
-	std::cout<<"*********************************************************\n";
-	std::cout<<"************************* SYMM *************************\n";
+	//**********************************************
+	// symm
+	//**********************************************
+	
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("SYMM",str)<<"\n";
 	test_symm_t1();
 	test_symm_g1();
 	test_symm_g2();
 	test_symm_g3();
 	test_symm_g4();
-	std::cout<<"************************* SYMM *************************\n";
-	std::cout<<"*********************************************************\n";
+	std::cout<<print::title("SYMM",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
 	
-	std::cout<<"*********************************************************\n";
-	std::cout<<"************************* EIGEN *************************\n";
+	//**********************************************
+	// eigen
+	//**********************************************
+	
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("EIGEN",str)<<"\n";
 	test_unit_eigen_vec3d();
 	test_unit_eigen_vecxd();
 	test_unit_eigen_mat3d();
 	test_unit_eigen_matxd();
-	std::cout<<"************************* EIGEN *************************\n";
-	std::cout<<"*********************************************************\n";
+	std::cout<<print::title("EIGEN",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
 	
-	std::cout<<"*********************************************************\n";
-	std::cout<<"*********************** OPTIMIZE ***********************\n";
+	//**********************************************
+	// optimize
+	//**********************************************
+	
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("OPTIMIZE",str)<<"\n";
 	std::cout<<"ROSENBERG\n";
-	std::cout<<"OPT - V = 0.0\n";
+	std::cout<<"OPT - V =  0.0\n";
 	std::cout<<"OPT - X = (1,1)\n";
 	//test_unit_opt_sgd();
 	test_unit_opt_sdm();
 	test_unit_opt_nag();
 	test_unit_opt_adam();
 	test_unit_opt_nadam();
-	std::cout<<"*********************** OPTIMIZE ***********************\n";
-	std::cout<<"*********************************************************\n";
+	std::cout<<print::title("OPTIMIZE",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
 	
-	std::cout<<"*********************************************************\n";
-	std::cout<<"************************* EWALD *************************\n";
+	//**********************************************
+	// ewald
+	//**********************************************
+	
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("EWALD",str)<<"\n";
 	test_unit_ewald_madelung();
-	std::cout<<"************************* EWALD *************************\n";
-	std::cout<<"*********************************************************\n";
+	test_unit_ewald_potential();
+	std::cout<<print::title("EWALD",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
 	
-	std::cout<<"*********************************************************\n";
-	std::cout<<"************************ STRING ************************\n";
+	//**********************************************
+	// string
+	//**********************************************
+	
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("STRING",str)<<"\n";
 	test_unit_string_hash();
-	std::cout<<"************************ STRING ************************\n";
-	std::cout<<"*********************************************************\n";
+	std::cout<<print::title("STRING",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
 	
-	std::cout<<"*********************************************************\n";
-	std::cout<<"************************** NN **************************\n";
+	//**********************************************
+	// nn
+	//**********************************************
+	
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("NN",str)<<"\n";
 	test_unit_nn_out();
 	test_unit_nn_grad();
-	std::cout<<"************************** NN **************************\n";
-	std::cout<<"*********************************************************\n";
+	test_unit_nn_time();
+	std::cout<<print::title("NN",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
 	
+	delete[] str;
 }

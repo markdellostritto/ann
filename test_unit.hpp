@@ -1,26 +1,5 @@
-#include <ctime>
-#include <iostream>
-// math
-#include "math_const.hpp"
-#include "math_special.hpp"
-//optimization
-#include "optimize.hpp"
-//eigen
-#include "eigen.hpp"
-//string
-#include "string.hpp"
-//ewald
-#include "ewald3D.hpp"
-//cutoff
-#include "cutoff.hpp"
-//symmetry functions
-#include "symm_radial_t1.hpp"
-#include "symm_radial_g1.hpp"
-#include "symm_radial_g2.hpp"
-#include "symm_angular_g3.hpp"
-#include "symm_angular_g4.hpp"
-//neural network
-#include "nn.hpp"
+
+static const char char_buf='-';
 
 struct Rosen{
 	double a,b;
@@ -79,6 +58,7 @@ void test_unit_opt_nadam();
 //**********************************************
 
 void test_unit_ewald_madelung();
+void test_unit_ewald_potential();
 
 //**********************************************
 // string
