@@ -2,21 +2,11 @@
 #ifndef VASP_HPP
 #define VASP_HPP
 
-// c libraries
-#include <cstdio>
-#include <ctime>
 // c++ libraries
+#include <vector>
 #include <string>
-#include <stdexcept>
-// eigen libraries
-#include <Eigen/Dense>
-// local libraries - structure
-#include "cell.hpp"
-#include "structure.hpp"
-// local libraries - strings
-#include "string.hpp"
-// local libraries - units
-#include "units.hpp"
+// ann - structure
+#include "structure_fwd.hpp"
 
 #ifndef DEBUG_VASP
 #define DEBUG_VASP 0
@@ -51,6 +41,7 @@ struct Format{
 //*****************************************************
 //reading
 //*****************************************************
+
 void read_cell(FILE* reader, Cell& cell);
 void read_atoms(FILE* reader, std::vector<std::string>& names, std::vector<unsigned int>& natoms);
 bool read_coord(FILE* reader);
@@ -58,9 +49,14 @@ bool read_coord(FILE* reader);
 //*****************************************************
 //writing
 //*****************************************************
+
 void write_name(FILE* writer, const char* name);
 void write_cell(FILE* writer, const Cell& cell);
 void write_atoms(FILE* write, const std::vector<std::string>& names, const std::vector<unsigned int>& natoms);
+
+//*****************************************************
+//POSCAR
+//*****************************************************
 
 namespace POSCAR{
 
@@ -70,6 +66,10 @@ void write(const char* file, const AtomType& atomT, const Structure& struc);
 
 }
 
+//*****************************************************
+//XDATCAR
+//*****************************************************
+
 namespace XDATCAR{
 
 static const char* NAMESPACE_LOCAL="XDATCAR";
@@ -77,6 +77,10 @@ void read(const char* file, const Interval interval, const AtomType& atomT, Simu
 void write(const char* file, const Interval interval, const AtomType& atomT, const Simulation& sim);
 
 }
+
+//*****************************************************
+//XML
+//*****************************************************
 
 namespace XML{
 

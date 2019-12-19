@@ -1,3 +1,21 @@
+// c libraries
+#include <cstdio>
+#include <ctime>
+// c++ libraries
+#include <iostream>
+#include <string>
+#include <stdexcept>
+// eigen libraries
+#include <Eigen/Dense>
+// ann - structure
+#include "structure.hpp"
+// ann - strings
+#include "string.hpp"
+// ann - units
+#include "units.hpp"
+// ann - chemistry
+#include "ptable.hpp"
+// ann - vasp
 #include "vasp.hpp"
 
 namespace VASP{
@@ -65,7 +83,7 @@ void read_atoms(FILE* reader, std::vector<std::string>& names, std::vector<unsig
 	//read in the number of species
 	if(DEBUG_VASP>1) std::cout<<"Reading in the number of species\n";
 	fgets(input, string::M, reader);
-	unsigned int nSpecies=string::substrN(input,string::WS);
+	const unsigned int nSpecies=string::substrN(input,string::WS);
 	names.resize(nSpecies);
 	natoms.resize(nSpecies);
 	//read in the species names
@@ -145,12 +163,9 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 	//cell
 		Cell cell;
 		Eigen::Matrix3d lv;
-		double scale=1;
 	//atom info
-		unsigned int nSpecies=0;//the number of atomic species
 		std::vector<unsigned int> natoms;//the number of atoms in each species
 		std::vector<std::string> names;//the names of each species
-		unsigned int N=0;
 	//units
 		double s=0.0;
 		if(units::consts::system()==units::System::AU) s=units::BOHRpANG;
@@ -198,9 +213,9 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		if(DEBUG_VASP>1) std::cout<<"reading positions\n";
 		for(unsigned int n=0; n<struc.nAtoms(); ++n){
 			fgets(input,string::M,reader);
-			struc.posn(n)[0]=s*std::atof(std::strtok(input,string::WS));
-			struc.posn(n)[1]=s*std::atof(std::strtok(NULL,string::WS));
-			struc.posn(n)[2]=s*std::atof(std::strtok(NULL,string::WS));
+			struc.posn(n)[0]=std::atof(std::strtok(input,string::WS));
+			struc.posn(n)[1]=std::atof(std::strtok(NULL,string::WS));
+			struc.posn(n)[2]=std::atof(std::strtok(NULL,string::WS));
 		}
 		
 		//====  convert to cartesian coordinates (if necessary) ==== 
@@ -208,6 +223,10 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		if(direct){
 			for(unsigned int n=0; n<struc.nAtoms(); ++n){
 				struc.posn(n)=struc.R()*struc.posn(n);
+			}
+		} else {
+			for(unsigned int n=0; n<struc.nAtoms(); ++n){
+				struc.posn(n)*=s;
 			}
 		}
 		
@@ -538,13 +557,14 @@ void read(const char* file, const Interval interval, const AtomType& atomT, Simu
 void write(const char* file, const Interval interval, const AtomType& atomT, const Simulation& sim){
 	const char* funcName="write(const char*,const Interval,const AtomType&,Simulation&)";
 	if(DEBUG_VASP>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<funcName<<":\n";
-	FILE* writer=NULL;
-	bool error=true;
 	//units
 		double s=0.0;
 		if(units::consts::system()==units::System::AU) s=units::ANGpBOHR;
 		else if(units::consts::system()==units::System::METAL) s=1.0;
 		else throw std::runtime_error("Invalid units.");
+	//misc
+		FILE* writer=NULL;
+		bool error=true;
 	
 	try{
 		writer=fopen(file,"w");
@@ -624,22 +644,16 @@ void write(const char* file, const Interval interval, const AtomType& atomT, con
 namespace XML{
 
 void read(const char* file, unsigned int t, const AtomType& atomT, Structure& struc){
-	static const char* funcName="read(const char*,Structure&,(int))";
+	const char* funcName="read(const char*,Structure&,(int))";
 	if(DEBUG_VASP>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<funcName<<":\n";
 	//==== local function variables ====
 	//file i/o
 		FILE* reader=NULL;
 		char* input=new char[string::M];
-		std::string str;
-	//simulation flags
-		bool direct;//whether the coordinates are in direct or Cartesian coordinates
 	//time info
 		unsigned int ts=0;//number of timesteps
-		unsigned int interval=0;//requested interval
 	//cell info
-		double scale=1;
 		Eigen::Matrix3d lv;
-		Cell cell;
 	//atom info
 		unsigned int nSpecies=0;//the number of atomic species
 		std::vector<unsigned int> nAtoms;//the number of atoms in each species
@@ -728,20 +742,19 @@ void read(const char* file, unsigned int t, const AtomType& atomT, Structure& st
 						if(tt<t) continue;
 						fgets(input,string::M,reader);
 						std::strtok(input,string::WS);
-						lv(0,0)=std::atof(std::strtok(NULL,string::WS));
-						lv(1,0)=std::atof(std::strtok(NULL,string::WS));
-						lv(2,0)=std::atof(std::strtok(NULL,string::WS));
+						lv(0,0)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+						lv(1,0)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+						lv(2,0)=std::atof(std::strtok(NULL,string::WS))*s_posn;
 						fgets(input,string::M,reader);
 						std::strtok(input,string::WS);
-						lv(0,1)=std::atof(std::strtok(NULL,string::WS));
-						lv(1,1)=std::atof(std::strtok(NULL,string::WS));
-						lv(2,1)=std::atof(std::strtok(NULL,string::WS));
+						lv(0,1)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+						lv(1,1)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+						lv(2,1)=std::atof(std::strtok(NULL,string::WS))*s_posn;
 						fgets(input,string::M,reader);
 						std::strtok(input,string::WS);
-						lv(0,2)=std::atof(std::strtok(NULL,string::WS));
-						lv(1,2)=std::atof(std::strtok(NULL,string::WS));
-						lv(2,2)=std::atof(std::strtok(NULL,string::WS));
-						lv*=s_posn;
+						lv(0,2)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+						lv(1,2)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+						lv(2,2)=std::atof(std::strtok(NULL,string::WS))*s_posn;
 						static_cast<Cell&>(struc).init(lv);
 						break;
 					}
@@ -803,12 +816,12 @@ void read(const char* file, unsigned int t, const AtomType& atomT, Structure& st
 						throw std::invalid_argument("No forces provided in calculation.");
 					} else if(std::strstr(input,"forces")!=NULL){
 						if(tt<t) continue;
+						const double fac=s_energy/s_posn;
 						for(unsigned int n=0; n<struc.nAtoms(); ++n){
 							std::strtok(fgets(input,string::M,reader),string::WS);
-							struc.force(n)[0]=std::atof(std::strtok(NULL,string::WS));
-							struc.force(n)[1]=std::atof(std::strtok(NULL,string::WS));
-							struc.force(n)[2]=std::atof(std::strtok(NULL,string::WS));
-							struc.force(n)*=s_energy/s_posn;
+							struc.force(n)[0]=std::atof(std::strtok(NULL,string::WS))*fac;
+							struc.force(n)[1]=std::atof(std::strtok(NULL,string::WS))*fac;
+							struc.force(n)[2]=std::atof(std::strtok(NULL,string::WS))*fac;
 						}
 						++tt;
 						break;
