@@ -6,36 +6,36 @@
 #endif
 // c++ libaries
 #include <ostream>
-// ann - symm - radial - g2
-#include "symm_radial_g2.h"
+// ann - symm - radial - t1
+#include "symm_radial_t1.h"
 
-//Behler G2
-
-std::ostream& operator<<(std::ostream& out, const PhiR_G2& f){
-	return out<<"G2 "<<f.rs<<" "<<f.eta<<" ";
+//T1
+std::ostream& operator<<(std::ostream& out, const PhiR_T1& f){
+	return out<<"T1 "<<f.rs<<" "<<f.eta<<" ";
 }
 
-bool operator==(const PhiR_G2& phi1, const PhiR_G2& phi2){
+bool operator==(const PhiR_T1& phi1, const PhiR_T1& phi2){
 	if(static_cast<const PhiR&>(phi1)!=static_cast<const PhiR&>(phi2)) return false;
 	else if(phi1.eta!=phi2.eta) return false;
 	else if(phi1.rs!=phi2.rs) return false;
 	else return true;
 }
 
-double PhiR_G2::val(double r, double cut)const{
+double PhiR_T1::val(double r, double cut)const{
 	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return std::exp(-eta*(r-rs)*(r-rs))*cut;
+	return 0.5*(std::tanh(-eta*(r-rs))+1.0)*cut;
 	#elif defined __ICC || defined __INTEL_COMPILER
-	return exp(-eta*(r-rs)*(r-rs))*cut;
+	return 0.5*(tanh(-eta*(r-rs))+1.0)*cut;
 	#endif
 }
 
-double PhiR_G2::grad(double r, double cut, double gcut)const{
+double PhiR_T1::grad(double r, double cut, double gcut)const{
 	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return std::exp(-eta*(r-rs)*(r-rs))*(-2.0*eta*(r-rs)*cut+gcut);
+	const double tanhf=tanh(-eta*(r-rs));
 	#elif defined __ICC || defined __INTEL_COMPILER
-	return exp(-eta*(r-rs)*(r-rs))*(-2.0*eta*(r-rs)*cut+gcut);
+	const double tanhf=tanh(-eta*(r-rs));
 	#endif
+	return 0.5*(-eta*(1.0-tanhf*tanhf)*cut+(1.0+tanhf)*gcut);
 }
 
 namespace serialize{
@@ -44,7 +44,7 @@ namespace serialize{
 	// byte measures
 	//**********************************************
 	
-	template <> unsigned int nbytes(const PhiR_G2& obj){
+	template <> unsigned int nbytes(const PhiR_T1& obj){
 		unsigned int N=0;
 		N+=nbytes(static_cast<const PhiR&>(obj));
 		N+=2*sizeof(double);
@@ -55,7 +55,7 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> unsigned int pack(const PhiR_G2& obj, char* arr){
+	template <> unsigned int pack(const PhiR_T1& obj, char* arr){
 		unsigned int pos=0;
 		pack(static_cast<const PhiR&>(obj),arr); pos+=nbytes(static_cast<const PhiR&>(obj));
 		std::memcpy(arr+pos,&obj.eta,sizeof(double)); pos+=sizeof(double);
@@ -67,7 +67,7 @@ namespace serialize{
 	// unpacking
 	//**********************************************
 	
-	template <> unsigned int unpack(PhiR_G2& obj, const char* arr){
+	template <> unsigned int unpack(PhiR_T1& obj, const char* arr){
 		unsigned int pos=0;
 		unpack(static_cast<PhiR&>(obj),arr); pos+=nbytes(static_cast<const PhiR&>(obj));
 		std::memcpy(&obj.eta,arr+pos,sizeof(double)); pos+=sizeof(double);

@@ -1,23 +1,36 @@
+// c libraries
+#include <cstring>
+// ann - symm - radial
 #include "symm_radial.h"
+
+//*****************************************
+// PhiRN - radial function names
+//*****************************************
 
 //loading/printing
 
 PhiRN::type PhiRN::load(const char* str){
 	if(std::strcmp(str,"G1")==0) return PhiRN::G1;
 	else if(std::strcmp(str,"G2")==0) return PhiRN::G2;
+	else if(std::strcmp(str,"T1")==0) return PhiRN::T1;
 	else return PhiRN::UNKNOWN;
 }
 
 std::ostream& operator<<(std::ostream& out, const PhiRN::type& t){
 	if(t==PhiRN::G1) out<<"G1";
 	else if(t==PhiRN::G2) out<<"G2";
+	else if(t==PhiRN::T1) out<<"T1";
 	else out<<"UNKNOWN";
 	return out;
 }
 
 //PhiR
 std::ostream& operator<<(std::ostream& out, const PhiR& f){
-	return out<<"PhiR "<<f.tcut<<" "<<f.rc;
+	return out;
+}
+
+bool operator==(const PhiR& phir1, const PhiR& phir2){
+	return true;
 }
 
 namespace serialize{
@@ -27,28 +40,23 @@ namespace serialize{
 	//**********************************************
 	
 	template <> unsigned int nbytes(const PhiR& obj){
-		unsigned int N=0;
-		N+=sizeof(double);//rc
-		N+=sizeof(obj.tcut);//cutoff type
-		return N;
+		return 0;
 	}
 	
 	//**********************************************
 	// packing
 	//**********************************************
 	
-	template <> void pack(const PhiR& obj, char* arr){
-		std::memcpy(arr,&obj.rc,sizeof(double));
-		std::memcpy(arr+sizeof(double),&obj.tcut,sizeof(obj.tcut));
+	template <> unsigned int pack(const PhiR& obj, char* arr){
+		return 0;
 	}
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(PhiR& obj, const char* arr){
-		std::memcpy(&obj.rc,arr,sizeof(double));
-		std::memcpy(&obj.tcut,arr+sizeof(double),sizeof(obj.tcut));
+	template <> unsigned int unpack(PhiR& obj, const char* arr){
+		return 0;
 	}
 	
 }

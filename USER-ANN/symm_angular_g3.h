@@ -1,30 +1,34 @@
+#pragma once
 #ifndef SYMM_ANGULAR_G3_HPP
 #define SYMM_ANGULAR_G3_HPP
 
-// c libraries
-#include <cmath>
 // c++ libaries
-#include <iostream>
-// local libraries
+#include <iosfwd>
+// ann - symm - angular
 #include "symm_angular.h"
+// ann - serialization
+#include "serialize.h"
 
 //Behler G3
 struct PhiA_G3: public PhiA{
-	int lambda;//sign of cosine window
 	double eta;//radial exponential width
 	double zeta;//angular exponential width
-	PhiA_G3():PhiA(),eta(0.0),zeta(0.0),lambda(0.0){};
-	PhiA_G3(CutoffN::type tcut_, double rc_, double eta_, double zeta_, int lambda_):PhiA(tcut_,rc_),eta(eta_),zeta(zeta_),lambda(lambda_){};
-	double operator()(double cos, double ri, double rj, double rij)const;
-	double val(double cos, double ri, double rj, double rij)const;
+	int lambda;//sign of cosine window
+	PhiA_G3():PhiA(),eta(0.0),zeta(0.0),lambda(0.0){}
+	PhiA_G3(double eta_, double zeta_, int lambda_):PhiA(),eta(eta_),zeta(zeta_),lambda(lambda_){}
+	double val(double cos, const double r[3], const double c[3])const;
+	double dist(const double r[3], const double c[3])const;
 	double angle(double cos)const;
-	double dist(double ri, double rj, double rij)const;
 	double grad_angle(double cos)const;
-	double grad_dist_0(double rij, double rik, double rjk)const;
-	double grad_dist_1(double rij, double rik, double rjk)const;
-	double grad_dist_2(double rij, double rik, double rjk)const;
+	double grad_dist_0(const double r[3], const double c[3], double gij)const;
+	double grad_dist_1(const double r[3], const double c[3], double gik)const;
+	double grad_dist_2(const double r[3], const double c[3], double gjk)const;
+	void compute_angle(double cos, double& val, double& grad)const;
+	void compute_dist(const double r[3], const double c[3], const double g[3], double& dist, double* gradd)const;
 };
 std::ostream& operator<<(std::ostream& out, const PhiA_G3& f);
+bool operator==(const PhiA_G3& phia1, const PhiA_G3& phia2);
+inline bool operator!=(const PhiA_G3& phia1, const PhiA_G3& phia2){return !(phia1==phia2);}
 
 namespace serialize{
 	
@@ -38,13 +42,13 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const PhiA_G3& obj, char* arr);
+	template <> unsigned int pack(const PhiA_G3& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(PhiA_G3& obj, const char* arr);
+	template <> unsigned int unpack(PhiA_G3& obj, const char* arr);
 	
 }
 

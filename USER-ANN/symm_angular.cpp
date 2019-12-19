@@ -1,4 +1,11 @@
+// c libraries
+#include <cstring>
+// ann - symm - angular
 #include "symm_angular.h"
+
+//*****************************************
+// PhiAN - angular function names
+//*****************************************
 
 //loading/printing
 
@@ -15,9 +22,13 @@ std::ostream& operator<<(std::ostream& out, const PhiAN::type& t){
 	return out;
 }
 
+bool operator==(const PhiA& phia1, const PhiA& phia2){
+	return true;
+}
+
 //PhiA
 std::ostream& operator<<(std::ostream& out, const PhiA& f){
-	return out<<"PhiA "<<f.tcut<<" "<<f.rc;
+	return out;
 }
 
 namespace serialize{
@@ -27,28 +38,23 @@ namespace serialize{
 	//**********************************************
 	
 	template <> unsigned int nbytes(const PhiA& obj){
-		unsigned int N=0;
-		N+=sizeof(double);//rc
-		N+=sizeof(obj.tcut);//cutoff type
-		return N;
+		return 0;
 	}
 	
 	//**********************************************
 	// packing
 	//**********************************************
 	
-	template <> void pack(const PhiA& obj, char* arr){
-		std::memcpy(arr,&obj.rc,sizeof(double));
-		std::memcpy(arr+sizeof(double),&obj.tcut,sizeof(obj.tcut));
+	template <> unsigned int pack(const PhiA& obj, char* arr){
+		return 0;
 	}
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(PhiA& obj, const char* arr){
-		std::memcpy(&obj.rc,arr,sizeof(double));
-		std::memcpy(&obj.tcut,arr+sizeof(double),sizeof(obj.tcut));
+	template <> unsigned int unpack(PhiA& obj, const char* arr){
+		return 0;
 	}
 	
 }
