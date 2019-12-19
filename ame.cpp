@@ -1,3 +1,17 @@
+//c libraries
+#include <cstdio>
+#include <ctime>
+//c++ libraries
+#include <iostream>
+// eigen libraries
+#include <Eigen/Dense>
+// ann - structure
+#include "structure.hpp"
+// ann - string
+#include "string.hpp"
+// ann - units
+#include "units.hpp"
+// ann - ame
 #include "ame.hpp"
 
 namespace AME{
@@ -13,7 +27,7 @@ Format& Format::read(const std::vector<std::string>& strlist, Format& format){
 }
 
 void read(const char* file, const AtomType& atomT, Structure& struc){
-	static const char* funcName="read(const char*,Structure&,const AtomType&)";
+	const char* funcName="read(const char*,Structure&,const AtomType&)";
 	if(DEBUG_AME_PRINT_FUNC>0) std::cout<<NAMESPACE<<"::"<<funcName<<":\n";
 	//==== local function variables ====
 	//file i/o
@@ -21,21 +35,14 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 		char* input=new char[string::M];
 	//simulation flags
 		bool frac;//fractiona/Cartesian coordinates
-	//time info
-		unsigned int ts=0;//number of timesteps
-		unsigned int interval=0;//requested interval
 	//cell info
 		Eigen::Matrix3d lv;
 	//atom info
 		unsigned int nspecies=0;//the number of atomic species
 		std::vector<unsigned int> numbers;//the number of atoms in each species
 		std::vector<std::string> names;//the names of each species
-		unsigned int N=0;
-	//units
-		units::System::type unitsys;
 	//misc
 		bool error=false;
-		unsigned int tt;
 		std::vector<std::string> strlist;
 	//units
 		double s_posn=0.0,s_energy=0.0;
@@ -189,7 +196,7 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 }
 
 void write(const char* file, const AtomType& atomT, const Structure& struc){
-	static const char* funcName="read(const char*,const Structure&,const AtomType&)";
+	const char* funcName="read(const char*,const Structure&,const AtomType&)";
 	if(DEBUG_AME_PRINT_FUNC>0) std::cout<<NAMESPACE<<"::"<<funcName<<":\n";
 	//==== local function variables ====
 	//file i/o
@@ -263,8 +270,7 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 			}
 		} else {
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
-				Eigen::Vector3d posn=struc.RInv()*struc.posn(i);
-				fprintf(writer,"\t0.0 0.0 0.0\n",posn[0],posn[1],posn[2]);
+				fprintf(writer,"\t0.0 0.0 0.0\n");
 			}
 		}
 		
@@ -278,8 +284,7 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 			}
 		} else {
 			for(unsigned int i=0; i<struc.nAtoms(); ++i){
-				Eigen::Vector3d posn=struc.RInv()*struc.posn(i);
-				fprintf(writer,"\t0.0 0.0 0.0\n",posn[0],posn[1],posn[2]);
+				fprintf(writer,"\t0.0 0.0 0.0\n");
 			}
 		}
 		
@@ -300,7 +305,7 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 }
 
 void read(const char* file, const Interval& interval, const AtomType& atomT, Simulation& sim){
-	static const char* funcName="read(const char*,const Interval&,const AtomType&,Simulation&):";
+	const char* funcName="read(const char*,const Interval&,const AtomType&,Simulation&):";
 	if(DEBUG_AME_PRINT_FUNC>0) std::cout<<NAMESPACE<<"::"<<funcName<<":\n";
 	//==== local function variables ====
 	//file i/o
@@ -315,10 +320,8 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 		unsigned int nspecies=0;//the number of atomic species
 		std::vector<unsigned int> numbers;//the number of atoms in each species
 		std::vector<std::string> names;//the names of each species
-		unsigned int N=0;
 	//misc
 		bool error=false;
-		unsigned int tt;
 		std::vector<std::string> strlist;
 	//units
 		double s_posn=0.0,s_energy=0.0;
@@ -411,7 +414,7 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 		fgets(input,string::M,reader);
 		fgets(input,string::M,reader);
 		
-		for(unsigned int t=0; t<interval.beg; ++t){
+		for(int t=0; t<interval.beg; ++t){
 			//header
 			for(unsigned int i=0; i<5; ++i) fgets(input,string::M,reader);
 			//positions
@@ -528,13 +531,11 @@ void read(const char* file, const Interval& interval, const AtomType& atomT, Sim
 }
 
 void write(const char* file, const Interval& interval, const AtomType& atomT, const Simulation& sim){
-	static const char* funcName="write(const char*,const Interval&,const AtomType&,const Simulation&)";
+	const char* funcName="write(const char*,const Interval&,const AtomType&,const Simulation&)";
 	if(DEBUG_AME_PRINT_FUNC>0) std::cout<<NAMESPACE<<"::"<<funcName<<":\n";
 	//==== local function variables ====
 	//file i/o
 		FILE* writer=NULL;
-	//simulation flags
-		bool frac;//fractiona/Cartesian coordinates
 	//time
 		unsigned int tsint=0;
 	//misc
@@ -566,12 +567,12 @@ void write(const char* file, const Interval& interval, const AtomType& atomT, co
 		tsint=end-beg+1;
 		
 		//write the timestep
-		fprintf(writer,"TIMESTEP %i\n",sim.timestep());
+		fprintf(writer,"TIMESTEP %f\n",sim.timestep());
 		
 		//write the number of timesteps
 		fprintf(writer,"N %i\n",tsint);
 		
-		for(unsigned int t=beg; t<=end; ++t){
+		for(int t=beg; t<=end; ++t){
 			//write the cell
 			if(DEBUG_AME_PRINT_STATUS>0) std::cout<<"writing lattice vectors\n";
 			fprintf(writer,"CELL ");

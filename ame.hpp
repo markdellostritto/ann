@@ -2,18 +2,11 @@
 #ifndef AME_HPP
 #define AME_HPP
 
-//c libraries
-#include <cstdlib>
-#include <cstdio>
-//c++ libraries
-#include <iostream>
-//local - structure
-#include "structure.hpp"
-#include "cell.hpp"
-//local - string
-#include "string.hpp"
-//local - units
-#include "units.hpp"
+// c++ libraries
+#include <vector>
+#include <string>
+// ann - structure
+#include "structure_fwd.hpp"
 
 #ifndef DEBUG_AME_PRINT_FUNC
 #define DEBUG_AME_PRINT_FUNC 0
