@@ -2,19 +2,10 @@
 #ifndef OPTIMIZE_HPP
 #define OPTIMIZE_HPP
 
-// c libraries
-#include <cstdlib>
-#include <cmath>
 // c++ libraries
-#include <iostream>
-#include <string>
+#include <iosfwd>
 // eigen libraries
 #include <Eigen/Dense>
-#include "eigen.hpp"
-// local libraries - math
-#include "math_const.hpp"
-#include "math_cmp.hpp"
-#include "math_special.hpp"
 //serialization
 #include "serialize.hpp"
 
@@ -34,21 +25,20 @@ namespace Opt{
 
 struct ALGO{
 	enum type {
-		SGD=0,
-		SDM=1,
-		NAG=2,
-		ADAGRAD=3,
-		ADADELTA=4,
-		RMSPROP=5,
-		ADAM=6,
-		NADAM=7,
-		BFGS=8,
-		RPROP=9,
-		UNKNOWN=-1
+		UNKNOWN=0,
+		SGD=1,
+		SDM=2,
+		NAG=3,
+		ADAGRAD=4,
+		ADADELTA=5,
+		RMSPROP=6,
+		ADAM=7,
+		NADAM=8,
+		BFGS=9,
+		RPROP=10
 	};
 	static type read(const char* str);
 };
-
 std::ostream& operator<<(std::ostream& out, const ALGO::type& type);
 
 //***************************************************
@@ -57,15 +47,31 @@ std::ostream& operator<<(std::ostream& out, const ALGO::type& type);
 
 struct VAL{
 	enum type{
-		XTOL_REL=0,
-		XTOL_ABS=1,
+		UNKNOWN=0,
+		FTOL_ABS=1,
 		FTOL_REL=2,
-		FTOL_ABS=3,
-		UNKNOWN=-1
+		XTOL_ABS=3,
+		XTOL_REL=4
 	};
 	static type read(const char* str);
 };
+std::ostream& operator<<(std::ostream& out, const VAL::type& type);
 
+//***************************************************
+// decay method
+//***************************************************
+
+struct DECAY{
+	enum type{
+		UNKNOWN=0,
+		CONST=1,
+		EXP=2,
+		SQRT=3,
+		INV=4,
+		POW=5
+	};
+	static type read(const char* str);
+};
 std::ostream& operator<<(std::ostream& out, const VAL::type& type);
 
 //***************************************************
@@ -134,10 +140,10 @@ public:
 		Eigen::VectorXd& gOld(){return gOld_;}
 		const Eigen::VectorXd& gOld()const{return gOld_;}
 	//algorithm
-		ALGO::type& algo(){return algo_;};
-		const ALGO::type& algo()const{return algo_;};
-		VAL::type& optVal(){return optVal_;};
-		const VAL::type& optVal()const{return optVal_;};
+		ALGO::type& algo(){return algo_;}
+		const ALGO::type& algo()const{return algo_;}
+		VAL::type& optVal(){return optVal_;}
+		const VAL::type& optVal()const{return optVal_;}
 	
 	//==== member functions ====
 	void defaults();
@@ -153,10 +159,15 @@ class Model{
 protected:
 	unsigned int dim_;//dimension of the problem
 	ALGO::type algo_;//optimization algorithm
+	DECAY::type decay_;//decay schedule
+	double alpha_;//step decay constant
+	double pow_;//step decay power
+	double gamma_;//gradient step size
+	double gamma0_;
 public:
 	//==== constructors/destructors ====
 	Model(){defaults();}
-	virtual ~Model(){};
+	virtual ~Model(){}
 	
 	//==== operators ====
 	friend std::ostream& operator<<(std::ostream& out, const Model& model);
@@ -166,10 +177,21 @@ public:
 	const unsigned int& dim()const{return dim_;}
 	ALGO::type& algo(){return algo_;}
 	const ALGO::type& algo()const{return algo_;}
-		
+	DECAY::type& decay(){return decay_;}
+	const DECAY::type& decay()const{return decay_;}
+	double& gamma(){return gamma_;}
+	const double& gamma()const{return gamma_;}
+	double& gamma0(){return gamma0_;}
+	const double& gamma0()const{return gamma0_;}
+	double& alpha(){return alpha_;}
+	const double& alpha()const{return alpha_;}
+	double& pow(){return pow_;}
+	const double& pow()const{return pow_;}
+	
 	//==== member functions ====
 	void defaults();
 	void clear();
+	void update_step(unsigned int step);
 	
 	//==== virtual functions ====
 	virtual void step(Data& d)=0;
@@ -178,19 +200,11 @@ public:
 
 //steepest-desccent
 class SGD: public Model{
-private:
-	double gamma_;
-	double decay_;
 public:
 	//constructors/destructors
 	SGD(){defaults();}
 	SGD(unsigned int dim){init(dim);}
-	~SGD(){};
-	//access
-	double& gamma(){return gamma_;}
-	const double& gamma()const{return gamma_;}
-	double& decay(){return decay_;}
-	const double& decay()const{return decay_;}
+	~SGD(){}
 	//member functions
 	void step(Data& d);
 	void defaults();
@@ -202,20 +216,14 @@ public:
 //steepest-descent + momentum
 class SDM: public Model{
 private:
-	double gamma_;//gradient step size
-	double decay_;
 	double eta_;//mixing term
 	Eigen::VectorXd dx_;//change in parameters
 public:
 	//constructors/destructors
 	SDM(){defaults();}
 	SDM(unsigned int dim){init(dim);}
-	~SDM(){};
+	~SDM(){}
 	//access
-	double& gamma(){return gamma_;}
-	const double& gamma()const{return gamma_;}
-	double& decay(){return decay_;}
-	const double& decay()const{return decay_;}
 	double& eta(){return eta_;}
 	const double& eta()const{return eta_;}
 	Eigen::VectorXd& dx(){return dx_;}
@@ -231,20 +239,14 @@ public:
 //nesterov accelerated gradient
 class NAG: public Model{
 private:
-	double gamma_;//gradient step size
-	double decay_;
 	double eta_;//mixing term
 	Eigen::VectorXd dx_;
 public:
 	//constructors/destructors
 	NAG(){defaults();}
 	NAG(unsigned int dim){init(dim);}
-	~NAG(){};
+	~NAG(){}
 	//access
-	double& gamma(){return gamma_;}
-	const double& gamma()const{return gamma_;}
-	double& decay(){return decay_;}
-	const double& decay()const{return decay_;}
 	double& eta(){return eta_;}
 	const double& eta()const{return eta_;}
 	Eigen::VectorXd& dx(){return dx_;}
@@ -261,16 +263,13 @@ public:
 class ADAGRAD: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
-	double gamma_;//gradient step size
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
 public:
 	//constructors/destructors
 	ADAGRAD(){defaults();}
 	ADAGRAD(unsigned int dim){init(dim);}
-	~ADAGRAD(){};
+	~ADAGRAD(){}
 	//access
-	double& gamma(){return gamma_;}
-	const double& gamma()const{return gamma_;}
 	Eigen::VectorXd& mgrad2(){return mgrad2_;}
 	const Eigen::VectorXd& mgrad2()const{return mgrad2_;}
 	//member functions
@@ -285,7 +284,6 @@ public:
 class ADADELTA: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
-	double gamma_;//gradient step size
 	double eta_;//mixing fraction
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
 	Eigen::VectorXd mdx2_;//avg of square of dx
@@ -294,10 +292,8 @@ public:
 	//constructors/destructors
 	ADADELTA(){defaults();}
 	ADADELTA(unsigned int dim){init(dim);}
-	~ADADELTA(){};
+	~ADADELTA(){}
 	//access
-	double& gamma(){return gamma_;}
-	const double& gamma()const{return gamma_;}
 	double& eta(){return eta_;}
 	const double& eta()const{return eta_;}
 	Eigen::VectorXd& mgrad2(){return mgrad2_;}
@@ -318,7 +314,6 @@ public:
 class RMSPROP: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
-	double gamma_;//gradient step size
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
 public:
 	//constructors/destructors
@@ -326,8 +321,6 @@ public:
 	RMSPROP(unsigned int dim){init(dim);}
 	~RMSPROP(){}
 	//access
-	double& gamma(){return gamma_;}
-	const double& gamma()const{return gamma_;}
 	Eigen::VectorXd& mgrad2(){return mgrad2_;}
 	const Eigen::VectorXd& mgrad2()const{return mgrad2_;}
 	//member functions
@@ -346,8 +339,6 @@ private:
 	static const double beta2_;
 	double beta1i_;//power w.r.t i
 	double beta2i_;//power w.r.t i
-	double gamma_;//gradient step size
-	double decay_;
 	Eigen::VectorXd mgrad_;//avg of gradient
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
 public:
@@ -356,10 +347,6 @@ public:
 	ADAM(unsigned int dim){init(dim);}
 	~ADAM(){}
 	//access
-	double& gamma(){return gamma_;}
-	const double& gamma()const{return gamma_;}
-	double& decay(){return decay_;}
-	const double& decay()const{return decay_;}
 	double& beta1i(){return beta1i_;}
 	const double& beta1i()const{return beta1i_;}
 	double& beta2i(){return beta2i_;}
@@ -384,8 +371,6 @@ private:
 	static const double beta2_;
 	double beta1i_;//power w.r.t i
 	double beta2i_;//power w.r.t i
-	double gamma_;//gradient step size
-	double decay_;
 	Eigen::VectorXd mgrad_;//avg of gradient
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
 public:
@@ -394,10 +379,6 @@ public:
 	NADAM(unsigned int dim){init(dim);}
 	~NADAM(){}
 	//access
-	double& gamma(){return gamma_;}
-	const double& gamma()const{return gamma_;}
-	double& decay(){return decay_;}
-	const double& decay()const{return decay_;}
 	double& beta1i(){return beta1i_;}
 	const double& beta1i()const{return beta1i_;}
 	double& beta2i(){return beta2i_;}
@@ -417,7 +398,6 @@ public:
 //bfgs
 class BFGS: public Model{
 private:
-	double gamma_;//gradient step size
 	Eigen::MatrixXd B_,BOld_;
 	Eigen::VectorXd s_,y_;
 public:
@@ -425,9 +405,6 @@ public:
 	BFGS(){defaults();}
 	BFGS(unsigned int dim){init(dim);}
 	~BFGS(){}
-	//access
-	double& gamma(){return gamma_;}
-	const double& gamma()const{return gamma_;}
 	//member functions
 	void step(Data& d);
 	void defaults();
@@ -540,35 +517,35 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const Opt::Data& obj, char* arr);
-	template <> void pack(const Opt::Model& obj, char* arr);
-	template <> void pack(const Opt::SGD& obj, char* arr);
-	template <> void pack(const Opt::SDM& obj, char* arr);
-	template <> void pack(const Opt::NAG& obj, char* arr);
-	template <> void pack(const Opt::ADAGRAD& obj, char* arr);
-	template <> void pack(const Opt::ADADELTA& obj, char* arr);
-	template <> void pack(const Opt::RMSPROP& obj, char* arr);
-	template <> void pack(const Opt::ADAM& obj, char* arr);
-	template <> void pack(const Opt::NADAM& obj, char* arr);
-	template <> void pack(const Opt::BFGS& obj, char* arr);
-	template <> void pack(const Opt::RPROP& obj, char* arr);
+	template <> unsigned int pack(const Opt::Data& obj, char* arr);
+	template <> unsigned int pack(const Opt::Model& obj, char* arr);
+	template <> unsigned int pack(const Opt::SGD& obj, char* arr);
+	template <> unsigned int pack(const Opt::SDM& obj, char* arr);
+	template <> unsigned int pack(const Opt::NAG& obj, char* arr);
+	template <> unsigned int pack(const Opt::ADAGRAD& obj, char* arr);
+	template <> unsigned int pack(const Opt::ADADELTA& obj, char* arr);
+	template <> unsigned int pack(const Opt::RMSPROP& obj, char* arr);
+	template <> unsigned int pack(const Opt::ADAM& obj, char* arr);
+	template <> unsigned int pack(const Opt::NADAM& obj, char* arr);
+	template <> unsigned int pack(const Opt::BFGS& obj, char* arr);
+	template <> unsigned int pack(const Opt::RPROP& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(Opt::Data& obj, const char* arr);
-	template <> void unpack(Opt::Model& obj, const char* arr);
-	template <> void unpack(Opt::SGD& obj, const char* arr);
-	template <> void unpack(Opt::SDM& obj, const char* arr);
-	template <> void unpack(Opt::NAG& obj, const char* arr);
-	template <> void unpack(Opt::ADAGRAD& obj, const char* arr);
-	template <> void unpack(Opt::ADADELTA& obj, const char* arr);
-	template <> void unpack(Opt::RMSPROP& obj, const char* arr);
-	template <> void unpack(Opt::ADAM& obj, const char* arr);
-	template <> void unpack(Opt::NADAM& obj, const char* arr);
-	template <> void unpack(Opt::BFGS& obj, const char* arr);
-	template <> void unpack(Opt::RPROP& obj, const char* arr);
+	template <> unsigned int unpack(Opt::Data& obj, const char* arr);
+	template <> unsigned int unpack(Opt::Model& obj, const char* arr);
+	template <> unsigned int unpack(Opt::SGD& obj, const char* arr);
+	template <> unsigned int unpack(Opt::SDM& obj, const char* arr);
+	template <> unsigned int unpack(Opt::NAG& obj, const char* arr);
+	template <> unsigned int unpack(Opt::ADAGRAD& obj, const char* arr);
+	template <> unsigned int unpack(Opt::ADADELTA& obj, const char* arr);
+	template <> unsigned int unpack(Opt::RMSPROP& obj, const char* arr);
+	template <> unsigned int unpack(Opt::ADAM& obj, const char* arr);
+	template <> unsigned int unpack(Opt::NADAM& obj, const char* arr);
+	template <> unsigned int unpack(Opt::BFGS& obj, const char* arr);
+	template <> unsigned int unpack(Opt::RPROP& obj, const char* arr);
 	
 }
 
