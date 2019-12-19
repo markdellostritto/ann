@@ -1,3 +1,14 @@
+//c++ libraries
+#include <iostream>
+//c libraries
+#include <stdexcept>
+// ann - strings
+#include "string.hpp"
+// ann - chemistry
+#include "ptable.hpp"
+// ann - print
+#include "print.hpp"
+// ann - structure
 #include "structure.hpp"
 
 //**********************************************************************************************
@@ -42,6 +53,7 @@ unsigned int AtomType::nbytes()const{
 	nbytes+=sizeof(double)*3*posn;
 	nbytes+=sizeof(double)*3*force;
 	nbytes+=sizeof(unsigned int)*8*symm;
+	return nbytes;
 }
 
 //**********************************************************************************************
@@ -474,15 +486,17 @@ void Structure::resize(const std::vector<uint>& nAtoms, const std::vector<std::s
 //==== operators ====
 
 std::ostream& operator<<(std::ostream& out, const Simulation& sim){
-	out<<"****************************************\n";
-	out<<"************** SIMULATION **************\n";
+	char* str=new char[print::len_buf];
+	out<<print::buf(str)<<"\n";
+	out<<print::title("SIMULATION",str)<<"\n";
 	out<<"SIM   = "<<sim.name_<<"\n";
 	out<<"TS    = "<<sim.timestep_<<"\n";
 	out<<"T     = "<<sim.timesteps_<<"\n";
 	out<<"CF    = "<<sim.cell_fixed_<<"\n";
 	out<<"AtomT = "<<sim.atomT_<<"\n";
-	out<<"************** SIMULATION **************\n";
-	out<<"****************************************";
+	out<<print::title("SIMULATION",str)<<"\n";
+	out<<print::buf(str);
+	delete[] str;
 	return out;
 }
 

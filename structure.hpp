@@ -5,22 +5,14 @@
 //no bounds checking in Eigen
 #define EIGEN_NO_DEBUG
 
-//c libraries
-#include <cstdlib>
-#include <stdexcept>
 //c++ libraries
-#include <iostream>
-#include <string>
+#include <iosfwd>
 //Eigen
 #include <Eigen/Dense>
-// ann library - typedefs
+// ann - typedefs
 #include "typedef.hpp"
-// ann library - cell
+// ann - cell
 #include "cell.hpp"
-// ann library - strings
-#include "string.hpp"
-// ann library - chemistry
-#include "ptable.hpp"
 
 #ifndef DEBUG_STRUCTURE
 #define DEBUG_STRUCTURE 0
@@ -271,7 +263,7 @@ private:
 public:
 	//==== constructors/destructors ====
 	Simulation(){defaults();}
-	~Simulation(){};
+	~Simulation(){}
 	
 	//==== operators ====
 	friend std::ostream& operator<<(std::ostream& out, const Simulation& sim);
