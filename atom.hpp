@@ -2,17 +2,9 @@
 #ifndef ATOM_HPP
 #define ATOM_HPP
 
-//c libraries
-#include <cstdlib>
-#include <cmath>
 //c++ libraries
-#include <iostream>
+#include <iosfwd>
 #include <string>
-#include <vector>
-// ann - math
-#include "math_const.hpp"
-// ann - string
-#include "string.hpp"
 // ann - serialize
 #include "serialize.hpp"
 
@@ -48,6 +40,7 @@ public:
 	void clear();
 	//static functions
 	static Atom& read(const char* str, Atom& atom);
+	static void print(FILE* out, const Atom& atom);
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const Atom& atom);
 };
@@ -70,13 +63,13 @@ template <> unsigned int nbytes(const Atom& obj);
 // packing
 //**********************************************
 
-template <> void pack(const Atom& obj, char* arr);
+template <> unsigned int pack(const Atom& obj, char* arr);
 
 //**********************************************
 // unpacking
 //**********************************************
 
-template <> void unpack(Atom& obj, const char* arr);
+template <> unsigned int unpack(Atom& obj, const char* arr);
 
 }
 

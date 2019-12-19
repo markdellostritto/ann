@@ -1,3 +1,11 @@
+// c libraries
+#include <cstdlib>
+#include <cstring>
+// c++ libraries
+#include <iostream>
+// ann - string
+#include "string.hpp"
+// ann - atom
 #include "atom.hpp"
 
 namespace serialize{
@@ -9,10 +17,10 @@ namespace serialize{
 template <> unsigned int nbytes(const Atom& obj){
 	if(ATOM_PRINT_FUNC>0) std::cout<<"nbytes(const Atom&):\n";
 	unsigned int size=0;
-	size+=sizeof(unsigned int);//id
 	size+=sizeof(double);//mass
 	size+=sizeof(double);//energy
 	size+=sizeof(double);//charge
+	size+=sizeof(unsigned int);//id
 	size+=nbytes(obj.name());//name
 	return size;
 }
@@ -21,28 +29,30 @@ template <> unsigned int nbytes(const Atom& obj){
 // packing
 //**********************************************
 
-template <> void pack(const Atom& obj, char* arr){
+template <> unsigned int pack(const Atom& obj, char* arr){
 	if(ATOM_PRINT_FUNC>0) std::cout<<"pack(const Atom&,char*):\n";
 	unsigned int pos=0;
-	std::memcpy(arr+pos,&obj.id(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//id
 	std::memcpy(arr+pos,&obj.mass(),sizeof(double)); pos+=sizeof(double);//mass
 	std::memcpy(arr+pos,&obj.energy(),sizeof(double)); pos+=sizeof(double);//energy
 	std::memcpy(arr+pos,&obj.charge(),sizeof(double)); pos+=sizeof(double);//charge
+	std::memcpy(arr+pos,&obj.id(),sizeof(unsigned int)); pos+=sizeof(unsigned int);//id
 	pack(obj.name(),arr+pos); pos+=nbytes(obj.name());//name
+	return pos;
 }
 
 //**********************************************
 // unpacking
 //**********************************************
 
-template <> void unpack(Atom& obj, const char* arr){
+template <> unsigned int unpack(Atom& obj, const char* arr){
 	if(ATOM_PRINT_FUNC>0) std::cout<<"unpack(Atom&,const char*):\n";
 	unsigned int pos=0;
-	std::memcpy(&obj.id(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//id
 	std::memcpy(&obj.mass(),arr+pos,sizeof(double)); pos+=sizeof(double);//mass
 	std::memcpy(&obj.energy(),arr+pos,sizeof(double)); pos+=sizeof(double);//energy
 	std::memcpy(&obj.charge(),arr+pos,sizeof(double)); pos+=sizeof(double);//charge
+	std::memcpy(&obj.id(),arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);//id
 	unpack(obj.name(),arr+pos); pos+=nbytes(obj.name());//name
+	return pos;
 }
 	
 }
@@ -71,6 +81,10 @@ Atom& Atom::read(const char* str, Atom& atom){
 
 std::ostream& operator<<(std::ostream& out, const Atom& atom){
 	return out<<atom.name_<<" "<<atom.mass_<<" "<<atom.energy_<<" "<<atom.charge_;
+}
+
+void Atom::print(FILE* out, const Atom& atom){
+	fprintf(out,"%s %f %f %f\n",atom.name(),atom.mass(),atom.energy(),atom.charge());
 }
 
 bool operator==(const Atom& atom1, const Atom& atom2){
