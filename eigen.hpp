@@ -4,32 +4,30 @@
 
 #define EIGEN_NO_DEBUG
 
-#include <iostream>
+//c libraries
 #include <cstdio>
-#include <cstdlib>
+//c++ libraries
+#include <iosfwd>
+//eigen
 #include <Eigen/Dense>
-#include "string.hpp"
+//ann serialize
 #include "serialize.hpp"
 
 namespace eigen{
 
 struct LIN_SOLVER{
 	enum type{
-		LLT,//cholesky decomposition
-		LDLT,//cholesky-variant
-		PPLU,//LU - partial pivoting
-		FPLU,//LU - full pivoting
-		HQR,//Householder QR
-		CPHQR,//Householder QR - column pivoting
-		UNKNOWN
+		LLT=0,//cholesky decomposition
+		LDLT=1,//cholesky-variant
+		PPLU=2,//LU - partial pivoting
+		FPLU=3,//LU - full pivoting
+		HQR=4,//Householder QR
+		CPHQR=5,//Householder QR - column pivoting
+		UNKNOWN=-1
 	};
-	static LIN_SOLVER::type load(const char* str);
+	static LIN_SOLVER::type read(const char* str);
 };
 std::ostream& operator<<(std::ostream& out, const LIN_SOLVER::type& t);
-
-Eigen::Vector3d& load(const char* str, Eigen::Vector3d& vec);
-
-const char* print(char* str, const Eigen::Vector3d& vec);
 
 }
 
@@ -48,19 +46,19 @@ template <> unsigned int nbytes(const Eigen::MatrixXd& obj);
 // packing
 //**********************************************
 
-template <> void pack(const Eigen::Vector3d& obj, char* arr);
-template <> void pack(const Eigen::VectorXd& obj, char* arr);
-template <> void pack(const Eigen::Matrix3d& obj, char* arr);
-template <> void pack(const Eigen::MatrixXd& obj, char* arr);
+template <> unsigned int pack(const Eigen::Vector3d& obj, char* arr);
+template <> unsigned int pack(const Eigen::VectorXd& obj, char* arr);
+template <> unsigned int pack(const Eigen::Matrix3d& obj, char* arr);
+template <> unsigned int pack(const Eigen::MatrixXd& obj, char* arr);
 
 //**********************************************
 // unpacking
 //**********************************************
 
-template <> void unpack(Eigen::Vector3d& obj, const char* arr);
-template <> void unpack(Eigen::VectorXd& obj, const char* arr);
-template <> void unpack(Eigen::Matrix3d& obj, const char* arr);
-template <> void unpack(Eigen::MatrixXd& obj, const char* arr);
+template <> unsigned int unpack(Eigen::Vector3d& obj, const char* arr);
+template <> unsigned int unpack(Eigen::VectorXd& obj, const char* arr);
+template <> unsigned int unpack(Eigen::Matrix3d& obj, const char* arr);
+template <> unsigned int unpack(Eigen::MatrixXd& obj, const char* arr);
 
 }
 
