@@ -1,3 +1,20 @@
+// c libraries
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
+#include <cmath>
+#elif defined __ICC || defined __INTEL_COMPILER
+#include <mathimf.h> //intel math library
+#endif
+// c++ libraries
+#include <iostream>
+// ann - math
+#include "math_const.hpp"
+// ann - structure
+#include "structure.hpp"
+// ann - units
+#include "units.hpp"
+// ann - print
+#include "print.hpp"
+// ann - ewald
 #include "ewald3D.hpp"
 
 namespace Ewald3D{
@@ -9,16 +26,12 @@ namespace Ewald3D{
 //operators
 
 std::ostream& operator<<(std::ostream& out, const Utility& u){
-	out<<"**********************************************\n";
-	out<<"************** EWALD3D::UTILITY **************\n";
 	out<<"PREC    = "<<u.prec_<<"\n";
 	out<<"ALPHA   = "<<u.alpha_<<"\n";
 	out<<"EPSILON = "<<u.eps_<<"\n";
 	out<<"WEIGHT  = "<<u.weight_<<"\n";
 	out<<"R_MAX   = "<<u.rMax_<<"\n";
-	out<<"K_MAX   = "<<u.kMax_<<"\n";
-	out<<"************** EWALD3D::UTILITY **************\n";
-	out<<"**********************************************";
+	out<<"K_MAX   = "<<u.kMax_;
 	return out;
 }
 
@@ -50,7 +63,14 @@ void Utility::init(double prec){
 //operators
 
 std::ostream& operator<<(std::ostream& out, const Coulomb& c){
-	return out<<static_cast<const Utility&>(c);
+	char* str=new char[print::len_buf];
+	out<<print::buf(str)<<"\n";
+	out<<print::title("EWALD - COULOMB",str)<<"\n";
+	out<<static_cast<const Utility&>(c)<<"\n";
+	out<<print::title("EWALD - COULOMB",str)<<"\n";
+	out<<print::buf(str);
+	delete[] str;
+	return out;
 }
 
 //member functions
@@ -488,7 +508,7 @@ double Coulomb::phi(const Structure& struc, const Eigen::Vector3d& r)const{
 
 double Coulomb::phi(const Structure& struc, unsigned int nn)const{
 	if(EWALD_PRINT_FUNC>0) std::cout<<"Ewald3D::Coulomb::phi(const Structure&,int)const:\n";
-	return units::consts::ke()*(phi(struc,struc.posn(nn))+(vSelfR_-vSelfC_)*struc.charge(nn));
+	return phi(struc,struc.posn(nn))+units::consts::ke()*((vSelfR_-vSelfC_)*struc.charge(nn));
 }
 
 double Coulomb::phis()const{
@@ -591,31 +611,33 @@ template <> unsigned int nbytes(const Ewald3D::Coulomb& obj){
 // packing
 //**********************************************
 
-template <> void pack(const Ewald3D::Utility& obj, char* arr){
+template <> unsigned int pack(const Ewald3D::Utility& obj, char* arr){
 	unsigned int pos=0;
 	double prec=obj.prec();
 	std::memcpy(arr+pos,&prec,sizeof(double)); pos+=sizeof(double);//prec_
 	std::memcpy(arr+pos,&obj.weight(),sizeof(double)); pos+=sizeof(double);//weight_
 	std::memcpy(arr+pos,&obj.eps(),sizeof(double)); pos+=sizeof(double);//eps_
+	return pos;
 }
-template <> void pack(const Ewald3D::Coulomb& obj, char* arr){
-	pack(static_cast<const Ewald3D::Utility&>(obj),arr);
+template <> unsigned int pack(const Ewald3D::Coulomb& obj, char* arr){
+	return pack(static_cast<const Ewald3D::Utility&>(obj),arr);
 }
 
 //**********************************************
 // unpacking
 //**********************************************
 
-template <> void unpack(Ewald3D::Utility& obj, const char* arr){
+template <> unsigned int unpack(Ewald3D::Utility& obj, const char* arr){
 	unsigned int pos=0;
 	double prec=0;
 	std::memcpy(&prec,arr+pos,sizeof(double)); pos+=sizeof(double);//prec_
 	std::memcpy(&obj.weight(),arr+pos,sizeof(double)); pos+=sizeof(double);//weight_
 	std::memcpy(&obj.eps(),arr+pos,sizeof(double)); pos+=sizeof(double);//eps_
 	obj.init(prec);
+	return pos;
 }
-template <> void unpack(Ewald3D::Coulomb& obj, const char* arr){
-	unpack(static_cast<Ewald3D::Utility&>(obj),arr);
+template <> unsigned int unpack(Ewald3D::Coulomb& obj, const char* arr){
+	return unpack(static_cast<Ewald3D::Utility&>(obj),arr);
 }
 	
 }

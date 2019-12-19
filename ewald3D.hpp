@@ -5,24 +5,12 @@
 //no bounds checking in Eigen
 #define EIGEN_NO_DEBUG
 
-//c libraries
-#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-#include <cmath>
-#elif defined __ICC || defined __INTEL_COMPILER
-#include <mathimf.h> //intel math library
-#endif
-#include <cstdlib>
 //Eigen
 #include <Eigen/Dense>
-//ame
-#include "math_const.hpp"
 //structure
-#include "cell.hpp"
-#include "structure.hpp"
+#include "structure_fwd.hpp"
 //serialization
 #include "serialize.hpp"
-//units
-#include "units.hpp"
 
 #ifndef EWALD_PRINT_FUNC
 #define EWALD_PRINT_FUNC 0
@@ -143,15 +131,15 @@ template <> unsigned int nbytes(const Ewald3D::Coulomb& obj);
 // packing
 //**********************************************
 
-template <> void pack(const Ewald3D::Utility& obj, char* arr);
-template <> void pack(const Ewald3D::Coulomb& obj, char* arr);
+template <> unsigned int pack(const Ewald3D::Utility& obj, char* arr);
+template <> unsigned int pack(const Ewald3D::Coulomb& obj, char* arr);
 
 //**********************************************
 // unpacking
 //**********************************************
 
-template <> void unpack(Ewald3D::Utility& obj, const char* arr);
-template <> void unpack(Ewald3D::Coulomb& obj, const char* arr);
+template <> unsigned int unpack(Ewald3D::Utility& obj, const char* arr);
+template <> unsigned int unpack(Ewald3D::Coulomb& obj, const char* arr);
 	
 }
 
