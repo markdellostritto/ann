@@ -1,3 +1,9 @@
+// c libraries
+#include <cstring>
+// c++ libraries
+#include <ostream>
+#include <stdexcept>
+// ann - units
 #include "units.hpp"
 
 namespace units{
@@ -12,37 +18,47 @@ System::type System::read(const char* str){
 }
 
 std::ostream& operator<<(std::ostream& out, const System::type& t){
-	if(t==System::AU) out<<"AU";
-	else if(t==System::METAL) out<<"METAL";
-	else if(t==System::IDENTITY) out<<"IDENTITY";
-	else out<<"UNKNOWN";
+	switch(t){
+		case System::AU: out<<"AU"; break;
+		case System::METAL: out<<"METAL"; break;
+		case System::IDENTITY: out<<"IDENTITY"; break;
+		default: out<<"UNKNOWN"; break;
+	}
 	return out;
 }
 
 std::ostream& operator<<(std::ostream& out, const Dist::type& t){
-	if(t==Dist::BOHR) out<<"BOHR";
-	else if(t==Dist::ANGSTROM) out<<"ANGSTROM";
-	else out<<"UNKNOWN";
+	switch(t){
+		case Dist::BOHR: out<<"BOHR"; break;
+		case Dist::ANGSTROM: out<<"ANGSTROM"; break;
+		default: out<<"UNKNOWN"; break;
+	}
 	return out;
 }
 
 std::ostream& operator<<(std::ostream& out, const Charge::type& t){
-	if(t==Charge::ELECTRON) out<<"ELECTRON";
-	else out<<"UNKNOWN";
+	switch(t){
+		case Charge::ELECTRON: out<<"ELECTRON"; break;
+		default: out<<"UNKNOWN"; break;
+	}
 	return out;
 }
 
 std::ostream& operator<<(std::ostream& out, const Mass::type& t){
-	if(t==Mass::ELECTRON) out<<"ELECTRON";
-	else if(t==Mass::AMU) out<<"AMU";
-	else out<<"UNKNOWN";
+	switch(t){
+		case Mass::ELECTRON: out<<"ELECTRON"; break;
+		case Mass::AMU: out<<"AMU"; break;
+		default: out<<"UNKNOWN"; break;
+	}
 	return out;
 }
 
 std::ostream& operator<<(std::ostream& out, const Time::type& t){
-	if(t==Time::AU) out<<"AU";
-	else if(t==Time::FEMTOSECONDS) out<<"FEMTOSECONDS";
-	else out<<"UNKNOWN";
+	switch(t){
+		case Time::AU: out<<"AU"; break;
+		case Time::FEMTOSECONDS: out<<"FEMTOSECONDS"; break;
+		default: out<<"UNKNOWN"; break;
+	}
 	return out;
 }
 
@@ -152,19 +168,20 @@ std::ostream& operator<<(std::ostream& out, const consts& c){
 	out<<"****************************************************\n";
 	out<<"******************** UNITS ********************\n";
 	out<<"SYSTEM = "<<c.system_<<"\n";
-	out<<"TIME = "<<c.time_<<"\n";
-	out<<"DIST = "<<c.dist_<<"\n";
+	out<<"TIME   = "<<c.time_<<"\n";
+	out<<"DIST   = "<<c.dist_<<"\n";
 	out<<"CHARGE = "<<c.charge_<<"\n";
-	out<<"MASS = "<<c.mass_<<"\n";
-	out<<"EPS0 = "<<c.eps0_<<"\n";
-	out<<"KE = "<<c.ke_<<"\n";
-	out<<"KB = "<<c.kb_<<"\n";
-	out<<"ME = "<<c.me_<<"\n";
-	out<<"MP = "<<c.mp_<<"\n";
-	out<<"QE = "<<c.qe_<<"\n";
-	out<<"HBAR = "<<c.hbar_<<"\n";
+	out<<"MASS   = "<<c.mass_<<"\n";
+	out<<"EPS0   = "<<c.eps0_<<"\n";
+	out<<"KE     = "<<c.ke_<<"\n";
+	out<<"KB     = "<<c.kb_<<"\n";
+	out<<"ME     = "<<c.me_<<"\n";
+	out<<"MP     = "<<c.mp_<<"\n";
+	out<<"QE     = "<<c.qe_<<"\n";
+	out<<"HBAR   = "<<c.hbar_<<"\n";
 	out<<"******************** UNITS ********************\n";
 	out<<"****************************************************";
+	return out;
 }
 
 }

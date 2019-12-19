@@ -2,9 +2,8 @@
 #ifndef UNITS_HPP
 #define UNITS_HPP
 
-#include <iostream>
-#include <cstring>
-#include <stdexcept>
+// c++ libraries
+#include <iosfwd>
 
 namespace units{
 	
