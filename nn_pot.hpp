@@ -2,28 +2,27 @@
 #ifndef ANN_NN_POT_HPP
 #define ANN_NN_POT_HPP
 
-// c libraries
-#include <cstdlib>
-#include <cmath>
 // c++ libraries
-#include <iostream>
-// lower triangular matrix
+#include <iosfwd>
+// typedefs
+#include "typedef.hpp"
+// ann - lower triangular matrix
 #include "lmat.hpp"
-// simulation libraries
-#include "cell.hpp"
-#include "structure.hpp"
+// ann - structure
+#include "structure_fwd.hpp"
 // neural networks
 #include "nn.hpp"
 // map
 #include "map.hpp"
-// math
-#include "math_const.hpp"
 // basis functions
-#include "cutoff.hpp"
 #include "basis_radial.hpp"
 #include "basis_angular.hpp"
 // atom
 #include "atom.hpp"
+
+//***********************************************************************
+// COMPILER DIRECTIVES
+//***********************************************************************
 
 #ifndef NN_POT_PRINT_FUNC
 #define NN_POT_PRINT_FUNC 0
@@ -48,19 +47,6 @@
 // the number of necessary parameters.  Note however, that they can be different.
 //************************************************************
 
-
-//************************************************************
-// TYPEDEFS
-//************************************************************
-
-typedef std::vector<Eigen::VectorXd,Eigen::aligned_allocator<Eigen::VectorXd> > VecList;
-
-//************************************************************
-// FORWARD DECLARATIONS
-//************************************************************
-
-class NNPotOpt;
-
 //************************************************************
 // NEURAL NETWORK POTENTIAL
 //************************************************************
@@ -68,7 +54,7 @@ class NNPotOpt;
 class NNPot{
 private:
 	//atomic species - generic "atom" objects
-	std::vector<Atom> atoms_;
+	std::vector<Atom> atoms_;//the atoms in the simulation
 	Map<unsigned int,unsigned int> atomMap_;//map atom ids to nnpot index
 	
 	//global cutoff
@@ -96,7 +82,7 @@ private:
 	//utility
 	Eigen::Vector3d rIJ_,rIK_,rJK_;
 	Eigen::Vector3d rIJt_,rIKt_,rJKt_;
-	std::vector<Eigen::Vector3d,Eigen::aligned_allocator<Eigen::Vector3d> > R_;
+	std::vector<Eigen::Vector3d> R_;
 public:
 	//initialization data - aggregates data necessary for starting training from scratch
 	struct Init{
@@ -109,20 +95,20 @@ public:
 		//operators
 		friend std::ostream& operator<<(std::ostream& out, const Init& init);
 		//constructors/destructors
-		Init(){defaults();};
-		~Init(){};
+		Init(){defaults();}
+		~Init(){}
 		//member functions
 		void defaults();
 	};
 public:
-	//constructors/destructors
+	//==== constructors/destructors ====
 	NNPot(){defaults();}
 	~NNPot(){}
 	
 	//friend declarations
 	friend class NNPotOpt;
 	
-	//access
+	//==== access ====
 	//species
 		const unsigned int nAtoms()const{return atoms_.size();}
 		Atom& atom(unsigned int i){return atoms_[i];}
@@ -162,8 +148,9 @@ public:
 		
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const NNPot& nnpot);
+	friend FILE* operator<<(FILE* out, const NNPot& nnpot);
 	
-	//member functions
+	//==== member functions ====
 	//auxilliary
 		void defaults();//set defaults
 		void clear(){defaults();};//clear the potential
@@ -191,7 +178,7 @@ public:
 };
 
 bool operator==(const NNPot& nnPot1, const NNPot& nnPot2);
-inline bool operator!=(const NNPot& nnPot1, const NNPot& nnPot2){return !(nnPot1==nnPot2);};
+inline bool operator!=(const NNPot& nnPot1, const NNPot& nnPot2){return !(nnPot1==nnPot2);}
 
 namespace serialize{
 	
@@ -205,13 +192,13 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const NNPot& obj, char* arr);
+	template <> unsigned int pack(const NNPot& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(NNPot& obj, const char* arr);
+	template <> unsigned int unpack(NNPot& obj, const char* arr);
 	
 }
 

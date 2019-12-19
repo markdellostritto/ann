@@ -1,3 +1,16 @@
+// c libraries
+#include <cmath>
+// c++ libraries
+#include <iostream>
+// ann - structure
+#include "structure.hpp"
+// ann - math
+#include "math_const.hpp"
+// ann - string
+#include "string.hpp"
+// ann - print
+#include "print.hpp"
+// ann - nn_pot
 #include "nn_pot.hpp"
 
 namespace serialize{
@@ -49,7 +62,7 @@ template <> unsigned int nbytes(const NNPot& obj){
 // packing
 //**********************************************
 
-template <> void pack(const NNPot& obj, char* arr){
+template <> unsigned int pack(const NNPot& obj, char* arr){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"pack(const NNPot&,char*):\n";
 	unsigned int pos=0;
 	//species
@@ -57,43 +70,45 @@ template <> void pack(const NNPot& obj, char* arr){
 	const unsigned int nAtoms=obj.nAtoms();
 	std::memcpy(arr+pos,&nAtoms,sizeof(unsigned int)); pos+=sizeof(unsigned int);
 	for(unsigned int i=0; i<obj.nAtoms(); ++i){
-		pack(obj.atom(i),arr+pos); pos+=nbytes(obj.atom(i));
+		pos+=pack(obj.atom(i),arr+pos);
 	}
-	pack(obj.atomMap(),arr+pos); pos+=nbytes(obj.atomMap());
+	pos+=pack(obj.atomMap(),arr+pos);
 	//cutoff
 	if(NN_POT_PRINT_STATUS>1) std::cout<<"packing cutoff\n";
 	std::memcpy(arr+pos,&obj.rc(),sizeof(double)); pos+=sizeof(double);
 	//element nn's
 	if(NN_POT_PRINT_STATUS>1) std::cout<<"packing nn's\n";
 	for(unsigned int i=0; i<obj.nAtoms(); ++i){
-		pack(obj.nn(i),arr+pos); pos+=nbytes(obj.nn(i));
+		pos+=pack(obj.nn(i),arr+pos);
 	}
 	//basis for pair/triple interactions
 	if(NN_POT_PRINT_STATUS>1) std::cout<<"packing radial basis\n";
 	for(unsigned int i=0; i<obj.nAtoms(); ++i){
 		for(unsigned int j=0; j<obj.nAtoms(); ++j){
-			pack(obj.basisR(i,j),arr+pos); pos+=nbytes(obj.basisR(i,j));
+			pos+=pack(obj.basisR(i,j),arr+pos);
 		}
 	}
 	if(NN_POT_PRINT_STATUS>1) std::cout<<"packing angular basis\n";
 	for(unsigned int i=0; i<obj.nAtoms(); ++i){
 		for(unsigned int j=0; j<obj.nAtoms(); ++j){
 			for(unsigned int k=j; k<obj.nAtoms(); ++k){
-				pack(obj.basisA(i,j,k),arr+pos); pos+=nbytes(obj.basisA(i,j,k));
+				pos+=pack(obj.basisA(i,j,k),arr+pos);
 			}
 		}
 	}
 	//input/output
 	if(NN_POT_PRINT_STATUS>1) std::cout<<"packing input/output\n";
-	pack(obj.head(),arr+pos); pos+=nbytes(obj.head());
-	pack(obj.tail(),arr+pos); pos+=nbytes(obj.tail());
+	pos+=pack(obj.head(),arr+pos);
+	pos+=pack(obj.tail(),arr+pos);
+	//return bytes written
+	return pos;
 }
 
 //**********************************************
 // unpacking
 //**********************************************
 
-template <> void unpack(NNPot& obj, const char* arr){
+template <> unsigned int unpack(NNPot& obj, const char* arr){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"unpack(NNPot&,const char*):\n";
 	unsigned int pos=0;
 	//species
@@ -102,10 +117,10 @@ template <> void unpack(NNPot& obj, const char* arr){
 	std::memcpy(&nAtoms,arr+pos,sizeof(unsigned int)); pos+=sizeof(unsigned int);
 	std::vector<Atom> atoms(nAtoms);
 	for(unsigned int i=0; i<nAtoms; ++i){
-		unpack(atoms[i],arr+pos); pos+=nbytes(atoms[i]);
+		pos+=unpack(atoms[i],arr+pos);
 	}
 	Map<unsigned int,unsigned int> map;
-	unpack(map,arr+pos); pos+=nbytes(map);
+	pos+=unpack(map,arr+pos);
 	obj.resize(atoms);
 	obj.atomMap()=map;
 	//cutoff
@@ -116,29 +131,31 @@ template <> void unpack(NNPot& obj, const char* arr){
 	//element nn's
 	if(NN_POT_PRINT_STATUS>1) std::cout<<"unpacking nn's\n";
 	for(unsigned int i=0; i<obj.nAtoms(); ++i){
-		unpack(obj.nn(i),arr+pos); pos+=nbytes(obj.nn(i));
+		pos+=unpack(obj.nn(i),arr+pos);
 	}
 	//basis for pair/triple interactions
 	if(NN_POT_PRINT_STATUS>1) std::cout<<"unpacking radial basis\n";
 	for(unsigned int i=0; i<obj.nAtoms(); ++i){
 		for(unsigned int j=0; j<obj.nAtoms(); ++j){
-			unpack(obj.basisR(i,j),arr+pos); pos+=nbytes(obj.basisR(i,j));
+			pos+=unpack(obj.basisR(i,j),arr+pos);
 		}
 	}
 	if(NN_POT_PRINT_STATUS>1) std::cout<<"unpacking angular basis\n";
 	for(unsigned int i=0; i<obj.nAtoms(); ++i){
 		for(unsigned int j=0; j<obj.nAtoms(); ++j){
 			for(unsigned int k=j; k<obj.nAtoms(); ++k){
-				unpack(obj.basisA(i,j,k),arr+pos); pos+=nbytes(obj.basisA(i,j,k));
+				pos+=unpack(obj.basisA(i,j,k),arr+pos);
 			}
 		}
 	}
 	//input/output
 	if(NN_POT_PRINT_STATUS>1) std::cout<<"unpacking input/output\n";
-	unpack(obj.head(),arr+pos); pos+=nbytes(obj.head());
-	unpack(obj.tail(),arr+pos); pos+=nbytes(obj.tail());
+	pos+=unpack(obj.head(),arr+pos);
+	pos+=unpack(obj.tail(),arr+pos);
 	//intialize the inputs and offsets
 	obj.init_inputs();
+	//return bytes read
+	return pos;
 }
 
 }
@@ -148,13 +165,15 @@ template <> void unpack(NNPot& obj, const char* arr){
 //************************************************************
 
 std::ostream& operator<<(std::ostream& out, const NNPot::Init& init){
-	out<<"**************************************************\n";
-	out<<"**************** NN - POT - INIT ****************\n";
+	char* str=new char[print::len_buf];
+	out<<print::buf(str)<<"\n";
+	out<<print::title("NN - POT - INIT",str)<<"\n";
 	out<<"TRANSFER = "<<init.tfType<<"\n";
 	out<<"LAMBDA   = "<<init.lambda<<"\n";
 	out<<"N_HIDDEN = "; for(unsigned int i=0; i<init.nh.size(); ++i) std::cout<<init.nh[i]<<" "; std::cout<<"\n";
-	out<<"**************** NN - POT - INIT ****************\n";
-	out<<"**************************************************";
+	out<<print::title("NN - POT - INIT",str)<<"\n";
+	out<<print::buf(str);
+	delete[] str;
 	return out;
 }
 
@@ -175,8 +194,9 @@ void NNPot::Init::defaults(){
 //operators
 
 std::ostream& operator<<(std::ostream& out, const NNPot& nnpot){
-	out<<"**************************************************\n";
-	out<<"******************** NN - POT ********************\n";
+	char* str=new char[print::len_buf];
+	out<<print::buf(str)<<"\n";
+	out<<print::title("NN - POT",str)<<"\n";
 	//file i/o
 	out<<"HEAD     = "<<nnpot.head_<<"\n";
 	out<<"TAIL     = "<<nnpot.tail_<<"\n";
@@ -203,8 +223,9 @@ std::ostream& operator<<(std::ostream& out, const NNPot& nnpot){
 			}
 		}
 	}
-	out<<"******************** NN - POT ********************\n";
-	out<<"**************************************************";
+	out<<print::title("NN - POT",str)<<"\n";
+	out<<print::buf(str);
+	delete[] str;
 	return out;
 }
 
@@ -324,15 +345,15 @@ void NNPot::resize(const std::vector<Structure>& strucv){
 }
 
 //set the number of species and species names to the total number of species in the simulations
-void NNPot::resize(const std::vector<std::string>& speciesNames){
+void NNPot::resize(const std::vector<std::string>& species){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::resize(const std::vector<std::string>&):\n";
 	//set the species
 		atomMap_.clear();
-		for(unsigned int i=0; i<speciesNames.size(); ++i){
-			atomMap_.add(string::hash(speciesNames[i]),i);
+		for(unsigned int i=0; i<species.size(); ++i){
+			atomMap_.add(string::hash(species[i]),i);
 			atoms_.push_back(Atom());
-			atoms_.back().name()=speciesNames[i];
-			atoms_.back().id()=string::hash(speciesNames[i]);
+			atoms_.back().name()=species[i];
+			atoms_.back().id()=string::hash(species[i]);
 		}
 		if(NN_POT_PRINT_DATA>0){
 			std::cout<<"====================================\n";
@@ -468,11 +489,11 @@ void NNPot::init_inputs(){
 void NNPot::inputs_symm(Structure& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::inputs_symm(Structure&):\n";
 	//lattice vector shifts
-	const short shellx=std::ceil(rc_/struc.cell().R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
-	const short shelly=std::ceil(rc_/struc.cell().R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
-	const short shellz=std::ceil(rc_/struc.cell().R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
+	const short shellx=std::ceil(rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
+	const short shelly=std::ceil(rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
+	const short shellz=std::ceil(rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
 	const unsigned short Rsize=(2*shellx+1)*(2*shelly+1)*(2*shellz+1);
-	if(NN_POT_PRINT_DATA>0) std::cout<<"R = "<<struc.cell().R()<<"\n";
+	if(NN_POT_PRINT_DATA>0) std::cout<<"R = "<<struc.R()<<"\n";
 	if(NN_POT_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<") = "<<(2*shellx+1)*(2*shelly+1)*(2*shellz+1)<<"\n";
 	if(Rsize>R_.size()) R_.resize(Rsize);
 	unsigned short count=0;
@@ -480,9 +501,9 @@ void NNPot::inputs_symm(Structure& struc){
 		for(short iy=-shelly; iy<=shelly; ++iy){
 			for(short iz=-shellz; iz<=shellz; ++iz){
 				R_[count].setZero();
-				R_[count].noalias()+=ix*struc.cell().R().col(0);
-				R_[count].noalias()+=iy*struc.cell().R().col(1);
-				R_[count].noalias()+=iz*struc.cell().R().col(2);
+				R_[count].noalias()+=ix*struc.R().col(0);
+				R_[count].noalias()+=iy*struc.R().col(1);
+				R_[count].noalias()+=iz*struc.R().col(2);
 				++count;
 			}
 		}
@@ -503,7 +524,7 @@ void NNPot::inputs_symm(Structure& struc){
 			if(NN_POT_PRINT_STATUS>2) std::cout<<"symm r("<<i<<","<<j<<")\n";
 			//calc radial contribution - loop over all radial functions
 			if(NN_POT_PRINT_STATUS>2) std::cout<<"computing radial functions\n";
-			Cell::diff(struc.posn(i),struc.posn(j),rIJ_,struc.cell().R(),struc.cell().RInv());
+			Cell::diff(struc.posn(i),struc.posn(j),rIJ_,struc.R(),struc.RInv());
 			//loop over lattice vector shifts
 			for(unsigned short idIJ=0; idIJ<Rsize; ++idIJ){
 				rIJt_.noalias()=rIJ_+R_[idIJ]; const double dIJ=rIJt_.norm();
@@ -522,8 +543,8 @@ void NNPot::inputs_symm(Structure& struc){
 						const unsigned short KK=atomMap_[string::hash(struc.name(k).c_str())];
 						//calculate rIK and rJK
 						if(NN_POT_PRINT_STATUS>2) std::cout<<"computing theta("<<i<<","<<j<<","<<k<<")\n";
-						Cell::diff(struc.posn(i),struc.posn(k),rIK_,struc.cell().R(),struc.cell().RInv());
-						Cell::diff(struc.posn(j),struc.posn(k),rJK_,struc.cell().R(),struc.cell().RInv());
+						Cell::diff(struc.posn(i),struc.posn(k),rIK_,struc.R(),struc.RInv());
+						Cell::diff(struc.posn(j),struc.posn(k),rJK_,struc.R(),struc.RInv());
 						//loop over all cell shifts
 						for(unsigned short idIK=0; idIK<Rsize; ++idIK){
 							rIKt_.noalias()=rIK_+R_[idIK]; const double dIK=rIKt_.norm();
@@ -559,10 +580,10 @@ void NNPot::forces(Structure& struc, bool calc_symm){
 	//reset the force
 	for(unsigned int i=0; i<struc.nAtoms(); ++i) struc.force(i).setZero();
 	//lattice vector shifts
-	const short shellx=std::ceil(rc_/struc.cell().R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
-	const short shelly=std::ceil(rc_/struc.cell().R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
-	const short shellz=std::ceil(rc_/struc.cell().R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
-	if(NN_POT_PRINT_DATA>0) std::cout<<"R = "<<struc.cell().R()<<"\n";
+	const short shellx=std::ceil(rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
+	const short shelly=std::ceil(rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
+	const short shellz=std::ceil(rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
+	if(NN_POT_PRINT_DATA>0) std::cout<<"R = "<<struc.R()<<"\n";
 	if(NN_POT_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<")\n";
 	const unsigned short Rsize=(2*shellx+1)*(2*shelly+1)*(2*shellz+1);
 	if(Rsize>R_.size()) R_.resize(Rsize);
@@ -571,9 +592,9 @@ void NNPot::forces(Structure& struc, bool calc_symm){
 		for(short iy=-shelly; iy<=shelly; ++iy){
 			for(short iz=-shellz; iz<=shellz; ++iz){
 				R_[count].setZero();
-				R_[count].noalias()+=ix*struc.cell().R().col(0);
-				R_[count].noalias()+=iy*struc.cell().R().col(1);
-				R_[count].noalias()+=iz*struc.cell().R().col(2);
+				R_[count].noalias()+=ix*struc.R().col(0);
+				R_[count].noalias()+=iy*struc.R().col(1);
+				R_[count].noalias()+=iz*struc.R().col(2);
 				++count;
 			}
 		}
@@ -595,7 +616,7 @@ void NNPot::forces(Structure& struc, bool calc_symm){
 			//find the index of the species of atom j
 			const unsigned short JJ=atomMap_[string::hash(struc.name(j))];
 			//calc rIJ
-			Cell::diff(struc.posn(i),struc.posn(j),rIJ_,struc.cell().R(),struc.cell().RInv());
+			Cell::diff(struc.posn(i),struc.posn(j),rIJ_,struc.R(),struc.RInv());
 			//loop over lattice vector shifts
 			for(unsigned short idIJ=0; idIJ<Rsize; ++idIJ){
 				rIJt_.noalias()=rIJ_+R_[idIJ]; const double dIJ=rIJt_.norm();
@@ -613,8 +634,8 @@ void NNPot::forces(Structure& struc, bool calc_symm){
 						const unsigned short KK=atomMap_[string::hash(struc.name(k))];
 						//calculate rIK and rJK
 						if(NN_POT_PRINT_STATUS>2) std::cout<<"computing theta("<<i<<","<<j<<","<<k<<")\n";
-						Cell::diff(struc.posn(i),struc.posn(k),rIK_,struc.cell().R(),struc.cell().RInv());
-						Cell::diff(struc.posn(j),struc.posn(k),rJK_,struc.cell().R(),struc.cell().RInv());
+						Cell::diff(struc.posn(i),struc.posn(k),rIK_,struc.R(),struc.RInv());
+						Cell::diff(struc.posn(j),struc.posn(k),rJK_,struc.R(),struc.RInv());
 						//loop over all cell shifts
 						for(unsigned short idIK=0; idIK<Rsize; ++idIK){
 							rIKt_.noalias()=rIK_+R_[idIK]; const double dIK=rIKt_.norm();
