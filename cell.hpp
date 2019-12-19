@@ -3,15 +3,10 @@
 #define CELL_HPP
 
 // c++ libraries
-#include <ostream>
+#include <iosfwd>
 // eigen libraries
 #include <Eigen/Dense>
-// local libraries - math
-#include "math_const.hpp"
-#include "math_special.hpp"
-// local libraries - eigen
-#include "eigen.hpp"
-// local libraries - serialization
+// ann - serialization
 #include "serialize.hpp"
 
 //****************************************************************
@@ -19,9 +14,6 @@
 //****************************************************************
 
 class Cell{
-public:
-	//static members
-	static const unsigned int D=3;
 private:
 	//members
 	double scale_;//the scale factor by which the lattice vector matrices are multiplied by
@@ -37,7 +29,7 @@ public:
 	Cell(const Eigen::Matrix3d& R, double scale){init(R,scale);}
 	Cell(const Eigen::Vector3d& R1,const Eigen::Vector3d& R2,const Eigen::Vector3d& R3):scale_(1){init(R1,R2,R3);}
 	Cell(const Eigen::Vector3d& R1,const Eigen::Vector3d& R2,const Eigen::Vector3d& R3, double scale):scale_(1){init(R1,R2,R3);}
-	~Cell(){};
+	~Cell(){}
 	
 	//operators
 	Cell& operator=(const Cell& cell);
@@ -87,13 +79,13 @@ namespace serialize{
 	// packing
 	//**********************************************
 
-	template <> void pack(const Cell& obj, char* arr);
+	template <> unsigned int pack(const Cell& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 
-	template <> void unpack(Cell& obj, const char* arr);
+	template <> unsigned int unpack(Cell& obj, const char* arr);
 	
 }
 

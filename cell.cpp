@@ -1,3 +1,11 @@
+// c++ libraries
+#include <ostream>
+// ann - math
+#include "math_const.hpp"
+#include "math_special.hpp"
+// ann - eigen
+#include "eigen.hpp"
+// ann - cell
 #include "cell.hpp"
 
 //operators
@@ -41,9 +49,9 @@ void Cell::init(const Eigen::Matrix3d& R, double scale){
 	scale_=scale;
 	R_=R*scale_;
 	RInv_.noalias()=R_.inverse();
-	K_.col(0)=2*num_const::PI*R_.col(1).cross(R_.col(2))/(R_.col(0).dot(R_.col(1).cross(R_.col(2))));
-	K_.col(1)=2*num_const::PI*R_.col(2).cross(R_.col(0))/(R_.col(1).dot(R_.col(2).cross(R_.col(0))));
-	K_.col(2)=2*num_const::PI*R_.col(0).cross(R_.col(1))/(R_.col(2).dot(R_.col(0).cross(R_.col(1))));
+	K_.col(0)=2.0*num_const::PI*R_.col(1).cross(R_.col(2))/(R_.col(0).dot(R_.col(1).cross(R_.col(2))));
+	K_.col(1)=2.0*num_const::PI*R_.col(2).cross(R_.col(0))/(R_.col(1).dot(R_.col(2).cross(R_.col(0))));
+	K_.col(2)=2.0*num_const::PI*R_.col(0).cross(R_.col(1))/(R_.col(2).dot(R_.col(0).cross(R_.col(1))));
 	KInv_.noalias()=K_.inverse();
 	vol_=std::fabs(R_.determinant());
 }
@@ -54,9 +62,9 @@ void Cell::init(const Eigen::Vector3d& R1,const Eigen::Vector3d& R2,const Eigen:
 	R_.col(1)=R2*scale_;
 	R_.col(2)=R3*scale_;
 	RInv_.noalias()=R_.inverse();
-	K_.col(0)=2*num_const::PI*R_.col(1).cross(R_.col(2))/(R_.col(0).dot(R_.col(1).cross(R_.col(2))));
-	K_.col(1)=2*num_const::PI*R_.col(2).cross(R_.col(0))/(R_.col(1).dot(R_.col(2).cross(R_.col(0))));
-	K_.col(2)=2*num_const::PI*R_.col(0).cross(R_.col(1))/(R_.col(2).dot(R_.col(0).cross(R_.col(1))));
+	K_.col(0)=2.0*num_const::PI*R_.col(1).cross(R_.col(2))/(R_.col(0).dot(R_.col(1).cross(R_.col(2))));
+	K_.col(1)=2.0*num_const::PI*R_.col(2).cross(R_.col(0))/(R_.col(1).dot(R_.col(2).cross(R_.col(0))));
+	K_.col(2)=2.0*num_const::PI*R_.col(0).cross(R_.col(1))/(R_.col(2).dot(R_.col(0).cross(R_.col(1))));
 	KInv_.noalias()=K_.inverse();
 	vol_=std::fabs(R_.determinant());
 }
@@ -148,22 +156,28 @@ namespace serialize{
 	// byte measures
 	//**********************************************
 
-	template <> unsigned int nbytes(const Cell& obj){return nbytes(obj.R());};
+	template <> unsigned int nbytes(const Cell& obj){
+		return nbytes(obj.R());
+	};
 	
 	//**********************************************
 	// packing
 	//**********************************************
 
-	template <> void pack(const Cell& obj, char* arr){std::memcpy(arr,obj.R().data(),nbytes(obj));};
+	template <> unsigned int pack(const Cell& obj, char* arr){
+		std::memcpy(arr,obj.R().data(),nbytes(obj));
+		return nbytes(obj);
+	};
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 
-	template <> void unpack(Cell& obj, const char* arr){
+	template <> unsigned int unpack(Cell& obj, const char* arr){
 		Eigen::Matrix3d lv;
 		unpack(lv,arr);
 		obj.init(lv);
+		return nbytes(obj);
 	}
 	
 }
