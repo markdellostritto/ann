@@ -2,24 +2,32 @@
 #ifndef SYMM_RADIAL_G1_HPP
 #define SYMM_RADIAL_G1_HPP
 
-// c libraries
-#include <cmath>
 // c++ libaries
-#include <iostream>
-// local libraries
+#include <iosfwd>
+// ann - symm - radial
 #include "symm_radial.hpp"
-// local libraries - serialization
+// ann - serialization
 #include "serialize.hpp"
 
-//Behler G1
+//*****************************************
+// PHIR - G1 - Behler
+//*****************************************
+
 struct PhiR_G1: public PhiR{
-	PhiR_G1():PhiR(){};
+	//==== constructors/destructors ====
+	PhiR_G1():PhiR(){}
+	//==== member functions - evaluation ====
 	inline double val(double r, double cut)const noexcept final{return cut;}
 	inline double grad(double r, double cut, double gcut)const noexcept final{return gcut;}
 };
+//==== operators ====
 std::ostream& operator<<(std::ostream& out, const PhiR_G1& f);
 bool operator==(const PhiR_G1& phi1, const PhiR_G1& phi2);
-inline bool operator!=(const PhiR_G1& phi1, const PhiR_G1& phi2){return !(phi1==phi2);};
+inline bool operator!=(const PhiR_G1& phi1, const PhiR_G1& phi2){return !(phi1==phi2);}
+
+//*****************************************
+// PHIR - G1 - Behler - serialization
+//*****************************************
 
 namespace serialize{
 	
@@ -33,13 +41,13 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const PhiR_G1& obj, char* arr);
+	template <> unsigned int pack(const PhiR_G1& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(PhiR_G1& obj, const char* arr);
+	template <> unsigned int unpack(PhiR_G1& obj, const char* arr);
 	
 }
 

@@ -1,6 +1,21 @@
+// c libraries
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
+#include <cmath>
+#elif defined __ICC || defined __INTEL_COMPILER
+#include <mathimf.h> //intel math library
+#endif
+#include <cstring>
+// c++ libaries
+#include <ostream>
+// ann - symm - radial - t1
 #include "symm_radial_t1.hpp"
 
-//T1
+//*****************************************
+// PHIR - T1 - DelloStritto
+//*****************************************
+
+//==== operators ====
+
 std::ostream& operator<<(std::ostream& out, const PhiR_T1& f){
 	return out<<"T1 "<<f.rs<<" "<<f.eta<<" ";
 }
@@ -11,6 +26,8 @@ bool operator==(const PhiR_T1& phi1, const PhiR_T1& phi2){
 	else if(phi1.rs!=phi2.rs) return false;
 	else return true;
 }
+
+//==== member functions - evaluation ====
 
 double PhiR_T1::val(double r, double cut)const noexcept{
 	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
@@ -29,6 +46,10 @@ double PhiR_T1::grad(double r, double cut, double gcut)const noexcept{
 	return 0.5*(-eta*(1.0-tanhf*tanhf)*cut+(1.0+tanhf)*gcut);
 }
 
+//*****************************************
+// PHIR - T1 - DelloStritto - serialization
+//*****************************************
+
 namespace serialize{
 	
 	//**********************************************
@@ -46,22 +67,24 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const PhiR_T1& obj, char* arr){
+	template <> unsigned int pack(const PhiR_T1& obj, char* arr){
 		unsigned int pos=0;
 		pack(static_cast<const PhiR&>(obj),arr); pos+=nbytes(static_cast<const PhiR&>(obj));
 		std::memcpy(arr+pos,&obj.eta,sizeof(double)); pos+=sizeof(double);
-		std::memcpy(arr+pos,&obj.rs,sizeof(double));
+		std::memcpy(arr+pos,&obj.rs,sizeof(double)); pos+=sizeof(double);
+		return pos;
 	}
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(PhiR_T1& obj, const char* arr){
+	template <> unsigned int unpack(PhiR_T1& obj, const char* arr){
 		unsigned int pos=0;
 		unpack(static_cast<PhiR&>(obj),arr); pos+=nbytes(static_cast<const PhiR&>(obj));
 		std::memcpy(&obj.eta,arr+pos,sizeof(double)); pos+=sizeof(double);
-		std::memcpy(&obj.rs,arr+pos,sizeof(double));
+		std::memcpy(&obj.rs,arr+pos,sizeof(double)); pos+=sizeof(double);
+		return pos;
 	}
 	
 }

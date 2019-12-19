@@ -1,12 +1,15 @@
+// c libraries
+#include <cstring>
+// c++ libraries
+#include <ostream>
+// ann - symm - radial
 #include "symm_radial.hpp"
 
 //*****************************************
 // PhiRN - radial function names
 //*****************************************
 
-//loading/printing
-
-PhiRN::type PhiRN::load(const char* str){
+PhiRN::type PhiRN::read(const char* str){
 	if(std::strcmp(str,"G1")==0) return PhiRN::G1;
 	else if(std::strcmp(str,"G2")==0) return PhiRN::G2;
 	else if(std::strcmp(str,"T1")==0) return PhiRN::T1;
@@ -20,8 +23,12 @@ std::ostream& operator<<(std::ostream& out, const PhiRN::type& t){
 	else out<<"UNKNOWN";
 	return out;
 }
+//*****************************************
+// PhiR - radial function base class
+//*****************************************
 
-//PhiR
+//==== operators ====
+
 std::ostream& operator<<(std::ostream& out, const PhiR& f){
 	return out;
 }
@@ -29,6 +36,10 @@ std::ostream& operator<<(std::ostream& out, const PhiR& f){
 bool operator==(const PhiR& phir1, const PhiR& phir2){
 	return true;
 }
+
+//*****************************************
+// PhiR - serialization
+//*****************************************
 
 namespace serialize{
 	
@@ -44,16 +55,16 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const PhiR& obj, char* arr){
-		
+	template <> unsigned int pack(const PhiR& obj, char* arr){
+		return 0;
 	}
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(PhiR& obj, const char* arr){
-		
+	template <> unsigned int unpack(PhiR& obj, const char* arr){
+		return 0;
 	}
 	
 }

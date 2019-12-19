@@ -1,8 +1,20 @@
+// c libraries
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
+#include <cmath>
+#elif defined __ICC || defined __INTEL_COMPILER
+#include <mathimf.h> //intel math library
+#endif
+#include <cstring>
+// c++ libaries
+#include <ostream>
+// ann - symm - angular - g3
 #include "symm_angular_g3.hpp"
 
-//Behler G3
+//*****************************************
+// PHIA - G3 - Behler
+//*****************************************
 
-//operators
+//==== operators ====
 
 std::ostream& operator<<(std::ostream& out, const PhiA_G3& f){
 	return out<<"G3 "<<f.eta<<" "<<f.zeta<<" "<<f.lambda;
@@ -16,7 +28,7 @@ bool operator==(const PhiA_G3& phia1, const PhiA_G3& phia2){
 	else return true;
 }
 
-//member functions
+//==== member functions ====
 
 double PhiA_G3::val(double cos, const double r[3], const double c[3])const noexcept{
 	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
@@ -37,36 +49,31 @@ double PhiA_G3::dist(const double r[3], const double c[3])const noexcept{
 }
 
 double PhiA_G3::angle(double cos)const noexcept{
-	cos=0.5*(1.0+lambda*cos);
 	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return (cos<0.5*num_const::ZERO)?0:std::pow(cos,zeta);
+	return std::pow(std::fabs(0.5*(1.0+lambda*cos)),zeta);
 	#elif (defined __ICC || defined __INTEL_COMPILER)
-	return (cos<0.5*num_const::ZERO)?0:pow(cos,zeta);
+	return pow(fabs(0.5*(1.0+lambda*cos)),zeta);
 	#endif
 }
 
 double PhiA_G3::grad_angle(double cos)const noexcept{
-	cos=0.5*(1.0+lambda*cos);
 	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return (cos<num_const::ZERO)?0:0.5*zeta*lambda*std::pow(cos,zeta-1.0);
+	return 0.5*zeta*lambda*std::pow(std::fabs(0.5*(1.0+lambda*cos)),zeta-1.0);
 	#elif (defined __ICC || defined __INTEL_COMPILER)
-	return (cos<num_const::ZERO)?0:0.5*zeta*lambda*pow(cos,zeta-1.0);
+	return 0.5*zeta*lambda*pow(fabs(0.5*(1.0+lambda*cos)),zeta-1.0);
 	#endif
 }
 
 void PhiA_G3::compute_angle(double cos, double& val, double& grad)const noexcept{
-	cos=0.5*(1.0+lambda*cos);
-	if(cos>num_const::ZERO){
-		#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-		val=std::pow(cos,zeta);
-		#elif (defined __ICC || defined __INTEL_COMPILER)
-		val=pow(cos,zeta);
-		#endif
-		grad=0.5*zeta*lambda*val/cos;
-	} else {
-		val=0;
-		grad=0;
-	}
+	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
+	cos=std::fabs(0.5*(1.0+lambda*cos));
+	grad=std::pow(cos,zeta-1.0);
+	#elif (defined __ICC || defined __INTEL_COMPILER)
+	cos=fabs(0.5*(1.0+lambda*cos));
+	grad=pow(cos,zeta-1.0);
+	#endif
+	val=cos*grad;
+	grad*=0.5*zeta*lambda;
 }
 
 double PhiA_G3::grad_dist_0(const double r[3], const double c[3], double gij)const noexcept{
@@ -108,6 +115,10 @@ void PhiA_G3::compute_dist(const double r[3], const double c[3], const double g[
 	gradd[2]=(-2.0*eta*r[2]*c[2]+g[2])*c[0]*c[1]*expf;
 }
 
+//*****************************************
+// PHIA - G3 - Behler - serialization
+//*****************************************
+
 namespace serialize{
 	
 	//**********************************************
@@ -126,24 +137,26 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const PhiA_G3& obj, char* arr){
+	template <> unsigned int pack(const PhiA_G3& obj, char* arr){
 		unsigned int pos=0;
 		pack(static_cast<const PhiA&>(obj),arr); pos+=nbytes(static_cast<const PhiA&>(obj));
 		std::memcpy(arr+pos,&obj.eta,sizeof(double)); pos+=sizeof(double);
 		std::memcpy(arr+pos,&obj.zeta,sizeof(double)); pos+=sizeof(double);
-		std::memcpy(arr+pos,&obj.lambda,sizeof(int));
+		std::memcpy(arr+pos,&obj.lambda,sizeof(int));  pos+=sizeof(int);
+		return pos;
 	}
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(PhiA_G3& obj, const char* arr){
+	template <> unsigned int unpack(PhiA_G3& obj, const char* arr){
 		unsigned int pos=0;
 		unpack(static_cast<PhiA&>(obj),arr); pos+=nbytes(static_cast<const PhiA&>(obj));
 		std::memcpy(&obj.eta,arr+pos,sizeof(double)); pos+=sizeof(double);
 		std::memcpy(&obj.zeta,arr+pos,sizeof(double)); pos+=sizeof(double);
-		std::memcpy(&obj.lambda,arr+pos,sizeof(int));
+		std::memcpy(&obj.lambda,arr+pos,sizeof(int));  pos+=sizeof(int);
+		return pos;
 	}
 	
 }

@@ -2,13 +2,9 @@
 #ifndef SYMM_RADIAL_HPP
 #define SYMM_RADIAL_HPP
 
-// c libraries
-#include <cstring>
 // c++ libraries
-#include <iostream>
-// local libraries - cutoff
-#include "cutoff.hpp"
-// local libraries - serialization
+#include <iosfwd>
+// ann - serialization
 #include "serialize.hpp"
 
 //*****************************************
@@ -17,12 +13,12 @@
 
 struct PhiRN{
 	enum type{
-		UNKNOWN=-1,
-		G1=0,//Behler G1
-		G2=1,//Behler G2
-		T1=2//tanh
+		UNKNOWN=0,
+		G1=1,//Behler G1
+		G2=2,//Behler G2
+		T1=3//tanh
 	};
-	static type load(const char* str);
+	static type read(const char* str);
 };
 std::ostream& operator<<(std::ostream& out, const PhiRN::type& t);
 
@@ -31,13 +27,20 @@ std::ostream& operator<<(std::ostream& out, const PhiRN::type& t);
 //*****************************************
 
 struct PhiR{
+	//==== constructors/destructors ====
 	virtual ~PhiR(){};
+	//==== member functions - evaluation ====
 	virtual double val(double r, double cut)const noexcept=0;
 	virtual double grad(double r, double cut, double gcut)const noexcept=0;
 };
+//==== operators ====
 std::ostream& operator<<(std::ostream& out, const PhiR& f);
 bool operator==(const PhiR& phir1, const PhiR& phir2);
-inline bool operator!=(const PhiR& phir1, const PhiR& phir2){return !(phir1==phir2);};
+inline bool operator!=(const PhiR& phir1, const PhiR& phir2){return !(phir1==phir2);}
+
+//*****************************************
+// PhiR - serialization
+//*****************************************
 
 namespace serialize{
 	
@@ -51,13 +54,13 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const PhiR& obj, char* arr);
+	template <> unsigned int pack(const PhiR& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(PhiR& obj, const char* arr);
+	template <> unsigned int unpack(PhiR& obj, const char* arr);
 	
 }
 
