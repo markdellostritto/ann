@@ -1,10 +1,15 @@
+// c libraries
+#include <cstring>
+// c ++libraries
+#include <ostream>
+// ann - cutoff
 #include "cutoff.h"
 
 //************************************************************
 // CUTOFF NAMES
 //************************************************************
 
-CutoffN::type CutoffN::load(const char* str){
+CutoffN::type CutoffN::read(const char* str){
 	if(std::strcmp(str,"COS")==0) return CutoffN::COS;
 	else if(std::strcmp(str,"TANH")==0) return CutoffN::TANH;
 	else return CutoffN::UNKNOWN;

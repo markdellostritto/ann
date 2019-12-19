@@ -1,13 +1,14 @@
+#pragma once
 #ifndef CUTOFF_HPP
 #define CUTOFF_HPP
 
 // c libraries
 #include <cmath>
-#include <cstring>
 // c ++libraries
-#include <iostream> 
-// local libraries
-#include "ann_math_const.h"
+#include <iosfwd>
+// ann - math
+#include "math_const_ann.h"
+#include "math_special_ann.h"
 
 //************************************************************
 // CUTOFF NAMES
@@ -20,7 +21,7 @@ struct CutoffN{
 		COS=0,
 		TANH=1
 	};
-	static type load(const char* str);
+	static type read(const char* str);
 };
 std::ostream& operator<<(std::ostream& out, const CutoffN::type& cutt);
 
@@ -34,19 +35,20 @@ typedef double (*FCutT)(double,double);
 //cutoff functions
 struct CutoffF{
 	static const unsigned int N_CUT_F=2;
-	static double cut_cos(double r, double rc){return (r>rc)?0:0.5*(std::cos(num_const::PI*r/rc)+1.0);};
-	static double cut_tanh(double r, double rc){double f=std::tanh(1.0-r/rc); return f*f*f*(r<=rc);};
+	static inline double cut_cos(double r, double rc){return (r>rc)?0:0.5*(special::cos(num_const::PI*r/rc)+1.0);}
+	static inline double cut_tanh(double r, double rc){const double f=(r>rc)?0:std::tanh(1.0-r/rc); return f*f*f;}
 	static const FCutT funcs[N_CUT_F];
 };
 
 //cutoff functions
 struct CutoffFD{
 	static const unsigned int N_CUT_F=2;
-	static double cut_cos(double r, double rc){return (r>rc)?0:-0.5*num_const::PI/rc*std::sin(num_const::PI*r/rc);};
-	static double cut_tanh(double r, double rc){
-		double cosh=std::cosh(1.0-r/rc);
-		double tanh=std::tanh(1.0-r/rc);
-		return -3.0*tanh*tanh/(rc*cosh*cosh)*(r<=rc);
+	static inline double cut_cos(double r, double rc){return (r>rc)?0:-0.5*num_const::PI/rc*special::sin(num_const::PI*r/rc);}
+	static inline double cut_tanh(double r, double rc){
+		if(r<=rc){
+			const double tanh=std::tanh(1.0-r/rc);
+			return -3.0*tanh*tanh*(1.0-tanh*tanh)/rc;
+		} else return 0;
 	};
 	static const FCutT funcs[N_CUT_F];
 };
