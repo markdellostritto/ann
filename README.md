@@ -10,6 +10,8 @@ for molecular dynamics simulations.
 
 **SYSTEM**
 * compiler.hpp - utilities for printing compiler information
+* typedef.hpp  - global typdefs
+* print.hpp    - utilities for formatted output
 
 **MEMORY**
 * serialize.hpp - serialization of complex objects
@@ -56,7 +58,6 @@ for molecular dynamics simulations.
 * nn_pot.hpp          - neural network potential
 
 **TRAINING**
-* nn_pot_train_omp.hpp - nn pot - training - OpenMP (deprecated)
 * nn_pot_train_mpi.hpp - nn pot - training - MPI
 * nn_train.hpp - neural network training (testing)
 
@@ -69,6 +70,9 @@ for molecular dynamics simulations.
 * qe.hpp   - read/write structures - QE (https://www.quantum-espresso.org/)
 * ame.hpp  - read/write structures - AME
 
+**TEST**
+* test_unit.cpp - unit tests
+
 ![Code Layout](/code_layout.png)
 
 ## INSTALLATION
@@ -79,12 +83,19 @@ The Eigen library is a header library, and thus does not need to be compiled.
 The location of the Eigen library must be specified in the Makefile.
 
 **Makefile options:**
-* make omp     - make training binary - parallelized - OMP - gnu (deprecated)
 * make mpi     - make training binary - parallelized - MPI - gnu
 * make impi    - make training binary - parallelized - MPI - intel
 * make test    - make testing binary
 * make convert - make conversion binary
 * make clean   - removes all object files
+
+## EXECUTION
+
+The code is executed taking a single argument, the parameter file, and
+all output is sent to standard output.  The parameter file provides all data files
+necessary for training, valiadation, and testing as well as all parameters defining
+the neural network potential and the training process.  The binary can be run in
+parallel using MPI, with the type of MPI specified during compilation.
 	
 ## TRAINING - DATA
 
@@ -92,10 +103,10 @@ The location of the Eigen library must be specified in the Makefile.
 
 The training, validation, and testing data are read from data files, each of which
 contains a list of files providing structures and associated energies. The structures
-listed are read from each data file and combined to form the total data set in each
+listed in each data file are read and combined to form the total data set in each
 category. Each data file can be individually classified as training, validation, or testing.
 Although one can use a single data file for each category, it is recommended to split 
-the data into several categories based on different constructions, symmetries, chemistries, etc.
+the data into several data files based on different constructions, symmetries, chemistries, etc.
 The use of separate data files facilitates the organization and division of data into
 different categories for training and analysis.
 
@@ -134,13 +145,11 @@ completely independent.  Since the energy is basis + network, the basis can be t
 same for all elements.  The basis can of course vary per element, reflecting different 
 local environments for each element.
 
-If no basis is provided, an automatically generated basis will be used. 
-It is not recommended to use the automatically generated parameters of the atomic basis. 
-Instead, one should specify a set of symmetry functions which best reflect the atomic forces.
+One should specify a set of symmetry functions which best reflect the atomic forces.
 Essentially, one should ensure that there are a large number of symmetry functions with large gradients
 at the interatomic distances and angles where the gradient of the energy is greatest.
-As the interatomic forces computed as sums of the gradients of the symmetry functions,
-the symmetry functions should also resemble the expected interatomic forces.
+As the interatomic forces are computed as sums of the gradients of the symmetry functions,
+the symmetry functions should also resemble the integral of the expected interatomic forces.
 
 ## NEURAL NETWORK POTENTIAL - TRAINING
 
@@ -177,28 +186,31 @@ There are three basic types of optimization:
 * gradient descent (sdg,sdm,nag,adagrad,adadelta,adam,nadam)
 * conjugate-gradient (bfgs)
 
-All gradient descent algorithms require a descent parameter (gamma).  Most also require 
+All gradient descent algorithms require a descent parameter (gamma).  Many also require 
 a memory parameter (eta) which adds different forms of momentum to the descent by 
 combining the current gradient with past gradients.  All gradient descent algorithms also
 offer a decay parameter which decreases the descent parameter (gamma) over time.  The decay
-parameter should be an integer which sets the time constant of the exponential decay of
-the step.  At step n, the optimization step will thus be reduced by a factor of exp(-n/T), where
-T is the number specified in the parameter file.  When using a gradient descent method,
-it is recommended to use a relatively large but non-zero decay parameter, typically on the order
-of the number of steps taking before stopping (max_iter).
+parameter should be an floating point number which sets the time constant of the decay function.
+Several different decay functions are available, including: exponential, inverse, power, and sqrt.
+For exponential decay, at step n, gamma will be reduced by a factor of exp(-alpha n).
+For inverse decay, at step n, gamma will be computed as gamm/(1+alpha n).
+For power decay, at step n, gamma will be computed as gamm/(1+alpha n)^(p) for a given power p.
+For sqrt decay, at step n, gamma will be computed as gamm/(1+alpha n)^(1/2).
+When using a gradient descent method, it is recommended to use a relatively large but non-zero
+decay parameter, typically on the order of the number of steps taking before stopping (max_iter).
 
 The RPROP algorithm uses the sign of the gradient only, with the step sized determined by 
-the sign of the change in the objective function. The RPROP algorithms is recommended, 
+the sign of the change in the objective function. The RPROP algorithm is recommended, 
 as it is extremently stable, exhibiting a monotonic decrease in the objective function 
 for essentially any parameter values. However, the RPROP algorithm can severely overfit
 the training data, and generally requires a large regularization parameter (lambda).
+In addition, the RPROP algorithm must use a full batch, and so can be very slow for large data sets.
 
 The ADAM algorithm is also effective, though it requires a good choice of gamma, and is 
-the best gradient descent method available. It is recommended that one use a small gamma (around 1e-3) 
-and a small batch size (~25% of the total number of training structures), as the smaller 
-batch size results in a stochastic gradient direction which tends to benifit 
-training performance. Though ADAM is less prone to overfitting, it is still recommended that 
-one use a non-zero regularization parameter.  For more difficult systems, one might consider using 
+one of the best gradient descent methods available. It is recommended that one use a small gamma (around 1e-3) 
+and a small batch size (5-25% of the total number of training structures), as the smaller 
+batch size results in a stochastic gradient direction which tends to benefit 
+training performance. For more difficult systems, one might consider using 
 the NADAM algorithm, with is ADAM with a Nesterov-style momentum term which results in a more stable 
 gradient in the optimization step.
 
@@ -211,11 +223,7 @@ term is added to the gradients. This regularization term thus prevents the weigh
 from becoming too large. Generally speaking, the order of magnitude of lambda will set the maximum order 
 of magnitude of the weights of the network, independent of the size of the network itself.  For example, 
 if lambda is of the order 1e-3 the largest weights of the network will typically be on the order of 1e2 and 
-will not exceed 1e3. The regularization parameter (lambda) is very important for optimization as it 
-is an excellent tool for preventing overfitting. If lambda is zero, the network may yield very good 
-training and validation errors, but will generally yield an unphysical potential. A non-zero lambda, typically 
-on the order of 1e-3, will yield slightly worse training and validation errors, but will yield a
-more accurate and more general potential.
+will not exceed 1e3.
 
 When restarting, all optimization parameters (lambda, gamma, decay, etc.) are overwritten by the 
 values provided in the parameter file. There are times when this is not desirable, i.e. when restarting 
@@ -229,7 +237,12 @@ file is written.  The optimization count and all optimization data is retained i
 restart file, allowing for consistent restarting from a completed run.  When the max
 number of iterations is reached, the final potential and restart files are written,
 allowing for rapid restart without moving or copying files. Note that the max iterations 
-applies only to the current run, not to the total optimization count.
+applies only to the current run, not to the total optimization count.  The restart file
+is named "nn_pot_train.restart.$i" where $i is the current optimization count, and the restart
+file "nn_pot_train.restart" is written when the max number of iterations is reached.
+The nueral network potential is written "ann_$name" where "name" is the name of the species 
+stored in the potential file.  Every "nsave" ierations "ann_$name.$i" is written where $i
+is the current optimization count.
 
 The error for the training and validation data is written to file very "nprint" timesteps.
 The error is accumulated in the same file when restarting, appending the new iteration 
@@ -238,7 +251,7 @@ count and error to the end of the file.
 Currently, the basis set, energies, and forces are optionally written to file.  
 The basis funtions are written as functions of distance/angle.  
 The reference and nn energies for the training and validation sets are written.  
-The reference and nn forces for the training and validation sets are written.  
+The reference and nn forces for the training and validation sets are written.
 
 ## MOLECULAR DYNAMICS
 
@@ -264,7 +277,7 @@ A conversion utility is included.  The arguments are as follows:
 * -frac = fractional coordinate ouput
 * -cart = Cartesian coordinate output
 * -offset x:y:z = uniform position offset
-* -interval beg : end : stride = interval to load trajectory
+* -interval beg:end:stride = interval to load trajectory
 * -sep = seperate the output into separate files for each timestep
 * -poscar "file" = VASP poscar file 
 * -xdatcar "file" = VASP xdatcar file
@@ -331,7 +344,8 @@ Each __atom__ entry (atom name mass (charge)) lists the properties of a given at
 * __n_write__ - (int) Write the restart file every "n_write" steps.
 * __gamma__ - (float) Optimization step size (gradient descent), must be greater than zero.
 * __eta__ - (float) Memory term for gradient descent methods which use momentum, must be between zero and one.
-* __decay__ - (int) Exponential decay rate for the optimization step __gamma__.
+* __alpha__ - (int) Decay rate for the optimization step __gamma__.
+* __decay__ - (string) Decay function, either: exp, inv, sqrt, pow
 
 ### NN POTENTIAL
 
