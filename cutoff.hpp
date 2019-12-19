@@ -3,10 +3,9 @@
 #define CUTOFF_HPP
 
 // c libraries
-#include <cstring>
 #include <cmath>
-// c ++libraries
-#include <iostream> 
+// c++ libraries
+#include <iosfwd> 
 // ann - math
 #include "math_const.hpp"
 #include "math_special.hpp"

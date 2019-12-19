@@ -1,3 +1,8 @@
+// c libraries
+#include <cstring>
+// c++ libraries
+#include <ostream> 
+// ann - cutoff
 #include "cutoff.hpp"
 
 //************************************************************
