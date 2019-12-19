@@ -2,20 +2,15 @@
 #ifndef BASIS_ANGULAR_HPP
 #define BASIS_ANGULAR_HPP
 
-// c libraries
-#include <cstring>
-#include <cstdio>
 // c++ libraries
-#include <iostream>
-#include <vector>
-// symmetry functions
-#include "cutoff.hpp"
-#include "symm_angular_g3.hpp"
-#include "symm_angular_g4.hpp"
-// string
-#include "string.hpp"
+#include <ostream>
 //eigen
 #include <Eigen/Dense>
+// symmetry functions
+#include "cutoff.hpp"
+#include "symm_angular.hpp"
+// serialize
+#include "serialize.hpp"
 
 #ifndef BASIS_ANGULAR_PRINT_FUNC
 #define BASIS_ANGULAR_PRINT_FUNC 0
@@ -33,7 +28,7 @@ private:
 	Eigen::VectorXd symm_;//symmetry function
 public:
 	//constructors/destructors
-	BasisA():phiAN_(PhiAN::UNKNOWN),nfA_(0),fA_(NULL){};
+	BasisA():phiAN_(PhiAN::UNKNOWN),nfA_(0),fA_(NULL){}
 	BasisA(const BasisA& basisA);
 	~BasisA();
 	//operators
@@ -42,7 +37,7 @@ public:
 	//initialization
 	void init_G3(unsigned int nA, CutoffN::type tcut, double rcut);
 	void init_G4(unsigned int nA, CutoffN::type tcut, double rcut);
-	//loading/printing
+	//reading/writing
 	static void write(const char* file,const BasisA& basis);
 	static void read(const char* file, BasisA& basis);
 	static void write(FILE* writer,const BasisA& basis);
@@ -56,17 +51,17 @@ public:
 	PhiAN::type& phiAN(){return phiAN_;};
 	const PhiAN::type& phiAN()const{return phiAN_;};
 	PhiA& fA(unsigned int i){return *fA_[i];};
-	const PhiA& fA(unsigned int i)const{return *fA_[i];};
+	const PhiA& fA(unsigned int i)const{return *fA_[i];}
 	const Eigen::VectorXd& symm()const{return symm_;}
 	Eigen::VectorXd& symm(){return symm_;}
 	//member functions
 	void clear();
 	void symm(double cos, const double d[3]);
-	void force(double* fij, double* fik, double cos, const double d[3], const double* dEdG);
+	void force(double* fij, double* fik, double cos, const double d[3], const double* dEdG)const;
 };
 
 bool operator==(const BasisA& basis1, const BasisA& basis2);
-inline bool operator!=(const BasisA& basis1, const BasisA& basis2){return !(basis1==basis2);};
+inline bool operator!=(const BasisA& basis1, const BasisA& basis2){return !(basis1==basis2);}
 
 namespace serialize{
 	
@@ -80,13 +75,13 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const BasisA& obj, char* arr);
+	template <> unsigned int pack(const BasisA& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(BasisA& obj, const char* arr);
+	template <> unsigned int unpack(BasisA& obj, const char* arr);
 	
 }
 

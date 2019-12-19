@@ -1,3 +1,15 @@
+// c libraries
+#include <cstring>
+#include <cstdio>
+// c++ libraries
+#include <iostream>
+#include <vector>
+// ann- symmetry functions
+#include "symm_angular_g3.hpp"
+#include "symm_angular_g4.hpp"
+// ann - string
+#include "string.hpp"
+// ann - basis - angular
 #include "basis_angular.hpp"
 
 //memer variables
@@ -70,12 +82,11 @@ void BasisA::init_G3(unsigned int nA, CutoffN::type tcut, double rcut){
 	if(nfA_>0){
 		//generate symmetry functions
 		symm_=Eigen::VectorXd::Zero(nfA_);
-		const double s=0.75;
 		const double eta=1.0/(3.0*rcut*rcut);
 		fA_=new PhiA*[nfA_];
 		const double lambda=1;
 		for(unsigned int i=0; i<nfA_; ++i){
-			double zeta=std::pow((i+1.0),std::log(i+2.0)/std::log(nfA_/(nfA_+1.0)+2.0));
+			const double zeta=std::pow((i+1.0),std::log(i+2.0)/std::log(nfA_/(nfA_+1.0)+2.0));
 			fA_[i]=new PhiA_G3(eta,zeta,lambda);
 		}
 	}
@@ -95,16 +106,17 @@ void BasisA::init_G4(unsigned int nA, CutoffN::type tcut, double rcut){
 	if(nfA_>0){
 		//generate symmetry functions
 		symm_=Eigen::VectorXd::Zero(nfA_);
-		const double s=0.75;
 		const double eta=1.0/(2.0*rcut*rcut);
 		fA_=new PhiA*[nfA_];
 		const double lambda=1;
 		for(unsigned int i=0; i<nfA_; ++i){
-			double zeta=std::pow((i+1.0),std::log(i+2.0)/std::log(nfA_/(nfA_+1.0)+2.0));
+			const double zeta=std::pow((i+1.0),std::log(i+2.0)/std::log(nfA_/(nfA_+1.0)+2.0));
 			fA_[i]=new PhiA_G4(eta,zeta,lambda);
 		}
 	}
 }
+
+//reading/writing
 
 void BasisA::write(const char* filename, const BasisA& basis){
 	if(BASIS_ANGULAR_PRINT_FUNC>0) std::cout<<"BasisA::write(const char*,const BasisA&):\n";
@@ -194,6 +206,29 @@ void BasisA::read(FILE* reader, BasisA& basis){
 	delete[] input;
 }
 
+//operators
+
+bool operator==(const BasisA& basis1, const BasisA& basis2){
+	if(basis1.nfA()!=basis2.nfA()) return false;
+	else if(basis1.phiAN()!=basis2.phiAN()) return false;
+	else if(basis1.tcut()!=basis2.tcut()) return false;
+	else if(basis1.rc()!=basis2.rc()) return false;
+	else {
+		unsigned int nfA=basis1.nfA();
+		PhiAN::type phiAN=basis1.phiAN();
+		if(phiAN==PhiAN::G3){
+			for(unsigned int i=0; i<nfA; ++i){
+				if(static_cast<const PhiA_G3&>(basis1.fA(i))!=static_cast<const PhiA_G3&>(basis2.fA(i))) return false;
+			}
+		} else if(phiAN==PhiAN::G4){
+			for(unsigned int i=0; i<nfA; ++i){
+				if(static_cast<const PhiA_G4&>(basis1.fA(i))!=static_cast<const PhiA_G4&>(basis2.fA(i))) return false;
+			}
+		}
+		return true;
+	}
+}
+
 std::ostream& operator<<(std::ostream& out, const BasisA& basis){
 	out<<"BasisA "<<basis.phiAN_<<" "<<basis.nfA_<<"\n";
 	if(basis.phiAN_==PhiAN::G3){
@@ -233,32 +268,9 @@ void BasisA::symm(double cos, const double d[3]){
 	}
 }
 
-void BasisA::force(double* fij, double* fik, double cos, const double d[3], const double* dEdG){
-	//d[3]=(rij,rik,rjk)
-	//cos=rij*rik/(|rij|*|rik|)
-	/*double amp,angle;
-	const double c[3]={
-		CutoffF::funcs[tcut_](d[0],rc_),//cut(rij)
-		CutoffF::funcs[tcut_](d[1],rc_),//cut(rik)
-		CutoffF::funcs[tcut_](d[2],rc_) //cut(rjk)
-	};
-	const double g[2]={
-		CutoffFD::funcs[tcut_](d[0],rc_),//cut'(rij)
-		CutoffFD::funcs[tcut_](d[1],rc_) //cut'(rik)
-	};
-	for(int na=nfA_-1; na>=0; --na){
-		//gradient - cosine - central atom
-		amp=-0.5*fA_[na]->grad_angle(cos)*fA_[na]->dist(d,c)*dEdG[na]*norm_;
-		fij[0]+=amp/d[0]*(-cos);
-		fij[1]+=amp/d[1];
-		fik[0]+=amp/d[1]*(-cos);
-		fik[1]+=amp/d[0];
-		//gradient distance - central atom
-		amp=-0.5*fA_[na]->angle(cos)*dEdG[na]*norm_;
-		fij[0]+=amp*fA_[na]->grad_dist_0(d,c,g[0]);
-		fik[0]+=amp*fA_[na]->grad_dist_1(d,c,g[1]);
-	}*/
+void BasisA::force(double* fij, double* fik, double cos, const double d[3], const double* dEdG)const{
 	double amp,angle,gangle,dist;
+	double gradd[3];//grad w.r.t. distance (not angle)
 	const double c[3]={
 		CutoffF::funcs[tcut_](d[0],rc_),//cut(rij)
 		CutoffF::funcs[tcut_](d[1],rc_),//cut(rik)
@@ -271,8 +283,8 @@ void BasisA::force(double* fij, double* fik, double cos, const double d[3], cons
 	};
 	fij[0]=0; fij[1]=0;
 	fik[0]=0; fik[1]=0;
-	double gradd[3];//grad w.r.t. distance (not angle)
 	for(int na=nfA_-1; na>=0; --na){
+		//compute
 		fA_[na]->compute_angle(cos,angle,gangle);
 		fA_[na]->compute_dist(d,c,g,dist,gradd);
 		//gradient - cosine - central atom
@@ -281,33 +293,10 @@ void BasisA::force(double* fij, double* fik, double cos, const double d[3], cons
 		fij[1]+=amp/d[1];
 		fik[0]+=amp/d[1]*(-cos);
 		fik[1]+=amp/d[0];
-		//gradient distance - central atom
+		//gradient - distance - central atom
 		amp=-0.5*angle*dEdG[na]*norm_;
 		fij[0]+=amp*gradd[0];
 		fik[0]+=amp*gradd[1];
-	}
-}
-
-//operators
-
-bool operator==(const BasisA& basis1, const BasisA& basis2){
-	if(basis1.nfA()!=basis2.nfA()) return false;
-	else if(basis1.phiAN()!=basis2.phiAN()) return false;
-	else if(basis1.tcut()!=basis2.tcut()) return false;
-	else if(basis1.rc()!=basis2.rc()) return false;
-	else {
-		unsigned int nfA=basis1.nfA();
-		PhiAN::type phiAN=basis1.phiAN();
-		if(phiAN==PhiAN::G3){
-			for(unsigned int i=0; i<nfA; ++i){
-				if(static_cast<const PhiA_G3&>(basis1.fA(i))!=static_cast<const PhiA_G3&>(basis2.fA(i))) return false;
-			}
-		} else if(phiAN==PhiAN::G4){
-			for(unsigned int i=0; i<nfA; ++i){
-				if(static_cast<const PhiA_G4&>(basis1.fA(i))!=static_cast<const PhiA_G4&>(basis2.fA(i))) return false;
-			}
-		}
-		return true;
 	}
 }
 
@@ -335,7 +324,7 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const BasisA& obj, char* arr){
+	template <> unsigned int pack(const BasisA& obj, char* arr){
 		unsigned int pos=0,nfA=obj.nfA();
 		std::memcpy(arr+pos,&obj.tcut(),sizeof(obj.tcut())); pos+=sizeof(obj.tcut());//name of cutoff function
 		std::memcpy(arr+pos,&obj.rc(),sizeof(obj.rc())); pos+=sizeof(obj.rc());//cutoff value
@@ -343,20 +332,21 @@ namespace serialize{
 		std::memcpy(arr+pos,&nfA,sizeof(nfA)); pos+=sizeof(nfA);//number of symmetry functions
 		if(obj.phiAN()==PhiAN::G3){
 			for(unsigned int i=0; i<obj.nfA(); ++i){
-				pack(static_cast<const PhiA_G3&>(obj.fA(i)),arr+pos); pos+=nbytes(static_cast<const PhiA_G3&>(obj.fA(i)));
+				pos+=pack(static_cast<const PhiA_G3&>(obj.fA(i)),arr+pos);
 			}
 		} else if(obj.phiAN()==PhiAN::G4){
 			for(unsigned int i=0; i<obj.nfA(); ++i){
-				pack(static_cast<const PhiA_G4&>(obj.fA(i)),arr+pos); pos+=nbytes(static_cast<const PhiA_G4&>(obj.fA(i)));
+				pos+=pack(static_cast<const PhiA_G4&>(obj.fA(i)),arr+pos);
 			}
 		} else throw std::runtime_error("Invalid angular symmetry function.");
+		return pos;
 	}
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(BasisA& obj, const char* arr){
+	template <> unsigned int unpack(BasisA& obj, const char* arr){
 		unsigned int pos=0,nfA=0;
 		double rc=0;
 		PhiAN::type phiAN=PhiAN::UNKNOWN;
@@ -368,14 +358,15 @@ namespace serialize{
 		if(phiAN==PhiAN::G3){
 			obj.init_G3(nfA,cutN,rc);
 			for(unsigned int i=0; i<obj.nfA(); ++i){
-				unpack(static_cast<PhiA_G3&>(obj.fA(i)),arr+pos); pos+=nbytes(static_cast<const PhiA_G3&>(obj.fA(i)));
+				pos+=unpack(static_cast<PhiA_G3&>(obj.fA(i)),arr+pos);
 			}
 		} else if(phiAN==PhiAN::G4){
 			obj.init_G4(nfA,cutN,rc);
 			for(unsigned int i=0; i<obj.nfA(); ++i){
-				unpack(static_cast<PhiA_G4&>(obj.fA(i)),arr+pos); pos+=nbytes(static_cast<const PhiA_G4&>(obj.fA(i)));
+				pos+=unpack(static_cast<PhiA_G4&>(obj.fA(i)),arr+pos);
 			}
 		} else throw std::runtime_error("Invalid angular symmetry function.");
+		return pos;
 	}
 	
 }
