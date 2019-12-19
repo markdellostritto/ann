@@ -1,3 +1,16 @@
+// c libraries
+#include <cstring>
+#include <cstdio>
+// c++ libraries
+#include <iostream>
+#include <vector>
+// ann - symmetry functions
+#include "symm_radial_g1.hpp"
+#include "symm_radial_g2.hpp"
+#include "symm_radial_t1.hpp"
+// ann - string
+#include "string.hpp"
+// ann - basis - radial
 #include "basis_radial.hpp"
 
 //member variables
@@ -57,6 +70,7 @@ BasisR& BasisR::operator=(const BasisR& basis){
 			for(unsigned int i=0; i<nfR_; ++i) fR_[i]=new PhiR_T1(static_cast<const PhiR_T1&>(basis.fR(i)));
 		}
 	}
+	return *this;
 }
 
 std::ostream& operator<<(std::ostream& out, const BasisR& basis){
@@ -72,6 +86,31 @@ std::ostream& operator<<(std::ostream& out, const BasisR& basis){
 		out<<"\t"<<static_cast<PhiR_T1&>(*basis.fR_[basis.nfR_-1]);
 	}
 	return out;
+}
+
+bool operator==(const BasisR& basis1, const BasisR& basis2){
+	if(basis1.nfR()!=basis2.nfR()) return false;
+	else if(basis1.phiRN()!=basis2.phiRN()) return false;
+	else if(basis1.tcut()!=basis2.tcut()) return false;
+	else if(basis1.rc()!=basis2.rc()) return false;
+	else {
+		unsigned int nfR=basis1.nfR();
+		PhiRN::type phiRN=basis1.phiRN();
+		if(phiRN==PhiRN::G1){
+			for(unsigned int i=0; i<nfR; ++i){
+				if(static_cast<const PhiR_G1&>(basis1.fR(i))!=static_cast<const PhiR_G1&>(basis2.fR(i))) return false;
+			}
+		} else if(phiRN==PhiRN::G2){
+			for(unsigned int i=0; i<nfR; ++i){
+				if(static_cast<const PhiR_G2&>(basis1.fR(i))!=static_cast<const PhiR_G2&>(basis2.fR(i))) return false;
+			}
+		} else if(phiRN==PhiRN::T1){
+			for(unsigned int i=0; i<nfR; ++i){
+				if(static_cast<const PhiR_T1&>(basis1.fR(i))!=static_cast<const PhiR_T1&>(basis2.fR(i))) return false;
+			}
+		}
+		return true;
+	}
 }
 
 //initialization
@@ -142,7 +181,7 @@ void BasisR::init_T1(unsigned int nR, CutoffN::type tcut, double rcut){
 	}
 }
 
-//loading/printing
+//reading/writing
 
 void BasisR::write(const char* filename, const BasisR& basis){
 	if(BASIS_RADIAL_PRINT_FUNC>0) std::cout<<"BasisR::write(const char*,const BasisR&):\n";
@@ -266,7 +305,7 @@ void BasisR::symm(double dr){
 	}
 }
 
-double BasisR::force(double dr, const double* dEdG){
+double BasisR::force(double dr, const double* dEdG)const{
 	double amp=0;
 	const double cut=CutoffF::funcs[tcut_](dr,rc_);
 	const double gcut=CutoffFD::funcs[tcut_](dr,rc_);
@@ -274,33 +313,6 @@ double BasisR::force(double dr, const double* dEdG){
 		amp-=dEdG[i]*fR_[i]->grad(dr,cut,gcut);
 	}
 	return amp*norm_;
-}
-
-//operators
-
-bool operator==(const BasisR& basis1, const BasisR& basis2){
-	if(basis1.nfR()!=basis2.nfR()) return false;
-	else if(basis1.phiRN()!=basis2.phiRN()) return false;
-	else if(basis1.tcut()!=basis2.tcut()) return false;
-	else if(basis1.rc()!=basis2.rc()) return false;
-	else {
-		unsigned int nfR=basis1.nfR();
-		PhiRN::type phiRN=basis1.phiRN();
-		if(phiRN==PhiRN::G1){
-			for(unsigned int i=0; i<nfR; ++i){
-				if(static_cast<const PhiR_G1&>(basis1.fR(i))!=static_cast<const PhiR_G1&>(basis2.fR(i))) return false;
-			}
-		} else if(phiRN==PhiRN::G2){
-			for(unsigned int i=0; i<nfR; ++i){
-				if(static_cast<const PhiR_G2&>(basis1.fR(i))!=static_cast<const PhiR_G2&>(basis2.fR(i))) return false;
-			}
-		} else if(phiRN==PhiRN::T1){
-			for(unsigned int i=0; i<nfR; ++i){
-				if(static_cast<const PhiR_T1&>(basis1.fR(i))!=static_cast<const PhiR_T1&>(basis2.fR(i))) return false;
-			}
-		}
-		return true;
-	}
 }
 
 namespace serialize{
@@ -329,7 +341,7 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const BasisR& obj, char* arr){
+	template <> unsigned int pack(const BasisR& obj, char* arr){
 		unsigned int pos=0,nfR=obj.nfR();
 		std::memcpy(arr+pos,&obj.tcut(),sizeof(obj.tcut())); pos+=sizeof(obj.tcut());
 		std::memcpy(arr+pos,&obj.rc(),sizeof(obj.rc())); pos+=sizeof(obj.rc());
@@ -337,24 +349,25 @@ namespace serialize{
 		std::memcpy(arr+pos,&nfR,sizeof(nfR)); pos+=sizeof(nfR);
 		if(obj.phiRN()==PhiRN::G1){
 			for(unsigned int i=0; i<obj.nfR(); ++i){
-				pack(static_cast<const PhiR_G1&>(obj.fR(i)),arr+pos); pos+=nbytes(static_cast<const PhiR_G1&>(obj.fR(i)));
+				pos+=pack(static_cast<const PhiR_G1&>(obj.fR(i)),arr+pos);
 			}
 		} else if(obj.phiRN()==PhiRN::G2){
 			for(unsigned int i=0; i<obj.nfR(); ++i){
-				pack(static_cast<const PhiR_G2&>(obj.fR(i)),arr+pos); pos+=nbytes(static_cast<const PhiR_G2&>(obj.fR(i)));
+				pos+=pack(static_cast<const PhiR_G2&>(obj.fR(i)),arr+pos);
 			}
 		} else if(obj.phiRN()==PhiRN::T1){
 			for(unsigned int i=0; i<obj.nfR(); ++i){
-				pack(static_cast<const PhiR_T1&>(obj.fR(i)),arr+pos); pos+=nbytes(static_cast<const PhiR_T1&>(obj.fR(i)));
+				pos+=pack(static_cast<const PhiR_T1&>(obj.fR(i)),arr+pos);
 			}
 		} else throw std::runtime_error("Invalid radial symmetry function.");
+		return pos;
 	}
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(BasisR& obj, const char* arr){
+	template <> unsigned int unpack(BasisR& obj, const char* arr){
 		unsigned int pos=0,nfR=0;
 		double rc=0;
 		CutoffN::type cutN=CutoffN::UNKNOWN;
@@ -366,19 +379,20 @@ namespace serialize{
 		if(phiRN==PhiRN::G1){
 			obj.init_G1(nfR,cutN,rc);
 			for(unsigned int i=0; i<obj.nfR(); ++i){
-				unpack(static_cast<PhiR_G1&>(obj.fR(i)),arr+pos); pos+=nbytes(static_cast<const PhiR_G1&>(obj.fR(i)));
+				pos+=unpack(static_cast<PhiR_G1&>(obj.fR(i)),arr+pos);
 			}
 		} else if(phiRN==PhiRN::G2){
 			obj.init_G2(nfR,cutN,rc);
 			for(unsigned int i=0; i<obj.nfR(); ++i){
-				unpack(static_cast<PhiR_G2&>(obj.fR(i)),arr+pos); pos+=nbytes(static_cast<const PhiR_G2&>(obj.fR(i)));
+				pos+=unpack(static_cast<PhiR_G2&>(obj.fR(i)),arr+pos);
 			}
 		} else if(phiRN==PhiRN::T1){
 			obj.init_T1(nfR,cutN,rc);
 			for(unsigned int i=0; i<obj.nfR(); ++i){
-				unpack(static_cast<PhiR_T1&>(obj.fR(i)),arr+pos); pos+=nbytes(static_cast<const PhiR_T1&>(obj.fR(i)));
+				pos+=unpack(static_cast<PhiR_T1&>(obj.fR(i)),arr+pos);
 			}
 		} else throw std::runtime_error("Invalid radial symmetry function.");
+		return pos;
 	}
 	
 }

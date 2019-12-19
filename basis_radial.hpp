@@ -2,23 +2,15 @@
 #ifndef BASIS_RADIAL_HPP
 #define BASIS_RADIAL_HPP
 
-// c libraries
-#include <cstring>
-#include <cstdio>
 // c++ libraries
-#include <iostream>
-#include <vector>
+#include <iosfwd>
+// eigen
+#include <Eigen/Dense>
 // symmetry functions
 #include "cutoff.hpp"
-#include "symm_radial_g1.hpp"
-#include "symm_radial_g2.hpp"
-#include "symm_radial_t1.hpp"
-//string
-#include "string.hpp"
-// local libraries - serialization
+#include "symm_radial.hpp"
+// ann - serialization
 #include "serialize.hpp"
-//eigen
-#include <Eigen/Dense>
 
 #ifndef BASIS_RADIAL_PRINT_FUNC
 #define BASIS_RADIAL_PRINT_FUNC 0
@@ -36,7 +28,7 @@ private:
 	Eigen::VectorXd symm_;//symmetry function
 public:
 	//constructors/destructors
-	BasisR():phiRN_(PhiRN::UNKNOWN),nfR_(0),fR_(NULL){};
+	BasisR():phiRN_(PhiRN::UNKNOWN),nfR_(0),fR_(NULL){}
 	BasisR(const BasisR& basisR);
 	~BasisR();
 	//operators
@@ -66,12 +58,12 @@ public:
 	//member functions
 	void clear();
 	void symm(double dr);
-	double force(double dr, const double* dEdG);
+	double force(double dr, const double* dEdG)const;
 };
 std::ostream& operator<<(std::ostream& out, const BasisR& basisR);
 
 bool operator==(const BasisR& basis1, const BasisR& basis2);
-inline bool operator!=(const BasisR& basis1, const BasisR& basis2){return !(basis1==basis2);};
+inline bool operator!=(const BasisR& basis1, const BasisR& basis2){return !(basis1==basis2);}
 
 namespace serialize{
 	
@@ -85,13 +77,13 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const BasisR& obj, char* arr);
+	template <> unsigned int pack(const BasisR& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(BasisR& obj, const char* arr);
+	template <> unsigned int unpack(BasisR& obj, const char* arr);
 	
 }
 
