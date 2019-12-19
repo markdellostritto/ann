@@ -2,28 +2,16 @@
 #ifndef ANN_NN_HPP
 #define ANN_NN_HPP
 
+//no bounds checking in Eigen
 #define EIGEN_NO_DEBUG
 
-// c libraries
-#include <cstdlib>
-#include <cstdio>
-#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-#include <cmath>
-#elif (defined __ICC || defined __INTEL_COMPILER)
-#include <mathimf.h> //intel math library
-#endif
-#include <ctime>
 // c++ libraries
-#include <iostream>
-// ann library - eigen utilities
+#include <iosfwd>
+// eigen
 #include <Eigen/Dense>
-#include <Eigen/StdVector>
-// ann library - math 
-#include "math_special.hpp"
-#include "math_cmp.hpp"
-// ann library - string
-#include "string.hpp"
-// ann library - serialization
+// ann - typedefs
+#include "typedef.hpp"
+// ann - serialization
 #include "serialize.hpp"
 
 namespace NN{
@@ -45,26 +33,20 @@ namespace NN{
 #endif
 
 //***********************************************************************
-// TYPEDEFS
-//***********************************************************************
-
-typedef std::vector<Eigen::VectorXd,Eigen::aligned_allocator<Eigen::VectorXd> > VecList;
-typedef std::vector<Eigen::MatrixXd,Eigen::aligned_allocator<Eigen::MatrixXd> > MatList;
-
-//***********************************************************************
 // TRANSFER FUNCTIONS - NAMES
 //***********************************************************************
 
 struct TransferN{
 	enum type{
-		UNKNOWN=-1,
-		TANH=0,
-		SIGMOID=1,
-		LINEAR=2,
-		SOFTPLUS=3,
-		RELU=4
+		UNKNOWN=0,
+		TANH=1,
+		SIGMOID=2,
+		LINEAR=3,
+		SOFTPLUS=4,
+		RELU=5
 	};
 	static type read(const char* str);
+	static const char* name(const TransferN::type& tf);
 };
 std::ostream& operator<<(std::ostream& out, const TransferN::type& tf);
 
@@ -86,8 +68,6 @@ struct TransferFFDV{
 
 class Network{
 private:
-	//macros
-		EIGEN_MAKE_ALIGNED_OPERATOR_NEW//just in case we are storing Eigen objects
 	//typedefs
 		typedef void (*FFDPV)(Eigen::VectorXd&,Eigen::VectorXd&);
 	//network dimensions
@@ -108,23 +88,24 @@ private:
 		Eigen::VectorXd preBias_,postBias_;//biasing layers for input/output
 	//gradients
 		Eigen::VectorXd grad_;//input layer
-		VecList dndz_;//node derivative - not including input layer
-		VecList delta_;//derivative of cost function w.r.t. node inputs
-		MatList dOut_;//derivative of the output nodes w.r.t. to all other nodes
+		VecList dndz_;//node derivative - not including input layer (nlayer_)
+		VecList delta_;//derivative of cost function w.r.t. node inputs (nlayer_)
+		MatList dOut_;//derivative of the output nodes w.r.t. to all other nodes (nlayer_+2)
 	//transfer functions
 		TransferN::type tfType_;//transfer function type
 		std::vector<FFDPV> tffdv_;//transfer derivative - input for indexed layer (nlayer_)
 public:
-	//======== constructors/destructors ========
+	//==== constructors/destructors ====
 	Network(){defaults();}
 	~Network(){}
 	
-	//======== operators ========
+	//==== operators ====
 	friend std::ostream& operator<<(std::ostream& out, const Network& n);
+	friend FILE* operator<<(FILE* out, const Network& n);
 	friend Eigen::VectorXd& operator>>(const Network& nn, Eigen::VectorXd& v);
 	friend Network& operator<<(Network& nn, const Eigen::VectorXd& v);
 	
-	//======== access ========
+	//==== access ====
 	//network dimensions
 		unsigned int nlayer()const{return nlayer_;}
 		unsigned int nhidden()const{return nlayer_-1;}
@@ -138,15 +119,13 @@ public:
 		double& input(unsigned int n){return input_[n];}
 		const double& input(unsigned int n)const{return input_[n];}
 		const Eigen::VectorXd& input()const{return input_;}
-		double& sinput(unsigned int n){return sinput_[n];}
-		const double& sinput(unsigned int n)const{return sinput_[n];}
+		double& output(unsigned int n){return output_[n];}
+		const double& output(unsigned int n)const{return output_[n];}
+		const Eigen::VectorXd& output()const{return output_;}
 		double& hidden(unsigned int l, unsigned int n){return node_[l][n];}
 		const double& hidden(unsigned int l, unsigned int n)const{return node_[l][n];}
 		double& layer(unsigned int l, unsigned int n){return node_[l][n];}
 		const double& layer(unsigned int l, unsigned int n)const{return node_[l][n];}
-		double& output(unsigned int n){return output_[n];}
-		const double& output(unsigned int n)const{return output_[n];}
-		const Eigen::VectorXd& output()const{return output_;}
 	//scaling
 		double& preScale(unsigned int n){return preScale_[n];}
 		const double& preScale(unsigned int n)const{return preScale_[n];}
@@ -167,12 +146,14 @@ public:
 	//edges
 		double& edge(unsigned int l, unsigned int n, unsigned int m){return edge_[l](n,m);}
 		const double& edge(unsigned int l, unsigned int n, unsigned int m)const{return edge_[l](n,m);}
+		double& edge(unsigned int l, unsigned int n){return edge_[l](n);}
+		const double& edge(unsigned int l, unsigned int n)const{return edge_[l](n);}
 		const Eigen::MatrixXd& edge(unsigned int l)const{return edge_[l];}
 	//size
 		unsigned int nInput()const{return input_.size();}
+		unsigned int nOutput()const{return node_.back().size();}
 		unsigned int nHidden(unsigned int l)const{return node_[l].size();}
 		unsigned int nlayer(unsigned int l)const{return node_[l].size();}
-		unsigned int nOutput()const{return node_.back().size();}
 	//gradients
 		double& grad(unsigned int n){return grad_[n];}
 		const double& grad(unsigned int n)const{return grad_[n];}
@@ -182,17 +163,16 @@ public:
 		const double& delta(unsigned int l, unsigned int n)const{return delta_[l][n];}
 		Eigen::MatrixXd& dOut(unsigned int i){return dOut_[i];}
 		const Eigen::MatrixXd& dOut(unsigned int i)const{return dOut_[i];}
-		void grad_out();
 	//transfer functions
 		TransferN::type& tfType(){return tfType_;}
 		const TransferN::type& tfType()const{return tfType_;}
-		FFDPV tfdv(unsigned int l){return tffdv_[l];}
-		const FFDPV tfdv(unsigned int l)const{return tffdv_[l];}
+		FFDPV tffdv(unsigned int l){return tffdv_[l];}
+		const FFDPV tffdv(unsigned int l)const{return tffdv_[l];}
 	//regularization
 		double& lambda(){return lambda_;}
 		const double& lambda()const{return lambda_;}
 		
-	//======== member functions ========
+	//==== member functions ====
 	//clearing/initialization
 		void defaults();
 		void clear();
@@ -214,8 +194,9 @@ public:
 	//execution
 		const Eigen::VectorXd& execute();
 		const Eigen::VectorXd& execute(const Eigen::VectorXd& input){input_.noalias()=input;return execute();}
+		void grad_out();
 		
-	//======== static functions ========
+	//==== static functions ====
 	static void write(FILE* writer, const Network& nn);
 	static void write(const char*, const Network& nn);
 	static void read(FILE* writer, Network& nn);
@@ -239,13 +220,13 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const NN::Network& obj, char* arr);
+	template <> unsigned int pack(const NN::Network& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(NN::Network& obj, const char* arr);
+	template <> unsigned int unpack(NN::Network& obj, const char* arr);
 	
 }
 

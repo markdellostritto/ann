@@ -1,3 +1,20 @@
+// c libraries
+#include <cstdio>
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
+#include <cmath>
+#elif (defined __ICC || defined __INTEL_COMPILER)
+#include <mathimf.h> //intel math library
+#endif
+#include <ctime>
+// c++ libraries
+#include <iostream>
+// ann - math 
+#include "math_special.hpp"
+// ann - string
+#include "string.hpp"
+// ann - print
+#include "print.hpp"
+// ann - nn
 #include "nn.hpp"
 
 namespace NN{
@@ -16,6 +33,17 @@ std::ostream& operator<<(std::ostream& out, const TransferN::type& tf){
 		default: out<<"UNKNOWN"; break;
 	}
 	return out;
+}
+
+const char* TransferN::name(const TransferN::type& tf){
+	switch(tf){
+		case TransferN::TANH: return "TANH";
+		case TransferN::SIGMOID: return "SIGMOID";
+		case TransferN::LINEAR: return "LINEAR";
+		case TransferN::SOFTPLUS: return "SOFTPLUS";
+		case TransferN::RELU: return "RELU";
+		default: return "UNKNOWN";
+	}
 }
 
 TransferN::type TransferN::read(const char* str){
@@ -64,7 +92,7 @@ void TransferFFDV::f_sigmoid(Eigen::VectorXd& f, Eigen::VectorXd& d)noexcept{
 			d[i]=1.0/((1.0+1.0/expf)*(1.0+expf));
 		}
 	}	
-	#endif			
+	#endif
 }
 
 void TransferFFDV::f_lin(Eigen::VectorXd& f, Eigen::VectorXd& d)noexcept{
@@ -123,16 +151,18 @@ void TransferFFDV::f_relu(Eigen::VectorXd& f, Eigen::VectorXd& d)noexcept{
 //operators
 
 std::ostream& operator<<(std::ostream& out, const Network& nn){
-	out<<"**************************************************\n";
-	out<<"*********************** NN ***********************\n";
-	out<<"nn        = "<<nn.input_.size()<<" "; for(unsigned int n=0; n<nn.node_.size(); ++n) out<<nn.node_[n].size()<<" "; out<<"\n";
-	out<<"size      = "<<nn.size()<<"\n";
-	out<<"transfer  = "<<nn.tfType_<<"\n";
-	out<<"lambda    = "<<nn.lambda_<<"\n";
-	out<<"b-init    = "<<nn.bInit_<<"\n";
-	out<<"w-init    = "<<nn.wInit_<<"\n";
-	out<<"*********************** NN ***********************\n";
-	out<<"**************************************************";
+	char* str=new char[print::len_buf];
+	out<<print::buf(str)<<"\n";
+	out<<print::title("NN",str)<<"\n";
+	out<<"nn       = "<<nn.input_.size()<<" "; for(unsigned int n=0; n<nn.node_.size(); ++n) out<<nn.node_[n].size()<<" "; out<<"\n";
+	out<<"size     = "<<nn.size()<<"\n";
+	out<<"transfer = "<<nn.tfType_<<"\n";
+	out<<"lambda   = "<<nn.lambda_<<"\n";
+	out<<"b-init   = "<<nn.bInit_<<"\n";
+	out<<"w-init   = "<<nn.wInit_<<"\n";
+	out<<print::title("NN",str)<<"\n";
+	out<<print::buf(str);
+	delete[] str;
 	return out;
 }
 
@@ -151,6 +181,7 @@ Eigen::VectorXd& operator>>(const Network& nn, Eigen::VectorXd& v){
 			}
 		}
 	}
+	return v;
 }
 
 Network& operator<<(Network& nn, const Eigen::VectorXd& v){
@@ -332,7 +363,6 @@ void Network::reset(){
 		postScale_=Eigen::VectorXd::Constant(output_.size(),1);
 		preBias_=Eigen::VectorXd::Constant(input_.size(),0);
 		postBias_=Eigen::VectorXd::Constant(output_.size(),0);
-	
 }
 
 //compute the error associated the output, given the target output
@@ -495,7 +525,10 @@ Eigen::VectorXd& Network::grad_nol(const Eigen::VectorXd& dcda, Eigen::VectorXd&
 	delta_.back().noalias()=grad_.cwiseProduct(dndz_.back());
 	//back-propogate the error
 	for(int l=nlayer_-1; l>0; --l){
-		delta_[l-1].noalias()=dndz_[l-1].cwiseProduct(edge_[l].transpose()*delta_[l]);
+		//delta_[l-1].noalias()=dndz_[l-1].cwiseProduct(edge_[l].transpose()*delta_[l]);
+		delta_[l-1].noalias()=delta_[l].transpose()*edge_[l];
+		const int size=delta_[l-1].size();
+		for(int n=size; n>=0; --n) delta_[l-1][n]*=dndz_[l-1][n];
 	}
 	unsigned int count=0;
 	//gradient w.r.t bias
@@ -506,14 +539,16 @@ Eigen::VectorXd& Network::grad_nol(const Eigen::VectorXd& dcda, Eigen::VectorXd&
 	}
 	//gradient w.r.t. edges
 	for(unsigned int n=0; n<edge_[0].rows(); ++n){
+		const double delta=delta_[0][n];
 		for(unsigned int m=0; m<edge_[0].cols(); ++m){
-			grad[count++]=delta_[0][n]*sinput_[m];//edge(0,n,m)
+			grad[count++]=delta*sinput_[m];//edge(0,n,m)
 		}
 	}
 	for(unsigned int l=1; l<nlayer_; ++l){
 		for(unsigned int n=0; n<edge_[l].rows(); ++n){
+			const double delta=delta_[l][n];
 			for(unsigned int m=0; m<edge_[l].cols(); ++m){
-				grad[count++]=delta_[l][n]*node_[l-1](m);//edge(l,n,m)
+				grad[count++]=delta*node_[l-1](m);//edge(l,n,m)
 			}
 		}
 	}
@@ -570,7 +605,7 @@ const Eigen::VectorXd& Network::execute(){
 	node_.front().noalias()+=edge_.front()*sinput_;
 	(*tffdv_.front())(node_.front(),dndz_.front());
 	//subsequent layers
-	for(int l=1; l<node_.size(); ++l){
+	for(unsigned int l=1; l<nlayer_; ++l){
 		node_[l]=bias_[l];
 		node_[l].noalias()+=edge_[l]*node_[l-1];
 		(*tffdv_[l])(node_[l],dndz_[l]);
@@ -595,7 +630,7 @@ void Network::write(const char* file, const Network& nn){
 		Network::write(writer,nn);
 		std::fclose(writer);
 		writer=NULL;
-	} else std::cout<<"WARNING: Could not open \""<<file<<"\" for printing.\n";
+	} else std::cout<<"WARNING: Could not open \""<<file<<"\" for writing.\n";
 }
 
 //write the network to file
@@ -611,6 +646,8 @@ void Network::write(FILE* writer, const Network& nn){
 		case TransferN::TANH: fprintf(writer,"t_func TANH\n"); break;
 		case TransferN::SIGMOID: fprintf(writer,"t_func SIGMOID\n"); break;
 		case TransferN::LINEAR: fprintf(writer,"t_func LINEAR\n"); break;
+		case TransferN::SOFTPLUS: fprintf(writer,"t_func SOFTPLUS\n"); break;
+		case TransferN::RELU: fprintf(writer,"t_func RELU\n"); break;
 	}
 	//print the scaling layers
 	fprintf(writer,"input-scale ");
@@ -703,15 +740,15 @@ void Network::read(FILE* reader, Network& nn){
 	//==== read the scaling layers ====
 	if(NN_PRINT_STATUS>0) std::cout<<"reading scaling layers\n";
 	string::split(fgets(input,MAX,reader),string::WS,strlist);
-	for(unsigned int j=0; j<strlist.size(); ++j) nn.preScale(j)=std::atof(strlist[j+1].c_str());
+	for(unsigned int j=1; j<strlist.size(); ++j) nn.preScale(j-1)=std::atof(strlist[j].c_str());
 	string::split(fgets(input,MAX,reader),string::WS,strlist);
-	for(unsigned int j=0; j<strlist.size(); ++j) nn.postScale(j)=std::atof(strlist[j+1].c_str());
+	for(unsigned int j=1; j<strlist.size(); ++j) nn.postScale(j-1)=std::atof(strlist[j].c_str());
 	//==== read the biasing layers ====
 	if(NN_PRINT_STATUS>0) std::cout<<"reading biasing layers\n";
 	string::split(fgets(input,MAX,reader),string::WS,strlist);
-	for(unsigned int j=0; j<strlist.size(); ++j) nn.preBias(j)=std::atof(strlist[j+1].c_str());
+	for(unsigned int j=1; j<strlist.size(); ++j) nn.preBias(j-1)=std::atof(strlist[j].c_str());
 	string::split(fgets(input,MAX,reader),string::WS,strlist);
-	for(unsigned int j=0; j<strlist.size(); ++j) nn.postBias(j)=std::atof(strlist[j+1].c_str());
+	for(unsigned int j=1; j<strlist.size(); ++j) nn.postBias(j-1)=std::atof(strlist[j].c_str());
 	//==== read in the biases ====
 	if(NN_PRINT_STATUS>0) std::cout<<"reading biases\n";
 	for(unsigned int n=0; n<nn.nlayer(); ++n){
@@ -789,7 +826,7 @@ namespace serialize{
 		N+=sizeof(NN::TransferN::type);//transfer function type
 		N+=sizeof(double);//lambda
 		for(unsigned int l=0; l<obj.nlayer(); ++l) N+=obj.bias(l).size()*sizeof(double);//bias
-		for(unsigned int l=0; l<obj.nlayer(); ++l) N+=obj.edge(l).rows()*obj.edge(l).cols()*sizeof(double);//edge
+		for(unsigned int l=0; l<obj.nlayer(); ++l) N+=obj.edge(l).size()*sizeof(double);//edge
 		N+=obj.nInput()*sizeof(double);//pre-scale
 		N+=obj.nInput()*sizeof(double);//pre-bias
 		N+=obj.nOutput()*sizeof(double);//post-scale
@@ -801,7 +838,7 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const NN::Network& obj, char* arr){
+	template <> unsigned int pack(const NN::Network& obj, char* arr){
 		unsigned int pos=0;
 		unsigned int tempInt=0;
 		//nlayer
@@ -824,9 +861,9 @@ namespace serialize{
 		}
 		//edge
 		for(unsigned int l=0; l<obj.nlayer(); ++l){
-			for(unsigned int n=0; n<obj.edge(l).cols(); ++n){
-				for(unsigned int m=0; m<obj.edge(l).rows(); ++m){
-					std::memcpy(arr+pos,&(obj.edge(l,m,n)),sizeof(double)); pos+=sizeof(double);
+			for(unsigned int m=0; m<obj.edge(l).cols(); ++m){
+				for(unsigned int n=0; n<obj.edge(l).rows(); ++n){
+					std::memcpy(arr+pos,&(obj.edge(l,n,m)),sizeof(double)); pos+=sizeof(double);
 				}
 			}
 		}
@@ -846,13 +883,15 @@ namespace serialize{
 		for(unsigned int i=0; i<obj.nOutput(); ++i){
 			std::memcpy(arr+pos,&(obj.postBias(i)),sizeof(double)); pos+=sizeof(double);
 		}
+		//return bytes written
+		return pos;
 	}
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(NN::Network& obj, const char* arr){
+	template <> unsigned int unpack(NN::Network& obj, const char* arr){
 		//local variables
 		unsigned int pos=0;
 		unsigned int nlayer=0,nInput=0;
@@ -880,9 +919,9 @@ namespace serialize{
 		}
 		//edge
 		for(unsigned int l=0; l<obj.nlayer(); ++l){
-			for(unsigned int n=0; n<obj.edge(l).cols(); ++n){
-				for(unsigned int m=0; m<obj.edge(l).rows(); ++m){
-					std::memcpy(&(obj.edge(l,m,n)),arr+pos,sizeof(double)); pos+=sizeof(double);
+			for(unsigned int m=0; m<obj.edge(l).cols(); ++m){
+				for(unsigned int n=0; n<obj.edge(l).rows(); ++n){
+					std::memcpy(&(obj.edge(l,n,m)),arr+pos,sizeof(double)); pos+=sizeof(double);
 				}
 			}
 		}
@@ -902,6 +941,8 @@ namespace serialize{
 		for(unsigned int i=0; i<obj.nOutput(); ++i){
 			std::memcpy(&(obj.postBias(i)),arr+pos,sizeof(double)); pos+=sizeof(double);
 		}
+		//return bytes read
+		return pos;
 	};
 	
 }
