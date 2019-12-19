@@ -7,7 +7,7 @@
 
 namespace eigen{
 
-LIN_SOLVER::type LIN_SOLVER::load(const char* str){
+LIN_SOLVER::type LIN_SOLVER::read(const char* str){
 	if(std::strcmp(str,"LLT")==0) return LIN_SOLVER::LLT;
 	else if(std::strcmp(str,"LDLT")==0) return LIN_SOLVER::LDLT;
 	else if(std::strcmp(str,"PPLU")==0) return LIN_SOLVER::PPLU;
