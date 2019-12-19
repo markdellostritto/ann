@@ -1,3 +1,9 @@
+// c libraries
+#include <cstring>
+// c++ libraries
+#include <string>
+#include <ostream>
+// ann - map
 #include "map.hpp"
 
 namespace serialize{
@@ -25,7 +31,7 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const Map<std::string,unsigned int>& obj, char* arr){
+	template <> unsigned int pack(const Map<std::string,unsigned int>& obj, char* arr){
 		unsigned int pos=0;
 		//size
 		const unsigned int size=obj.size();
@@ -38,8 +44,10 @@ namespace serialize{
 		for(unsigned int i=0; i<size; ++i){
 			std::memcpy(arr+pos,&obj.val(i),sizeof(unsigned int)); pos+=sizeof(unsigned int);
 		}
+		//return bytes written
+		return pos;
 	}
-	template <> void pack(const Map<unsigned int,unsigned int>& obj, char* arr){
+	template <> unsigned int pack(const Map<unsigned int,unsigned int>& obj, char* arr){
 		unsigned int pos=0;
 		//size
 		const unsigned int size=obj.size();
@@ -52,13 +60,15 @@ namespace serialize{
 		for(unsigned int i=0; i<size; ++i){
 			std::memcpy(arr+pos,&obj.val(i),sizeof(unsigned int)); pos+=sizeof(unsigned int);
 		}
+		//return bytes written
+		return pos;
 	}
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(Map<std::string,unsigned int>& obj, const char* arr){
+	template <> unsigned int unpack(Map<std::string,unsigned int>& obj, const char* arr){
 		unsigned int pos=0;
 		obj.clear();
 		//size
@@ -78,8 +88,10 @@ namespace serialize{
 		for(unsigned int i=0; i<size; ++i){
 			obj.add(key[i],val[i]);
 		}
+		//return bytes read
+		return pos;
 	}
-	template <> void unpack(Map<unsigned int,unsigned int>& obj, const char* arr){
+	template <> unsigned int unpack(Map<unsigned int,unsigned int>& obj, const char* arr){
 		unsigned int pos=0;
 		obj.clear();
 		//size
@@ -99,6 +111,8 @@ namespace serialize{
 		for(unsigned int i=0; i<size; ++i){
 			obj.add(key[i],val[i]);
 		}
+		//return bytes read
+		return pos;
 	}
 	
 }

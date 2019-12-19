@@ -2,9 +2,10 @@
 #ifndef MAP_HPP
 #define MAP_HPP
 
-#include <string>
+//c++ libraries
 #include <vector>
-#include <iostream>
+#include <iosfwd>
+//ann - serialize
 #include "serialize.hpp"
 
 template <class T1, class T2>
@@ -105,15 +106,15 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> void pack(const Map<std::string,unsigned int>& obj, char* arr);
-	template <> void pack(const Map<unsigned int,unsigned int>& obj, char* arr);
+	template <> unsigned int pack(const Map<std::string,unsigned int>& obj, char* arr);
+	template <> unsigned int pack(const Map<unsigned int,unsigned int>& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> void unpack(Map<std::string,unsigned int>& obj, const char* arr);
-	template <> void unpack(Map<unsigned int,unsigned int>& obj, const char* arr);
+	template <> unsigned int unpack(Map<std::string,unsigned int>& obj, const char* arr);
+	template <> unsigned int unpack(Map<unsigned int,unsigned int>& obj, const char* arr);
 	
 }
 
