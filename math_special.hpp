@@ -2,11 +2,13 @@
 #ifndef MATH_SPECIAL_HPP
 #define MATH_SPECIAL_HPP
 
-#include <iostream>
+// c libaries
+#include <cmath>
+// c++ libraries
+#include <iosfwd>
 #include <vector>
-#include <stdexcept>
+// ann - math
 #include "math_const.hpp"
-#include "math_func.hpp"
 
 #ifndef DEBUG_MATH_SPECIAL
 #define DEBUG_MATH_SPECIAL 0
@@ -103,7 +105,7 @@ namespace special{
 	//Logarithm
 	//**************************************************************
 	
-	static const double logp1c[6]={1.0,-1.0/2.0,1.0/3.0,-1.0/4.0,1.0/5.0,-1.0/6.0};
+	static const double logp1c[5]={1.0,1.0/3.0,1.0/5.0,1.0/7.0,1.0/9.0};
 	double logp1(double x)noexcept;
 	
 	//**************************************************************
@@ -122,6 +124,7 @@ namespace special{
 	//**************************************************************
 	//Error Function - Approximations
 	//**************************************************************
+	
 	struct erfa_const{
 		static const double a1[5];
 		static const double a2[5];

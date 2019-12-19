@@ -1,3 +1,9 @@
+// c++ libraries
+#include <ostream>
+#include <stdexcept>
+// ann - math - func
+#include "math_func.hpp"
+// ann - math - special
 #include "math_special.hpp"
 
 namespace special{
@@ -23,7 +29,9 @@ namespace special{
 	//**************************************************************
 	
 	double logp1(double x)noexcept{
-		return x*(logp1c[0]+x*(logp1c[1]+x*(logp1c[2]+x*(logp1c[3]+x*(logp1c[4]+x*logp1c[5])))));
+		const double y=x/(x+2.0);
+		const double y2=y*y;
+		return 2.0*y*(logp1c[0]+y2*(logp1c[1]+y2*(logp1c[2]+y2*(logp1c[3]+y2*logp1c[4]))));
 	}
 	
 	//**************************************************************
@@ -60,7 +68,6 @@ namespace special{
 	//**************************************************************
 	
 	double M(double a, double b, double z, double prec){
-		if(DEBUG_MATH_SPECIAL>0) std::cout<<"M(unsigned int,unsigned int,double):\n";
 		unsigned int nMax=1e8;
 		double fac=1,result=1;
 		for(unsigned int n=1; n<=nMax; ++n){
