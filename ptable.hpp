@@ -1,8 +1,6 @@
+#pragma once
 #ifndef PERIODIC_TABLE_HPP
 #define PERIODIC_TABLE_HPP
-
-#include <cstring>
-#include <cmath>
 
 namespace PTable{
 

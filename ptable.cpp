@@ -1,5 +1,9 @@
 #include "ptable.hpp"
 
+// c libraries
+#include <cstring>
+#include <cmath>
+
 namespace PTable{
 	
 //*********************************************
@@ -18,7 +22,7 @@ unsigned int an(const char* name){
 unsigned int an(double mass){
 	double min=100;
 	unsigned int an=0;
-	for(int i=0; i<NUM_ELEMENTS; ++i){
+	for(unsigned int i=0; i<NUM_ELEMENTS; ++i){
 		if(std::fabs(mass-ELEMENT_MASS[i])<min){
 			min=std::fabs(mass-ELEMENT_MASS[i]);
 			an=i+1;
