@@ -1,3 +1,20 @@
+// c libraries
+#include <ctime>
+// c++ libraries
+#include <iostream>
+#include <string>
+#include <stdexcept>
+// eigen libraries
+#include <Eigen/Dense>
+// ann - structure
+#include "structure.hpp"
+// ann - strings
+#include "string.hpp"
+// ann - units
+#include "units.hpp"
+// ann - math
+#include "math_const.hpp"
+// ann - qe
 #include "qe.hpp"
 
 namespace QE{
@@ -69,21 +86,20 @@ void read_cell(FILE* reader, Simulation& sim){
 			fgets(input,string::M,reader);//header
 			//first line
 			fgets(input,string::M,reader);
-			lv(0,0)=std::atof(std::strtok(input,string::WS));
-			lv(0,1)=std::atof(std::strtok(NULL,string::WS));
-			lv(0,2)=std::atof(std::strtok(NULL,string::WS));
+			lv(0,0)=std::atof(std::strtok(input,string::WS))*s_posn;
+			lv(0,1)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+			lv(0,2)=std::atof(std::strtok(NULL,string::WS))*s_posn;
 			//second line
 			fgets(input,string::M,reader);
-			lv(1,0)=std::atof(std::strtok(input,string::WS));
-			lv(1,1)=std::atof(std::strtok(NULL,string::WS));
-			lv(1,2)=std::atof(std::strtok(NULL,string::WS));
+			lv(1,0)=std::atof(std::strtok(input,string::WS))*s_posn;
+			lv(1,1)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+			lv(1,2)=std::atof(std::strtok(NULL,string::WS))*s_posn;
 			//third line
 			fgets(input,string::M,reader);
-			lv(2,0)=std::atof(std::strtok(input,string::WS));
-			lv(2,1)=std::atof(std::strtok(NULL,string::WS));
-			lv(2,2)=std::atof(std::strtok(NULL,string::WS));
+			lv(2,0)=std::atof(std::strtok(input,string::WS))*s_posn;
+			lv(2,1)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+			lv(2,2)=std::atof(std::strtok(NULL,string::WS))*s_posn;
 			//set the cell
-			lv*=s_posn;
 			sim.frame(t).init(lv);
 			for(unsigned int tt=1; tt<sim.stride(); ++tt){
 				fgets(input,string::M,reader);//header
@@ -125,7 +141,6 @@ Cell& read_cell(FILE* reader, Cell& cell){
 		char* option=new char[string::M];
 	//cell
 		int ibrav=0;
-		double s=1.0;
 		std::vector<double> lvp(6,0);
 		Eigen::Matrix3d lv;
 	//misc
@@ -175,21 +190,19 @@ Cell& read_cell(FILE* reader, Cell& cell){
 					if(QE_PRINT_STATUS>1) std::cout<<"option = "<<option<<"\n";
 					//first lattice vector
 					fgets(input,string::M,reader);
-					lv(0,0)=std::atof(std::strtok(input,string::WS));
-					lv(1,0)=std::atof(std::strtok(NULL,string::WS));
-					lv(2,0)=std::atof(std::strtok(NULL,string::WS));
+					lv(0,0)=std::atof(std::strtok(input,string::WS))*s_posn;
+					lv(1,0)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+					lv(2,0)=std::atof(std::strtok(NULL,string::WS))*s_posn;
 					//second lattice vector
 					fgets(input,string::M,reader);
-					lv(0,1)=std::atof(std::strtok(input,string::WS));
-					lv(1,1)=std::atof(std::strtok(NULL,string::WS));
-					lv(2,1)=std::atof(std::strtok(NULL,string::WS));
+					lv(0,1)=std::atof(std::strtok(input,string::WS))*s_posn;
+					lv(1,1)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+					lv(2,1)=std::atof(std::strtok(NULL,string::WS))*s_posn;
 					//third lattice vector
 					fgets(input,string::M,reader);
-					lv(0,2)=std::atof(std::strtok(input,string::WS));
-					lv(1,2)=std::atof(std::strtok(NULL,string::WS));
-					lv(2,2)=std::atof(std::strtok(NULL,string::WS));
-					//scale
-					lv*=s_posn;
+					lv(0,2)=std::atof(std::strtok(input,string::WS))*s_posn;
+					lv(1,2)=std::atof(std::strtok(NULL,string::WS))*s_posn;
+					lv(2,2)=std::atof(std::strtok(NULL,string::WS))*s_posn;
 					//break
 					break;
 				}
@@ -584,12 +597,12 @@ void read_forces(FILE* reader, Simulation& sim){
 			if(QE_PRINT_STATUS>1) std::cout<<"T = "<<t<<"\n";
 			else if(t%1000==0) std::cout<<"T = "<<t<<"\n";
 			fgets(input,string::M,reader);//header
+			const double fac=s_energy/s_posn;
 			for(unsigned int n=0; n<sim.frame(t).nAtoms(); ++n){
 				fgets(input,string::M,reader);
-				sim.frame(t).force(n)[0]=std::atof(std::strtok(input,string::WS));
-				sim.frame(t).force(n)[1]=std::atof(std::strtok(NULL,string::WS));
-				sim.frame(t).force(n)[2]=std::atof(std::strtok(NULL,string::WS));
-				sim.frame(t).force(n)*=s_energy/s_posn;
+				sim.frame(t).force(n)[0]=std::atof(std::strtok(input,string::WS))*fac;
+				sim.frame(t).force(n)[1]=std::atof(std::strtok(NULL,string::WS))*fac;
+				sim.frame(t).force(n)[2]=std::atof(std::strtok(NULL,string::WS))*fac;
 			}
 			for(unsigned int tt=1; tt<sim.stride(); ++tt){
 				fgets(input,string::M,reader);//header
@@ -868,16 +881,16 @@ void read(const char* file, const AtomType& atomT, Structure& struc){
 				if(std::strstr(input,str_force)!=NULL){
 					std::vector<std::string> strlist;
 					fgets(input,string::M,reader);
+					const double fac=s_energy/s_posn;
 					for(unsigned int i=0; i<natomst; ++i){
 						fgets(input,string::M,reader);
 						string::split(input,string::WS,strlist);
 						unsigned int atom=std::atoi(strlist.at(1).c_str())-1;
 						const unsigned int type=std::atoi(strlist.at(3).c_str())-1;
 						for(unsigned int j=0; j<type; ++j) atom-=struc.nAtoms(j);
-						struc.force(type,atom)[0]=std::atof(strlist.at(6).c_str());
-						struc.force(type,atom)[1]=std::atof(strlist.at(7).c_str());
-						struc.force(type,atom)[2]=std::atof(strlist.at(8).c_str());
-						struc.force(type,atom)*=s_energy/s_posn;
+						struc.force(type,atom)[0]=std::atof(strlist.at(6).c_str())*fac;
+						struc.force(type,atom)[1]=std::atof(strlist.at(7).c_str())*fac;
+						struc.force(type,atom)[2]=std::atof(strlist.at(8).c_str())*fac;
 					}
 				}
 			}

@@ -1,11 +1,12 @@
-#include <iostream>
-#include <cstdio>
-#include <cstdlib>
-#include <ctime>
-#include "structure.hpp"
-#include "string.hpp"
-#include "cell.hpp"
-#include "units.hpp"
+#pragma once
+#ifndef QE_HPP
+#define QE_HPP
+
+// c++ libraries
+#include <vector>
+#include <string>
+// ann - structure
+#include "structure_fwd.hpp"
 
 #ifndef QE_PRINT_FUNC
 #define QE_PRINT_FUNC 0
@@ -113,3 +114,5 @@ void read(const char* file, const AtomType& atomT, Structure& struc);
 Simulation& read(const Format& format, const Interval& interval, const AtomType& atomT, Simulation& sim);
 
 }
+
+#endif
