@@ -8,18 +8,42 @@ for molecular dynamics simulations.
 
 ## CODE ORGANIZATION
 
-**SYSTEM**
-* compiler.hpp - utilities for printing compiler information
-* typedef.hpp  - global typdefs
-* print.hpp    - utilities for formatted output
+**NEURAL NETWORK POTENTIAL**
+* nn.hpp               - neural network
+* nn_pot.hpp           - neural network potential
+* cutoff.hpp           - distance cutoff
+* atom.hpp             - stores atom properties
+* nn_pot_train_mpi.hpp - nn pot - training - MPI
+* nn_train.hpp         - nn - training
+* nn_fit_1D.hpp        - nn - function fitting - 1D
+* nn_fit_2D.hpp        - nn - function fitting - 2D
 
-**MEMORY**
-* serialize.hpp - serialization of complex objects
-* map.hpp       - mapping two different objects to each other
+**BASIS - RADIAL**
+* basis_radial.hpp    - radial basis (table of radial symmetry functions)
+* symm_radial.hpp     - radial symmetry function header
+* symm_radial_g1.hpp  - "G1" symmetry function [1]
+* symm_radial_g2.hpp  - "G2" symmetry function [1]
+* symm_radial_t1.hpp  - "T1" symmetry function (tanh)
 
-**MULTITHREADING**
-* parallel.hpp - utilities for thread distribution
-* mpi_util.hpp - utilities for mpi communication
+**BASIS - ANGULAR**
+* basis_angular.hpp   - angular basis (table of angular symmetry functions)
+* symm_angular.hpp    - angular symmetry function header
+* symm_angular_g3.hpp - "G3" symmetry function [1]
+* symm_angular_g4.hpp - "G4" symmetry function [1]
+
+**STRUCTURE**
+* cell.hpp      - unit cell
+* structure.hpp - atomic trajectories/properties
+* cell_list.hpp - divides unit cell into grid
+
+**FORMAT**
+* format.hpp - stores possible formats
+* vasp.hpp   - read/write VASP files
+* qe.hpp     - read/write QE files
+* lammps.hpp - read/write LAMMPS files
+* xyz.hpp    - read/write XYZ files
+* ame.hpp    - read/write AME files
+* ann.hpp    - read/write ANN files
 
 **MATH**
 * math_const.hpp   - mathematical constants
@@ -29,49 +53,30 @@ for molecular dynamics simulations.
 * accumulator.hpp  - statistical accumulator
 * eigen.hpp        - Eigen utilities
 * lmat.hpp         - lower triangular matrix
-
-**OPTIMIZATION**
-* optimize.hpp - optimization
-
-**STRING**
-* string.hpp - string utilities
+* random.hpp       - random number generation
+* optimize.hpp     - optimization
 
 **CHEMISTRY**
-* units.hpp  - physical units
-* ptable.hpp - physical constants
-* atom.hpp   - atomic species
+* units.hpp   - physical units
+* ptable.hpp  - physical constants
+* ewald3D.hpp - ewald sums
 
-**NEURAL NETWORK**
-* nn.hpp - neural network implementation
+**UTILITY**
+* compiler.hpp - utilities for printing compiler information
+* typedef.hpp  - global typdefs
+* print.hpp    - utilities for formatted output
+* serialize.hpp - serialization of complex objects
+* map.hpp       - mapping two different objects to each other
+* string.hpp - string utilities
 
-**NEURAL NETWORK POTENTIAL**
-* cutoff.hpp          - distance cutoff
-* symm_radial.hpp     - radial symmetry function header
-* symm_radial_g1.hpp  - "G1" symmetry function [1]
-* symm_radial_g2.hpp  - "G2" symmetry function [1]
-* symm_radial_t1.hpp  - "T1" symmetry function (tanh)
-* symm_angular.hpp    - angular symmetry function header
-* symm_angular_g3.hpp - "G3" symmetry function [1]
-* symm_angular_g4.hpp - "G4" symmetry function [1]
-* basis_radial.hpp    - radial basis (table of radial symmetry functions)
-* basis_angular.hpp   - angular basis (table of angular symmetry functions)
-* nn_pot.hpp          - neural network potential
-
-**TRAINING**
-* nn_pot_train_mpi.hpp - nn pot - training - MPI
-* nn_train.hpp - neural network training (testing)
-
-**STRUCTURE**
-* cell.hpp      - unit cell
-* structure.hpp - atomic trajectories/properties
-
-**FILE**
-* vasp.hpp - read/write structures - VASP (https://www.vasp.at/)
-* qe.hpp   - read/write structures - QE (https://www.quantum-espresso.org/)
-* ame.hpp  - read/write structures - AME
+**MULTITHREADING**
+* parallel.hpp - utilities for thread distribution
+* mpi_util.hpp - utilities for mpi communication
 
 **TEST**
-* test_unit.cpp - unit tests
+* test_unit.cpp   - test - unit
+* test_mem.cpp    - test - memory
+* test_foramt.cpp - test - format
 
 ![Code Layout](/code_layout.png)
 
@@ -85,8 +90,10 @@ The location of the Eigen library must be specified in the Makefile.
 **Makefile options:**
 * make mpi     - make training binary - parallelized - MPI - gnu
 * make impi    - make training binary - parallelized - MPI - intel
-* make test    - make testing binary
+* make test    - make testing binaries
 * make convert - make conversion binary
+* make fit1D   - make training binary for fitting 1D functions
+* make fit2D   - make training binary for fitting 1D functions
 * make clean   - removes all object files
 
 ## EXECUTION
@@ -216,15 +223,6 @@ gradient in the optimization step.
 
 All other algorithms work to some degree, but are not recommended.
 
-An important aspect of optimization is the regularization parameter (lambda). This parameter is a 
-Lagrange multiplier which enforces small weights. When lambda is non-zero, a term is added to the 
-error which is proportional to the average squared magnitude of the weights, and a corresponding 
-term is added to the gradients. This regularization term thus prevents the weights of the newtork 
-from becoming too large. Generally speaking, the order of magnitude of lambda will set the maximum order 
-of magnitude of the weights of the network, independent of the size of the network itself.  For example, 
-if lambda is of the order 1e-3 the largest weights of the network will typically be on the order of 1e2 and 
-will not exceed 1e3.
-
 When restarting, all optimization parameters (lambda, gamma, decay, etc.) are overwritten by the 
 values provided in the parameter file. There are times when this is not desirable, i.e. when restarting 
 the optimization when using a decay schedule for the optimization step (gamma). In this case, if one removes
@@ -318,8 +316,8 @@ Each __atom__ entry (atom name mass (charge)) lists the properties of a given at
 ### READ/WRITE
 
 * __read_pot__ - (atomname filename) Read the nueral network potential for "atomname" from "file". The name of the atom must match a species specified with an __atom__ command.
-* __read_basis_radial__ - (atomname filename) Read the radial basis for "atomname" from "file".
-* __read_basis_angular__ - (atomname filename) Read the radial basis for "atomname" from "file".
+* __read_basis_radial__ - (type1 type2 file) Read the radial basis for "type1" to "type2" from "file".
+* __read_basis_angular__ - (type1 type2 type3 filename) Read the radial basis for "type1" at the center of a triple with "type2" and "type3" from "file".
 * __read_restart__ - (filename) Read the restart data from "filename".
 
 ### OPTIMIZATION
@@ -355,8 +353,13 @@ Each __atom__ entry (atom name mass (charge)) lists the properties of a given at
 * __transfer__ - (string) The name of the transfer function. Possible values:
 	* __tanh__ - hyperbolic tanh function
 	* __sigmoid__ - sigmoid function
+	* __isru__ - inverse square root unit
+	* __softsign__ - softsign function
 	* __softplus__ - softplus function
+	* __softplus2__ - softplus function with ln(2) substracted
 	* __relu__ - rectified linear function
+	* __elu__ - exponential linear function
+	* __gelu__ - gaussian error linear function
 	* __lin__ - linear function
 * __n_batch__ - (int) Number of structures in the batch, must be less than the total number of structures owned by a process, superceded by __p_batch__.
 * __p_batch__ - (float) Percentage of structures in the batch, must be between zero and one.
@@ -365,9 +368,13 @@ Each __atom__ entry (atom name mass (charge)) lists the properties of a given at
 
 ### OUTPUT
 
-* __write_basis__ - Whether to write the basis as a function of distance/angle to file.
+* __write_basis__  - Whether to write the basis as a function of distance/angle to file.
 * __write_energy__ - Whether to write the training/validation/testing energies to file.
-* __write_force__ - Whether to write the force on each atom to file.
+* __write_ewald__  - Whether to write the training/validation/testing ewald energies to file.
+* __write_force__  - Whether to write the force on each atom to file.
+* __write_input__  - Whether to write the inputs to file.
+* __write_corr__   - Whether to write the input correlations to file.
+* __write_symm__   - Whether to write the symmetry function values to binary files for restarting.
 
 ## REFERENCES
 
