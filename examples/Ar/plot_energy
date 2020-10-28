@@ -1,0 +1,5 @@
+w=1.4
+plot [:] [-574.73:-574.65]\
+	'nn_pot_energy_train.dat' using 2 with lines lw w lc 'blue' title 'exact',\
+	'nn_pot_energy_train.dat' using 3 with lines lw w lc 'red' title 'nn'
+pause -1 'continue'

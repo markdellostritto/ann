@@ -1,0 +1,87 @@
+# GENERAL PARAMETERS
+	# execution mode
+		mode			train # train nn
+		#mode			symm # test nn 
+		#mode			test # test nn 
+	# training data
+		#data_train		data_deform_iso_train.txt
+		data_train		data_deform_iso_train_bin.txt
+	# validation data
+		#data_val		data_md_nve.txt
+		data_val		data_md_nve_bin.txt
+	# test data
+		#data_test		data_md_nve.txt
+	# format
+		#format			VASP_XML # file format - vasp xml
+		#format			QE # file format - qe standard output
+		#format			AME # file format - ame format
+		format			BINARY # file format - binary format
+	# units
+		units			metal # same as LAMMPS units
+
+# ATOMS
+	atom			Ar mass 39.948
+	atom			Ar energy -574.641
+	atom			Ar basis basis_Ar
+	atom			Ar nh 7 4 2
+
+# READING
+	#read_pot		Ar ann_Ar
+	read_restart		nn_pot_train
+
+# WRITING
+	write_basis		true		# print basis (radial and angular)
+	write_energy		true		# print energies
+	write_force		false		# print forces
+	write_corr		false		# write correlation (not implemented)
+	
+# OPTIMIZATION
+	#algo			sdg		# steepest-descent
+	#algo			sdm		# steepest-descent - momentum
+	#algo			nag		# Nesterov accelerated gradient
+	#algo			adagrad		# Adagrad
+	#algo			adadelta	# AdaDelta
+	algo			adam		# Adam
+	#algo			nadam		# Nesterov-Adam
+	#algo			rmsprop		# RMSprop
+	#algo			rprop		# irprop+ (Igel, C.; Hüsken, M. Improving the Rprop Learning Algorithm; 2000)
+	#algo			bfgs		# BFGS conjugate gradient
+	decay			exp		# decay schedule - exponential
+	#decay			sqrt		# decay schedule - square root
+	#decay			pow		# decay schedule - power
+	#decay			inv		# decay schedule - inverse
+	opt_val			ftol_abs	# type of break condition
+	tol			1e-14		# break condition - make small
+	max_iter		1000000		# max number of iterations
+	n_print			10000		# print - status - every n optimization steps
+	n_write			100000		# write - restart - every n optimization steps
+	#gamma			1e-3		# step size for gradient descent
+	eta			0.9		# memory term (nag,adagrad,adam)
+	alpha			1e-6		# decay term
+	seed			1		# random seed
+	lambda			0		# regularization parameter
+	write_symm		false		# whether to write symmetry functions
+
+# NN POTENTIAL
+	r_cut			10		# max cutoff distance
+	init			he		# initialization - He	
+	idev			1.0		# initialization - deviation
+	#transfer		tanh		# transfer function
+	transfer		arctan		# transfer function
+	n_batch			8		# number of systems in batch (superceded by p_batch)
+	p_batch			0		# percentage of system in batch
+	pre_cond		0		# whether to pre-condition the network inputs
+	#post_cond		0		# whether to post-condition the network outputs (deprecated)
+	calc_force		true		# whether to compute the force at the end of optimization
+	
+# algorithm performance (gamma=0.001,eta=0.9,t=10000)
+# more * implies better performance
+	# sdg		**	# simple, slow, reliable (gamma=1e-3)
+	# sdm		***	# better than sdg, (gamma=1e-3)
+	# nag		****	# better than sdm, (gamma=1-e3,eta=0.9)
+	# adagrad	*	# typically unstable, sensitive to gamma
+	# adadelta	*	# typically unstable, sensitive to gamma
+	# adam		****	# more robust than nag, no eta
+	# rmsprop	**	# similar but worse than adam
+	# rprop		******	# slow near minimum, but extremely stable, no parameters
+	# bfgsg		***	# poor stability (gamma=1e-3)

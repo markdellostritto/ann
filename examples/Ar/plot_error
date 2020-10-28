@@ -1,0 +1,10 @@
+set logscale xy
+set grid xtics ytics mxtics mytics
+w=1.2;s=1000.0
+set xlabel 'Optimization Step'
+set ylabel 'Error (10^3 energy-unit/atom)'
+plot\
+	'nn_pot_error.dat' using 1:(s*$3) with lines lc 'red'   lw w title 'err-train',\
+	'nn_pot_error.dat' using 1:(s*$4) with lines lc 'blue'  lw w title 'err-val'
+pause -1 'continue'
+
