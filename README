@@ -1,0 +1,13 @@
+Example: training a neural network to fit a Tanh function.
+
+Requirements:
+-executable: python
+-executable: nn_fit_1D.exe
+
+A python executable is required to generate the gaussian data
+using the 'write_tanh.py' script.
+The executable 'nn_fit_1D.exe' is required to fit the gaussian function.
+Default values are assumed for these two exucutables in the 'run.sh' script.
+One should change them to appropriate values based on the
+current system configuration.
+

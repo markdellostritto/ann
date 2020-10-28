@@ -1,0 +1,9 @@
+set key left font ',14'
+w=1.2
+set term pngcairo
+set output 'tanh.png'
+plot\
+	'tanh_train.dat' with linespoints lw w lc 'black' title 'train',\
+	'tanh_val.dat' with points lw w lc 'blue' title 'val',\
+	'tanh_test.dat' with points lw w lc 'red' title 'test'
+
