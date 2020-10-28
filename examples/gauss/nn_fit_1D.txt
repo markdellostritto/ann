@@ -1,0 +1,39 @@
+# files 
+data_train	gauss_train.dat
+data_val	gauss_val.dat
+data_test	gauss_test.dat
+file_error	nn_train_error.dat
+
+# nn
+n_hidden	12 12
+#transfer	tanh
+#transfer	arctan
+#transfer	isru
+transfer	elu
+init		he
+idev		1.0
+
+# optimization - model
+algo		adam
+gamma		1e-3
+lambda		0
+#decay		const
+decay		exp
+alpha		1e-6
+pow		0
+
+# optimization - data
+opt_val		ftol_abs
+tol		1e-12
+max_iter	5000000
+n_print		10000
+n_write		10000
+
+# pre-/pos-conditioning
+pre_cond	F
+post_cond	F
+
+#batch size
+pbatch		0.20
+#nbatch		10
+

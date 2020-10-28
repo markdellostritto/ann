@@ -1,0 +1,12 @@
+set logscale xy
+set grid xtics ytics mxtics mytics
+set key font ',14'
+set xlabel 'optimization step'
+set ylabel 'error'
+w=1.2
+set term pngcairo
+set output 'error.png'
+plot\
+	'nn_train_error.dat' using 1:3 with lines lw w lc 'red' title 'err-train',\
+	'nn_train_error.dat' using 1:4 with lines lw w lc 'blue' title 'err-val'
+
