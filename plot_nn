@@ -1,8 +1,0 @@
-w=1.2
-set key left font ',14'
-set term pngcairo
-set output 'nn.png'
-plot\
-	'nn_fit_1D.out' using 1:2 with points lw w lc 'black' title 'exact',\
-	'nn_fit_1D.out' using 1:3 with points lw w lc 'red' title 'nn'
-
