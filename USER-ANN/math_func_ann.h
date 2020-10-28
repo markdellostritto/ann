@@ -1,6 +1,6 @@
 #pragma once
-#ifndef MATH_FUNC_ANN_HPP
-#define MATH_FUNC_ANN_HPP
+#ifndef MATH_FUNC_HPP
+#define MATH_FUNC_HPP
 
 #include <cmath>
 #include <vector>
@@ -9,7 +9,26 @@
 #define DEBUG_MATH_SPECIAL 0
 #endif 
 
-namespace function{
+namespace math{
+
+namespace func{
+	
+	//**************************************************************
+	// sign function
+	//**************************************************************
+
+	template <class T> inline int sign(T x){return (x>0)-(x<0);}
+	
+	//**************************************************************
+	// modulus functions
+	//**************************************************************
+	
+	template <class T> inline T mod(T n, T z){return (n%z+z)%z;}
+	template <> inline int mod<int>(int n, int z){return (n%z+z)%z;}
+	template <> inline unsigned int mod<unsigned int>(unsigned int n, unsigned int z){return (n%z+z)%z;}
+	template <> inline float mod<float>(float n, float z){return fmod(fmod(n,z)+z,z);}
+	template <> inline double mod<double>(double n, double z){return fmod(fmod(n,z)+z,z);}
+	template <class T> inline T mod(T n, T lLim, T uLim){return mod<T>(n-lLim,uLim-lLim)+lLim;}
 	
 	//**************************************************************
 	//polynomial evaluation
@@ -83,6 +102,8 @@ namespace function{
 		x*=x; x*=x; x*=x; x*=x; x*=x; x*=x; x*=x;
 		return x;
 	}
+}
+
 }
 
 #endif

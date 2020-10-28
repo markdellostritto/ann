@@ -13,12 +13,13 @@
 
 struct PhiRN{
 	enum type{
-		UNKNOWN=-1,
-		G1=0,//Behler G1
-		G2=1,//Behler G2
-		T1=2//tanh
+		UNKNOWN=0,
+		G1=1,//Behler G1
+		G2=2,//Behler G2
+		T1=3//tanh
 	};
-	static type load(const char* str);
+	static type read(const char* str);
+	static const char* name(const PhiRN::type& t);
 };
 std::ostream& operator<<(std::ostream& out, const PhiRN::type& t);
 
@@ -27,13 +28,20 @@ std::ostream& operator<<(std::ostream& out, const PhiRN::type& t);
 //*****************************************
 
 struct PhiR{
-	virtual ~PhiR(){};
+	//==== constructors/destructors ====
+	virtual ~PhiR(){}
+	//==== member functions - evaluation ====
 	virtual double val(double r, double cut)const=0;
 	virtual double grad(double r, double cut, double gcut)const=0;
 };
+//==== operators ====
 std::ostream& operator<<(std::ostream& out, const PhiR& f);
 bool operator==(const PhiR& phir1, const PhiR& phir2);
 inline bool operator!=(const PhiR& phir1, const PhiR& phir2){return !(phir1==phir2);}
+
+//*****************************************
+// PhiR - serialization
+//*****************************************
 
 namespace serialize{
 	
@@ -41,19 +49,19 @@ namespace serialize{
 	// byte measures
 	//**********************************************
 	
-	template <> unsigned int nbytes(const PhiR& obj);
+	template <> int nbytes(const PhiR& obj);
 	
 	//**********************************************
 	// packing
 	//**********************************************
 	
-	template <> unsigned int pack(const PhiR& obj, char* arr);
+	template <> int pack(const PhiR& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> unsigned int unpack(PhiR& obj, const char* arr);
+	template <> int unpack(PhiR& obj, const char* arr);
 	
 }
 

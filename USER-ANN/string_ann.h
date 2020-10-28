@@ -1,8 +1,7 @@
-#pragma once
-#ifndef STRING_ANN_HPP
-#define STRING_ANN_HPP
+#ifndef STRING_ANN_H
+#define STRING_ANN_H
 
-// c++ libraries
+//c++ libraries
 #include <string>
 #include <vector>
 
@@ -12,7 +11,7 @@ namespace string{
 	//Standard Strings
 	//******************************************************
 	
-	static const unsigned int M=250;
+	static const int M=250;
 	static const char* WS=" \r\t\n";
 	static const char* DIGITS="1234567890";
 	const char* const COMMENT="#";
@@ -21,8 +20,8 @@ namespace string{
 	//Hash
 	//******************************************************
 	
-	unsigned int hash(const char* str);
-	unsigned int hash(const std::string& str);
+	int hash(const char* str);
+	int hash(const std::string& str);
 	unsigned short hash_s(const char* str);
 	unsigned short hash_s(const std::string& str);
 	
@@ -48,12 +47,6 @@ namespace string{
 	char* trim(char* str, const char* delim);
 	
 	//******************************************************
-	//Modifying
-	//******************************************************
-	
-	char* replace(char* str, char c1, char c2);
-	
-	//******************************************************
 	//Copying
 	//******************************************************
 	
@@ -66,13 +59,13 @@ namespace string{
 	
 	bool empty(const char* str);
 	bool boolean(const char* str);
-	unsigned int substrN(const char* str, const char* delim);
+	int substrN(const char* str, const char* delim);
 	
 	//******************************************************
 	//Splitting string
 	//******************************************************
 	
-	unsigned int split(const char* str, const char* delim, std::vector<std::string>& strlist);
+	int split(const char* str, const char* delim, std::vector<std::string>& strlist);
 	
 }	
 

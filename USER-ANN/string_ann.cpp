@@ -1,6 +1,10 @@
 // c libraries
 #include <cstring>
 #include <cctype>
+#include <cstdlib>
+// c++ libraries
+#include <ostream>
+#include <string>
 // ann - string
 #include "string_ann.h"
 
@@ -10,11 +14,11 @@ namespace string{
 //Hash
 //******************************************************
 
-unsigned int hash(const char* str){
-	const unsigned int p=31;
-	const unsigned int m=2147483647;//mersenne prime 31
-	unsigned int val=0;
-	unsigned int pow=1;
+int hash(const char* str){
+	const int p=31;//prime
+	const int m=2147483647;//mersenne prime 31
+	int val=0;
+	int pow=1;
 	while(*str){
 		val=(val+(*str-'a'+1)*pow)%m;
 		pow=(pow*p)%m;
@@ -23,15 +27,15 @@ unsigned int hash(const char* str){
 	return val;
 }
 
-unsigned int hash(const std::string& name){
+int hash(const std::string& name){
 	return hash(name.c_str());
 }
 
 unsigned short hash_s(const char* str){
-	const unsigned short p=31;
-	const unsigned short m=65497;//prime
-	unsigned short val=0;
-	unsigned short pow=1;
+	const short p=31;//prime
+	const short m=65497;//prime
+	short val=0;
+	short pow=1;
 	while(*str){
 		val=(val+(*str-'a'+1)*pow)%m;
 		pow=(pow*p)%m;
@@ -50,29 +54,23 @@ unsigned short hash_s(const std::string& name){
 
 char* to_upper(char* str){
 	char* s=str;
-	while(*s){
-		*s=std::toupper(*s);
-		++s;
-	}
+	while(*s){*s=std::toupper(*s); ++s;}
 	return str;
 }
 
 char* to_lower(char* str){
 	char* s=str;
-	while(*s){
-		*s=std::tolower(*s);
-		++s;
-	}
+	while(*s){*s=std::tolower(*s); ++s;}
 	return str;
 }
 
 std::string& to_upper(std::string& str){
-	for(int i=str.size()-1; i>=0; --i) str[i]=std::toupper(str[i]);
+	for(int i=0; i<str.size(); ++i) str[i]=std::toupper(str[i]);
 	return str;
 }
 
 std::string& to_lower(std::string& str){
-	for(int i=str.size()-1; i>=0; --i) str[i]=std::tolower(str[i]);
+	for(int i=0; i<str.size(); ++i) str[i]=std::tolower(str[i]);
 	return str;
 }
 
@@ -107,44 +105,32 @@ char* trim_right(char* str){
 }
 
 char* trim_all(char* str){
-	char* temp=new char[std::strlen(str)];
-	unsigned int count=0;
-	for(unsigned int i=0; i<std::strlen(str); ++i){
+	char* temp=(char*)malloc(sizeof(char)*std::strlen(str));
+	int count=0;
+	for(int i=0; i<std::strlen(str); ++i){
 		if(!std::isspace(str[i])) temp[count++]=str[i];
 	}
 	temp[count]='\0';
 	std::strcpy(str,temp);
-	delete[] temp;
+	free(temp);
 	return str;
 }
 
 char* trim_left(char* str, const char* delim){
 	char* s=std::strpbrk(str,delim);
-	if(s!=NULL) std::memmove(str,s+1,(std::strlen(s))*sizeof(char));
+	if(s!=NULL) std::memmove(str,s+1,std::strlen(s)*sizeof(char));
 	return str;
 }
 
 char* trim_right(char* str, const char* delim){
 	char* s=std::strpbrk(str,delim);
-	if(s!=NULL) *s='\0';
+	if(s!=NULL) str[s-str]='\0';
 	return str;
 }
 
 char* trim(char* str, const char* delim){
 	trim_left(str,delim);
 	trim_right(str,delim);
-	return str;
-}
-
-//******************************************************
-//Modifying
-//******************************************************
-
-char* replace(char* str, char c1, char c2){
-	while(*str){
-		if(*str==c1) *str=c2;
-		++str;
-	}
 	return str;
 }
 
@@ -185,8 +171,8 @@ bool boolean(const char* str){
 	else return false;
 }
 
-unsigned int substrN(const char* str, const char* delim){
-	unsigned int n=0;
+int substrN(const char* str, const char* delim){
+	int n=0;
 	while(std::strpbrk(str,delim)){
 		const char* stemp=std::strpbrk(str,delim);
 		if(stemp-str>0) ++n;
@@ -200,8 +186,8 @@ unsigned int substrN(const char* str, const char* delim){
 //Splitting string
 //******************************************************
 
-unsigned int split(const char* str, const char* delim, std::vector<std::string>& strlist){
-	unsigned int n=substrN(str,delim);
+int split(const char* str, const char* delim, std::vector<std::string>& strlist){
+	int n=substrN(str,delim);
 	strlist.resize(n);
 	n=0;
 	while(std::strpbrk(str,delim)){

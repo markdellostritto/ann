@@ -4,12 +4,12 @@
 
 // c++ libraries
 #include <iosfwd>
-//eigen
+// eigen
 #include <Eigen/Dense>
 // symmetry functions
 #include "cutoff.h"
 #include "symm_radial.h"
-// local libraries - serialization
+// ann - serialization
 #include "serialize.h"
 
 #ifndef BASIS_RADIAL_PRINT_FUNC
@@ -21,44 +21,51 @@ private:
 	static const double V_CUT;//value cutoff
 	double rc_;//cutoff radius
 	double norm_;//normalization factor
-	CutoffN::type tcut_;//cutoff function type
+	cutoff::Func* cutoff_;//cutoff function
 	PhiRN::type phiRN_;//type of radial functions
-	unsigned int nfR_;//number of radial functions
+	int nfR_;//number of radial functions
 	PhiR** fR_;//radial functions
 	Eigen::VectorXd symm_;//symmetry function
 public:
-	//constructors/destructors
-	BasisR():phiRN_(PhiRN::UNKNOWN),nfR_(0),fR_(NULL){}
+	//==== constructors/destructors ====
+	BasisR():phiRN_(PhiRN::UNKNOWN),nfR_(0),fR_(NULL),cutoff_(NULL){}
 	BasisR(const BasisR& basisR);
 	~BasisR();
-	//operators
+	
+	//==== operators ====
 	BasisR& operator=(const BasisR& basis);
 	friend std::ostream& operator<<(std::ostream& out, const BasisR& basisR);
-	//initialization
-	void init_G1(unsigned int nR, CutoffN::type tcut, double rcut);
-	void init_G2(unsigned int nR, CutoffN::type tcut, double rcut);
-	void init_T1(unsigned int nR, CutoffN::type tcut, double rcut);
-	//loading/printing
+	
+	//==== initialization ====
+	void init_G1(int nR, cutoff::Name::type tcut, double rcut);
+	void init_G2(int nR, cutoff::Name::type tcut, double rcut);
+	void init_T1(int nR, cutoff::Name::type tcut, double rcut);
+	
+	//==== reading/writing ====
 	static void write(const char* filename, const BasisR& basis);
 	static void read(const char* filename, BasisR& basis);
 	static void write(FILE* writer, const BasisR& basis);
 	static void read(FILE* reader, BasisR& basis);
-	//member access
-	const CutoffN::type& tcut()const{return tcut_;}
-	CutoffN::type& tcut(){return tcut_;}
-	const double& rc()const{return rc_;}
+	
+	//==== member access ====
+	cutoff::Func* cutoff(){return cutoff_;}
+	const cutoff::Func* cutoff()const{return cutoff_;}
 	double& rc(){return rc_;}
-	const unsigned int& nfR()const{return nfR_;}
+	const double& rc()const{return rc_;}
+	const int& nfR()const{return nfR_;}
 	PhiRN::type& phiRN(){return phiRN_;}
 	const PhiRN::type& phiRN()const{return phiRN_;}
-	PhiR& fR(unsigned int i){return *fR_[i];}
-	const PhiR& fR(unsigned int i)const{return *fR_[i];}
-	const Eigen::VectorXd& symm()const{return symm_;}
+	PhiR& fR(int i){return *fR_[i];}
+	const PhiR& fR(int i)const{return *fR_[i];}
 	Eigen::VectorXd& symm(){return symm_;}
-	//member functions
+	const Eigen::VectorXd& symm()const{return symm_;}
+	
+	//==== member functions ====
 	void clear();
 	void symm(double dr);
 	double force(double dr, const double* dEdG)const;
+	//==== static functions ====
+	static double norm(double rc);
 };
 std::ostream& operator<<(std::ostream& out, const BasisR& basisR);
 
@@ -71,19 +78,19 @@ namespace serialize{
 	// byte measures
 	//**********************************************
 	
-	template <> unsigned int nbytes(const BasisR& obj);
+	template <> int nbytes(const BasisR& obj);
 	
 	//**********************************************
 	// packing
 	//**********************************************
 	
-	template <> unsigned int pack(const BasisR& obj, char* arr);
+	template <> int pack(const BasisR& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> unsigned int unpack(BasisR& obj, const char* arr);
+	template <> int unpack(BasisR& obj, const char* arr);
 	
 }
 

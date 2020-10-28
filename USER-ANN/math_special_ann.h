@@ -1,36 +1,23 @@
-#pragma once
 #ifndef MATH_SPECIAL_ANN_HPP
 #define MATH_SPECIAL_ANN_HPP
 
-//c++ libraries
+// c libaries
+#include <cmath>
+// c++ libraries
 #include <iosfwd>
-//ann - math
+#include <vector>
+// ann - math
 #include "math_const_ann.h"
 
 #ifndef DEBUG_MATH_SPECIAL
 #define DEBUG_MATH_SPECIAL 0
 #endif 
 
+namespace math{
+	
 namespace special{
 	
 	static const double prec=1E-8;
-	
-	//**************************************************************
-	//Sign functions
-	//**************************************************************
-
-	template <class T> inline int sign(T x){return (x>0)-(x<0);}
-	
-	//**************************************************************
-	//Modulus functions
-	//**************************************************************
-	
-	template <class T> inline T mod(T n, T z){return (n%z+z)%z;}
-	template <> inline int mod<int>(int n, int z){return (n%z+z)%z;}
-	template <> inline unsigned int mod<unsigned int>(unsigned int n, unsigned int z){return (n%z+z)%z;}
-	template <> inline float mod<float>(float n, float z){return fmod(fmod(n,z)+z,z);}
-	template <> inline double mod<double>(double n, double z){return fmod(fmod(n,z)+z,z);}
-	template <class T> inline T mod(T n, T lLim, T uLim){return mod<T>(n-lLim,uLim-lLim)+lLim;}
 	
 	//**************************************************************
 	//trig (fdlibm)
@@ -61,9 +48,8 @@ namespace special{
 	//**************************************************************
 	//Exponential
 	//**************************************************************
-	
 	template <unsigned int N> inline double expl(double x){
-		x=1.0+x/std::pow(2.0,N);
+		x=1.0+x/std::pow(2,N);
 		for(unsigned int i=0; i<N; ++i) x*=x;
 		return x;
 	}
@@ -71,18 +57,18 @@ namespace special{
 		x=1.0+x/16.0;
 		x*=x; x*=x; x*=x; x*=x;
 		return x;
-	}
+	};
 	template <> inline double expl<6>(double x){
 		x=1.0+x/64.0;
 		x*=x; x*=x; x*=x; x*=x; x*=x; x*=x;
 		return x;
-	}
+	};
 	template <> inline double expl<8>(double x){
 		x=1.0+x/256.0;
 		x*=x; x*=x; x*=x; x*=x;
 		x*=x; x*=x; x*=x; x*=x;
 		return x;
-	}
+	};
 	static union{
 		double d;
 		struct{
@@ -93,7 +79,7 @@ namespace special{
 			#endif
 		} n;
 	} eco;
-	static const double EXPA=1048576.0/num_const::LOG2;
+	static const double EXPA=1048576.0/math::constant::LOG2;
 	static const double EXPB=1072693248.0;
 	static const double EXPC=60801.0;
 	inline double expb(const double x){return (eco.n.i=EXPA*x+(EXPB-EXPC),eco.d);}
@@ -103,10 +89,10 @@ namespace special{
 	//**************************************************************
 	
 	static const double logp1c[5]={1.0,1.0/3.0,1.0/5.0,1.0/7.0,1.0/9.0};
-	double logp1(double x);
+	double logp1(double x);//log(x+1)
 	
 	//**************************************************************
-	//Sigmoid
+	//Sigmoid function
 	//**************************************************************
 	
 	inline double sigmoid(double x){return 1.0/(1.0+std::exp(-x));}
@@ -133,6 +119,70 @@ namespace special{
 	double erfa3(double x);//max error: 3e-7
 	double erfa4(double x);//max error: 1.5e-7
 	
+	//**************************************************************
+	//Gamma Function
+	//**************************************************************
+	
+	static const double gammac[15]={
+		0.99999999999999709182,
+		57.156235665862923517,
+		-59.597960355475491248,
+		14.136097974741747174,
+		-0.49191381609762019978,
+		0.33994649984811888699e-4,
+		0.46523628927048575665e-4,
+		-0.98374475304879564677e-4,
+		0.15808870322491248884e-3,
+		-0.21026444172410488319e-3,
+		0.21743961811521264320e-3,
+		-0.16431810653676389022e-3,
+		0.84418223983852743293e-4,
+		-0.26190838401581408670e-4,
+		0.36899182659531622704e-5
+	};
+	double lgamma(double x);
+	double tgamma(double x);
+	
+	//**************************************************************
+	//Beta Function
+	//**************************************************************
+	
+	double beta(double z, double w);
+	
+}
+
+namespace poly{
+	
+	//**************************************************************
+	//Legendre Poylnomials
+	//**************************************************************
+	double legendre(int n, double x);
+	std::vector<double>& legendre_c(int n, std::vector<double>& c);
+	
+	//**************************************************************
+	//Chebyshev Polynomials
+	//**************************************************************
+	double chebyshev1l(int n, double x);//chebyshev polynomial of the first kind
+	double chebyshev2l(int n, double x);//chebyshev polynomial of the second kind
+	std::vector<double>& chebyshev1_c(int n, double x, std::vector<double>& r);//polynomial coefficients
+	std::vector<double>& chebyshev2_c(int n, double x, std::vector<double>& r);//polynomial coefficients
+	std::vector<double>& chebyshev1_r(int n, std::vector<double>& r);//polynomial roots
+	std::vector<double>& chebyshev2_r(int n, std::vector<double>& r);//polynomial roots
+	
+	//**************************************************************
+	//Jacobi Polynomials
+	//**************************************************************
+	double jacobi(int n, double a, double b, double x);
+	std::vector<double>& jacobi(int n, double a, double b, std::vector<double>& c);
+	
+	//**************************************************************
+	//Laguerre Polynomials
+	//**************************************************************
+	double laguerre(int n, double x);
+	std::vector<double>& laguerre_c(int n, std::vector<double>& c);
+	
+}
+
 }
 
 #endif

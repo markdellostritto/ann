@@ -4,17 +4,20 @@
 #elif defined __ICC || defined __INTEL_COMPILER
 #include <mathimf.h> //intel math library
 #endif
+#include <cstring>
 // c++ libaries
 #include <ostream>
 // ann - symm - angular - g3
 #include "symm_angular_g3.h"
 
-//Behler G3
+//*****************************************
+// PHIA - G3 - Behler
+//*****************************************
 
-//operators
+//==== operators ====
 
 std::ostream& operator<<(std::ostream& out, const PhiA_G3& f){
-	return out<<"G3 "<<f.eta<<" "<<f.zeta<<" "<<f.lambda;
+	return out<<static_cast<const PhiA&>(f)<<" G3 "<<f.eta<<" "<<f.zeta<<" "<<f.lambda;
 }
 
 bool operator==(const PhiA_G3& phia1, const PhiA_G3& phia2){
@@ -25,13 +28,13 @@ bool operator==(const PhiA_G3& phia1, const PhiA_G3& phia2){
 	else return true;
 }
 
-//member functions
+//==== member functions ====
 
 double PhiA_G3::val(double cos, const double r[3], const double c[3])const{
 	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return angle(cos)*std::exp(-eta*(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]))*c[0]*c[1]*c[2];
+	return std::pow(std::fabs(0.5*(1.0+lambda*cos)),zeta)*std::exp(-eta*(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]))*c[0]*c[1]*c[2];
 	#elif (defined __ICC || defined __INTEL_COMPILER)
-	return angle(cos)*exp(-eta*(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]))*c[0]*c[1]*c[2];
+	return pow(fabs(0.5*(1.0+lambda*cos)),zeta)*exp(-eta*(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]))*c[0]*c[1]*c[2];
 	#endif
 	//return angle(cos)*std::exp(-eta*(rij*rij+rik*rik+rjk*rjk))*cij*cik*cjk;
 }
@@ -118,8 +121,8 @@ namespace serialize{
 	// byte measures
 	//**********************************************
 	
-	template <> unsigned int nbytes(const PhiA_G3& obj){
-		unsigned int N=0;
+	template <> int nbytes(const PhiA_G3& obj){
+		int N=0;
 		N+=nbytes(static_cast<const PhiA&>(obj));
 		N+=2*sizeof(double);
 		N+=sizeof(int);
@@ -130,12 +133,12 @@ namespace serialize{
 	// packing
 	//**********************************************
 	
-	template <> unsigned int pack(const PhiA_G3& obj, char* arr){
-		unsigned int pos=0;
-		pack(static_cast<const PhiA&>(obj),arr); pos+=nbytes(static_cast<const PhiA&>(obj));
+	template <> int pack(const PhiA_G3& obj, char* arr){
+		int pos=0;
+		pos+=pack(static_cast<const PhiA&>(obj),arr);
 		std::memcpy(arr+pos,&obj.eta,sizeof(double)); pos+=sizeof(double);
 		std::memcpy(arr+pos,&obj.zeta,sizeof(double)); pos+=sizeof(double);
-		std::memcpy(arr+pos,&obj.lambda,sizeof(int));  pos+=sizeof(int);
+		std::memcpy(arr+pos,&obj.lambda,sizeof(int)); pos+=sizeof(int);
 		return pos;
 	}
 	
@@ -143,12 +146,12 @@ namespace serialize{
 	// unpacking
 	//**********************************************
 	
-	template <> unsigned int unpack(PhiA_G3& obj, const char* arr){
-		unsigned int pos=0;
-		unpack(static_cast<PhiA&>(obj),arr); pos+=nbytes(static_cast<const PhiA&>(obj));
+	template <> int unpack(PhiA_G3& obj, const char* arr){
+		int pos=0;
+		pos+=unpack(static_cast<PhiA&>(obj),arr);
 		std::memcpy(&obj.eta,arr+pos,sizeof(double)); pos+=sizeof(double);
 		std::memcpy(&obj.zeta,arr+pos,sizeof(double)); pos+=sizeof(double);
-		std::memcpy(&obj.lambda,arr+pos,sizeof(int));  pos+=sizeof(int);
+		std::memcpy(&obj.lambda,arr+pos,sizeof(int)); pos+=sizeof(int);
 		return pos;
 	}
 	

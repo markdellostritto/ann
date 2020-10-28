@@ -1,17 +1,13 @@
-#pragma once
-#ifndef NN_HPP
-#define NN_HPP
+#ifndef ANN_NN_HPP
+#define ANN_NN_HPP
 
-//no bounds checking in Eigen
 #define EIGEN_NO_DEBUG
 
 // c++ libraries
 #include <iosfwd>
 // eigen
 #include <Eigen/Dense>
-// ann library - typedefs
-#include "typedef.h"
-// ann library - serialization
+// ann - serialization
 #include "serialize.h"
 
 namespace NN{
@@ -33,66 +29,176 @@ namespace NN{
 #endif
 
 //***********************************************************************
+// TYPEDEFS
+//***********************************************************************
+
+typedef Eigen::Matrix<double,Eigen::Dynamic,1> VecX;
+typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> MatX;
+
+//***********************************************************************
+// INITIALIZATION METHOD
+//***********************************************************************
+
+struct InitN{
+	enum type{
+		UNKNOWN=0,
+		RAND=1,
+		XAVIER=2,
+		HE=3,
+		MEAN=4
+	};
+	static type read(const char* str);
+	static const char* name(const InitN::type& tf);
+};
+std::ostream& operator<<(std::ostream& out, const InitN::type& tf);
+
+//***********************************************************************
 // TRANSFER FUNCTIONS - NAMES
 //***********************************************************************
 
 struct TransferN{
 	enum type{
-		UNKNOWN=-1,
-		TANH=0,
-		SIGMOID=1,
-		LINEAR=2,
-		SOFTPLUS=3,
-		RELU=4
+		UNKNOWN=0,
+		LINEAR=1,
+		SIGMOID=2,
+		TANH=3,
+		ISRU=4,
+		ARCTAN=5,
+		SOFTSIGN=6,
+		RELU=7,
+		SOFTPLUS=8,
+		ELU=9,
+		GELU=10,
+		SOFTPLUS2=11
 	};
 	static type read(const char* str);
+	static const char* name(const TransferN::type& tf);
 };
 std::ostream& operator<<(std::ostream& out, const TransferN::type& tf);
 
 //***********************************************************************
-// TRANSFER FUNCTIONS - FUNCTION WRAPPERS
+// TRANSFER FUNCTIONS
 //***********************************************************************
 
 struct TransferFFDV{
-	static void f_tanh(Eigen::VectorXd& f, Eigen::VectorXd& d);
-	static void f_sigmoid(Eigen::VectorXd& f, Eigen::VectorXd& d);
-	static void f_lin(Eigen::VectorXd& f, Eigen::VectorXd& d);
-	static void f_softplus(Eigen::VectorXd& f, Eigen::VectorXd& d);
-	static void f_relu(Eigen::VectorXd& f, Eigen::VectorXd& d);
+	static void f_lin(VecX& f, VecX& d);
+	static void f_sigmoid(VecX& f, VecX& d);
+	static void f_tanh(VecX& f, VecX& d);
+	static void f_isru(VecX& f, VecX& d);
+	static void f_arctan(VecX& f, VecX& d);
+	static void f_softsign(VecX& f, VecX& d);
+	static void f_relu(VecX& f, VecX& d);
+	static void f_softplus(VecX& f, VecX& d);
+	static void f_softplus2(VecX& f, VecX& d);
+	static void f_elu(VecX& f, VecX& d);
+	static void f_gelu(VecX& f, VecX& d);
 };
 
 //***********************************************************************
 // NETWORK CLASS
 //***********************************************************************
 
+/*
+DEFINITIONS:
+	ensemble - total set of all data (e.g. training "ensemble")
+	element - single datum from ensemble
+	c - "c" donotes the cost function, e.g. the gradient of the cost function w.r.t. the value of a node is dc/da
+	z - "z" is the input to each node, e.g. the gradient of a node w.r.t. to its input is da/dz
+	a - "a" is the value of a node, e.g. the gradient of a node w.r.t. to its input is da/dz
+	o - "o" is the output of the network (i.e. out_), e.g. the gradient of the output w.r.t. the input is do/di
+	i - "i" is the input of the network (i.e. in_), e.g. the gradient of the output w.r.t. the input is do/di
+PRIVATE:
+	VecX in_ - raw input data for a single element of the ensemble (e.g. training set)
+	VecX inw_ - weight used to scale the input data
+	VecX inb_ - bias used to shift the input data
+	VecX out_ - raw output data given a single input element
+	VecX outw_ - weight used to scale the output data
+	VecX outb_ - bias used to shift the output data
+	int nlayer_ - 
+		total number of hidden layers
+		best thought of as the number of "connections" between layers
+		thus, if we have just the input and output, we have one "layer" - 
+			one set of weights,biases connecting input/output
+		if we have two layers, we have the input, output, and one "hidden" layer - 
+			two sets of weights,biases connecting input/layer0/output
+		if we have three layers, we have the input, output, and two "hidden" layers - 
+			three sets of weights,biases connecting input/layer0/layer1/output
+		et cetera
+	std::vector<VecX> node_ - 
+		all nodes, including the input, output, and hidden layers
+		the raw input and output (in_,out_) are separate from "node_"
+		this is because the raw input/output may be shifted/scaled before being used
+		thus, while in_/out_ are the "raw" input/output,
+		the front/back of "node_" can be thought of the "scaled" input/output
+		note that scaling is not necessary, but made optional with the use of in_/out_
+		has a size of "nlayer_+1", as there are "nlayer_" connections between "nlayer_+1" nodes
+	std::vector<VecX> bias_ - 
+		the bias of each layer, best thought of as the bias "between" layers n,n+1
+		bias_[n] must have the size node_[n+1] - we add this bias when going from node_[n] to node_[n+1]
+		has a size of "nlayer_", as there are "nlayer_" connections between "nlayer_+1" nodes
+	std::vector<MatX> edge_ -
+		the weights of each layer, best though of as transforming from layers n to n+1
+		edge_[n] must have the size (node_[n+1],node_[n]) - matrix multiplying (node_[n]) to get (node_[n+1])
+		has a size of "nlayer_", as there are "nlayer_" connections between "nlayer_+1" nodes
+	std::vector<VecX> dadz_ - 
+		the gradient of the value of a node (a) w.r.t. the input of the node (z) - da/dz
+		practically, the gradient of the transfer function of each layer
+		best thought of as the gradient associated with function transferring "between" layers n,n+1
+		thus, dadz_[n] must have the size node_[n+1]
+		has a size of "nlayer_", as there are "nlayer_" connections between "nlayer_+1" nodes
+	dcdz_ - 
+		the gradient of the cost function (c) w.r.t. the node inputs (z) - dc/dz
+	dcdo_ -
+		the gradient of the cost function (c) w.r.t. the output (o) - dc/do
+	doda_ -
+		the derivative of the output (o) w.r.t. the value of all nodes (a)
+		has a size of "nlayer_+1" as we need to compute the gradient w.r.t. all nodes
+		thus, doda_[n] must of the size node_[n]
+		this includes the hidden layers as well as the input/ouput layers
+		note these are the scaled inputs/outputs
+	dodi_ -
+		the derivative of the output w.r.t. the raw input
+		this is the first element of doda_ multiplied by the input scaling
+	tfType_ -
+		the type of the transfer function
+		note the transfer function for the last layer is always linear
+	tffdv_ - 
+		(Transfer Function, Function Derivative, Vector)
+		the transfer function for each layer, operates on entire vector at once
+		computes both function and derivative simultaneously
+*/
 class Network{
 private:
 	//typedefs
-		typedef void (*FFDPV)(Eigen::VectorXd&,Eigen::VectorXd&);
-	//network dimensions
-		unsigned int nlayer_;//number of layers of the network (hidden + output)
-	//initialize
-		double bInit_;
-		double wInit_;
-	//regularization
-		double lambda_;//regularization weight
+		typedef void (*FFDVP)(VecX&,VecX&);
+	//initialization
+		double bInit_;//initial value - bias
+		double wInit_;//initial value - weight
+		double idev_;//initialization deviation
+		InitN::type initType_;//initialization scheme
+		int seed_;//random seed
+	//layers
+		int nlayer_;//number of layers (weights,biases)
+	//input/output
+		VecX in_;//input layer
+		VecX out_;//output layer
+		VecX inw_,inb_;//input weight, bias
+		VecX outw_,outb_;//output weight, bias
 	//node weights and biases
-		Eigen::VectorXd input_;//input layer
-		Eigen::VectorXd sinput_;//scaled input
-		Eigen::VectorXd output_;//output layer
-		VecList node_;//nodes - not including input layer (nlayer_)
-		VecList bias_;//bias - same indexing as nodes_ (nlayer_)
-		MatList edge_;//edges - input for indexed layer (nodes_[n-1] -> nodes_[n]) => (nodes_[n-1] x nodes_[n])
-		Eigen::VectorXd preScale_,postScale_;//scaling layers for input/output
-		Eigen::VectorXd preBias_,postBias_;//biasing layers for input/output
-	//gradients
-		Eigen::VectorXd grad_;//input layer
-		VecList dndz_;//node derivative - not including input layer
-		VecList delta_;//derivative of cost function w.r.t. node inputs
-		MatList dOut_;//derivative of the output nodes w.r.t. to all other nodes
+		std::vector<VecX> node_;//nodes (nlayer_+1)
+		std::vector<VecX> bias_;//bias (nlayer_)
+		std::vector<MatX> edge_;//edges (nlayer_)
+	//gradients - nodes
+		std::vector<VecX> dadz_;//node derivative - not including input layer (nlayer_)
+	//gradients - cost function
+		std::vector<VecX> dcdz_;//derivative of cost function w.r.t. node inputs (nlayer_)
+		VecX dcdo_;//gradient of cost w.r.t. output (out_.size())
+	//gradients - output
+		std::vector<MatX> doda_;//derivative of out_ w.r.t. to the value "a" of all nodes (nlayer_+1)
+		MatX dodi_;//derivative of out_ w.r.t. to in_ (out_.size() x in_.size())
 	//transfer functions
 		TransferN::type tfType_;//transfer function type
-		std::vector<FFDPV> tffdv_;//transfer derivative - input for indexed layer (nlayer_)
+		std::vector<FFDVP> tffdv_;//transfer function - input for indexed layer (nlayer_)
 public:
 	//==== constructors/destructors ====
 	Network(){defaults();}
@@ -100,101 +206,93 @@ public:
 	
 	//==== operators ====
 	friend std::ostream& operator<<(std::ostream& out, const Network& n);
-	friend Eigen::VectorXd& operator>>(const Network& nn, Eigen::VectorXd& v);
-	friend Network& operator<<(Network& nn, const Eigen::VectorXd& v);
+	friend FILE* operator<<(FILE* out, const Network& n);
+	friend VecX& operator>>(const Network& nn, VecX& v);
+	friend Network& operator<<(Network& nn, const VecX& v);
 	
 	//==== access ====
 	//network dimensions
-		unsigned int nlayer()const{return nlayer_;}
-		unsigned int nhidden()const{return nlayer_-1;}
-		unsigned int nNodes(unsigned int l)const{return node_[l].size();}
+		int nlayer()const{return nlayer_;}
 	//initialization
 		double& bInit(){return bInit_;}
 		const double& bInit()const{return bInit_;}
 		double& wInit(){return wInit_;}
 		const double& wInit()const{return wInit_;}
+		double& idev(){return idev_;}
+		const double& idev()const{return idev_;}
+		InitN::type& initType(){return initType_;}
+		const InitN::type& initType()const{return initType_;}
+		int& seed(){return seed_;}
+		const int& seed()const{return seed_;}
 	//nodes
-		double& input(unsigned int n){return input_[n];}
-		const double& input(unsigned int n)const{return input_[n];}
-		const Eigen::VectorXd& input()const{return input_;}
-		double& sinput(unsigned int n){return sinput_[n];}
-		const double& sinput(unsigned int n)const{return sinput_[n];}
-		double& hidden(unsigned int l, unsigned int n){return node_[l][n];}
-		const double& hidden(unsigned int l, unsigned int n)const{return node_[l][n];}
-		double& layer(unsigned int l, unsigned int n){return node_[l][n];}
-		const double& layer(unsigned int l, unsigned int n)const{return node_[l][n];}
-		double& output(unsigned int n){return output_[n];}
-		const double& output(unsigned int n)const{return output_[n];}
-		const Eigen::VectorXd& output()const{return output_;}
+		VecX& in(){return in_;}
+		const VecX& in()const{return in_;}
+		VecX& out(){return out_;}
+		const VecX& out()const{return out_;}
+		VecX& node(int n){return node_[n];}
+		const VecX& node(int n)const{return node_[n];}
+		int nNodes(int n)const{return node_[n].size();}
 	//scaling
-		double& preScale(unsigned int n){return preScale_[n];}
-		const double& preScale(unsigned int n)const{return preScale_[n];}
-		const Eigen::VectorXd& preScale()const{return preScale_;}
-		double& postScale(unsigned int n){return postScale_[n];}
-		const double& postScale(unsigned int n)const{return postScale_[n];}
-		const Eigen::VectorXd& postScale()const{return postScale_;}
-		double& preBias(unsigned int n){return preBias_[n];}
-		const double& preBias(unsigned int n)const{return preBias_[n];}
-		const Eigen::VectorXd& preBias()const{return preBias_;}
-		double& postBias(unsigned int n){return postBias_[n];}
-		const double& postBias(unsigned int n)const{return postBias_[n];}
-		const Eigen::VectorXd& postBias()const{return postBias_;}
+		VecX& inw(){return inw_;}
+		const VecX& inw()const{return inw_;}
+		VecX& inb(){return inb_;}
+		const VecX& inb()const{return inb_;}
+		VecX& outw(){return outw_;}
+		const VecX& outw()const{return outw_;}
+		VecX& outb(){return outb_;}
+		const VecX& outb()const{return outb_;}
 	//bias
-		double& bias(unsigned int l, unsigned int n){return bias_[l][n];}
-		const double& bias(unsigned int l, unsigned int n)const{return bias_[l][n];}
-		const Eigen::VectorXd& bias(unsigned int l)const{return bias_[l];}
-	//edges
-		double& edge(unsigned int l, unsigned int n, unsigned int m){return edge_[l](n,m);}
-		const double& edge(unsigned int l, unsigned int n, unsigned int m)const{return edge_[l](n,m);}
-		double& edge(unsigned int l, unsigned int n){return edge_[l](n);}
-		const double& edge(unsigned int l, unsigned int n)const{return edge_[l](n);}
-		const Eigen::MatrixXd& edge(unsigned int l)const{return edge_[l];}
+		VecX& bias(int l){return bias_[l];}
+		const VecX& bias(int l)const{return bias_[l];}
+	//edge
+		MatX& edge(int l){return edge_[l];}
+		const MatX& edge(int l)const{return edge_[l];}
 	//size
-		unsigned int nInput()const{return input_.size();}
-		unsigned int nHidden(unsigned int l)const{return node_[l].size();}
-		unsigned int nlayer(unsigned int l)const{return node_[l].size();}
-		unsigned int nOutput()const{return node_.back().size();}
-	//gradients
-		double& grad(unsigned int n){return grad_[n];}
-		const double& grad(unsigned int n)const{return grad_[n];}
-		double& dndz(unsigned int l, unsigned int n){return dndz_[l][n];}
-		const double& dndz(unsigned int l, unsigned int n)const{return dndz_[l][n];}
-		double& delta(unsigned int l, unsigned int n){return delta_[l][n];}
-		const double& delta(unsigned int l, unsigned int n)const{return delta_[l][n];}
-		Eigen::MatrixXd& dOut(unsigned int i){return dOut_[i];}
-		const Eigen::MatrixXd& dOut(unsigned int i)const{return dOut_[i];}
-		void grad_out();
+		int nIn()const{return in_.size();}
+		int nOut()const{return out_.size();}
+	//gradients - nodes
+		VecX& dadz(int n){return dadz_[n];}
+		const VecX& dadz(int n)const{return dadz_[n];}
+	//gradients - cost function
+		VecX& dcdo(){return dcdo_;}
+		const VecX& dcdo()const{return dcdo_;}
+		VecX& dcdz(int n){return dcdz_[n];}
+		const VecX& dcdz(int n)const{return dcdz_[n];}
+	//gradients - output
+		MatX& doda(int n){return doda_[n];}
+		const MatX& doda(int n)const{return doda_[n];}
+		MatX dodi(){return dodi_;}
+		const MatX dodi()const{return dodi_;}
 	//transfer functions
 		TransferN::type& tfType(){return tfType_;}
 		const TransferN::type& tfType()const{return tfType_;}
-		FFDPV tffdv(unsigned int l){return tffdv_[l];}
-		const FFDPV tffdv(unsigned int l)const{return tffdv_[l];}
-	//regularization
-		double& lambda(){return lambda_;}
-		const double& lambda()const{return lambda_;}
+		FFDVP tffdv(int l){return tffdv_[l];}
+		const FFDVP tffdv(int l)const{return tffdv_[l];}
 		
 	//==== member functions ====
 	//clearing/initialization
 		void defaults();
 		void clear();
 	//error
-		double error(const Eigen::VectorXd& output)const;
-		double error(const Eigen::VectorXd& output, Eigen::VectorXd& grad);
+		double error(const VecX& output)const;
+		double error(const VecX& output, VecX& grad);
 		double error_lambda()const;
-		Eigen::VectorXd& dcda(const Eigen::VectorXd& output, Eigen::VectorXd& grad)const;
+		VecX& dcda(const VecX& output, VecX& grad)const;
 	//info
-		unsigned int size()const;
+		int size()const;
+		int nBias()const;
+		int nWeight()const;
 	//resizing
-		void resize(unsigned int nInput, unsigned int nOutput);
-		void resize(unsigned int nInput, const std::vector<unsigned int>& nNodes, unsigned int nOutput);
-		void resize(unsigned int nInput, const std::vector<unsigned int>& nNodes);
+		void resize(int nInput, int nOutput);
+		void resize(int nInput, const std::vector<int>& nNodes, int nOutput);
+		void resize(const std::vector<int>& nNodes);
 		void reset();
-		Eigen::VectorXd& grad(const Eigen::VectorXd& dcda, Eigen::VectorXd& grad);
-		Eigen::VectorXd& grad_nol(const Eigen::VectorXd& dcda, Eigen::VectorXd& grad);
-		Eigen::VectorXd& grad_lambda(Eigen::VectorXd& grad)const;
+		VecX& grad(const VecX& dcda, VecX& grad);
+		VecX& grad_lambda(VecX& grad)const;
 	//execution
-		const Eigen::VectorXd& execute();
-		const Eigen::VectorXd& execute(const Eigen::VectorXd& input){input_.noalias()=input;return execute();}
+		const VecX& execute();
+		const VecX& execute(const VecX& in){in_.noalias()=in;return execute();}
+		void grad_out();
 		
 	//==== static functions ====
 	static void write(FILE* writer, const Network& nn);
@@ -208,25 +306,29 @@ inline bool operator!=(const Network& n1, const Network& n2){return !(n1==n2);}
 
 }
 
+//**********************************************
+// serialization
+//**********************************************
+
 namespace serialize{
 	
 	//**********************************************
 	// byte measures
 	//**********************************************
 	
-	template <> unsigned int nbytes(const NN::Network& obj);
+	template <> int nbytes(const NN::Network& obj);
 	
 	//**********************************************
 	// packing
 	//**********************************************
 	
-	template <> unsigned int pack(const NN::Network& obj, char* arr);
+	template <> int pack(const NN::Network& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> unsigned int unpack(NN::Network& obj, const char* arr);
+	template <> int unpack(NN::Network& obj, const char* arr);
 	
 }
 

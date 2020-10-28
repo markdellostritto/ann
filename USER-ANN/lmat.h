@@ -1,4 +1,3 @@
-#pragma once
 #ifndef ANN_LMAT_HPP
 #define ANN_LMAT_HPP
 
@@ -8,45 +7,43 @@
 template <class T>
 class LMat{
 private:
-	unsigned int n_;
+	int n_;
 	std::vector<T> mat_;
 public:
 	//constructors/destructors
 	LMat():n_(0){}
-	LMat(unsigned int n){resize(n);}
-	LMat(unsigned int n, const T& t){resize(n,t);}
+	LMat(int n){resize(n);}
+	LMat(int n, const T& t){resize(n,t);}
 	~LMat(){}
 	
 	//access
-	unsigned int& n(){return n_;}
-	const unsigned int& n()const{return n_;}
-	T& operator()(unsigned int i, unsigned int j);
-	const T& operator()(unsigned int i, unsigned int j)const;
-	T& operator[](unsigned int i){return mat_[i];}
-	const T& operator[](unsigned int i)const{return mat_[i];}
+	int& n(){return n_;}
+	const int& n()const{return n_;}
+	T& operator()(int i, int j);
+	const T& operator()(int i, int j)const;
+	T& operator[](int i){return mat_[i];}
+	const T& operator[](int i)const{return mat_[i];}
 	
 	//member functions
 	void clear();
-	unsigned int size()const{return (n_*(n_+1))/2;}
-	void resize(unsigned int n){n_=n; mat_.resize(n*(n+1)/2);}
-	void resize(unsigned int n, const T& t){n_=n; mat_.resize(n*(n+1)/2,t);}
-	unsigned int index(unsigned int i, unsigned int j);
+	int size()const{return (n_*(n_+1))/2;}
+	void resize(int n){n_=n; mat_.resize(n*(n+1)/2);}
+	void resize(int n, const T& t){n_=n; mat_.resize(n*(n+1)/2,t);}
+	int index(int i, int j)const;
 };
 
 //access
 
 template <class T>
-T& LMat<T>::operator()(unsigned int i, unsigned int j){
-	const unsigned int ii=cmp::min(i,j);
-	const unsigned int jj=cmp::max(i,j);
-	return mat_[ii*(ii+1)/2+jj];
+T& LMat<T>::operator()(int i, int j){
+	if(i<j) return mat_[i*(i+1)/2+j];
+	else return mat_[j*(j+1)/2+i];
 }
 
 template <class T>
-const T& LMat<T>::operator()(unsigned int i, unsigned int j)const{
-	const unsigned int ii=cmp::min(i,j);
-	const unsigned int jj=cmp::max(i,j);
-	return mat_[ii*(ii+1)/2+jj];
+const T& LMat<T>::operator()(int i, int j)const{
+	if(i<j) return mat_[i*(i+1)/2+j];
+	else return mat_[j*(j+1)/2+i];
 }
 
 //member functions
@@ -58,17 +55,16 @@ void LMat<T>::clear(){
 }
 
 template <class T>
-unsigned LMat<T>::index(unsigned int i, unsigned int j){
-	const unsigned int ii=cmp::min(i,j);
-	const unsigned int jj=cmp::max(i,j);
-	return ii*(ii+1)/2+jj;
+int LMat<T>::index(int i, int j)const{
+	if(i<j) return i*(i+1)/2+j;
+	else return j*(j+1)/2+i;
 }
 
 template <class T> bool operator==(const LMat<T>& lmat1, const LMat<T>& lmat2){
 	if(lmat1.n()!=lmat2.n()) return false;
 	else{
-		unsigned int size=lmat1.size();
-		for(unsigned int i=0; i<size; ++i){
+		const int size=lmat1.size();
+		for(int i=0; i<size; ++i){
 			if(lmat1[i]!=lmat2[i]) return false;
 		}
 		return true;

@@ -13,11 +13,12 @@
 
 struct PhiAN{
 	enum type{
-		UNKNOWN=-1,
-		G3=0,//Behler G3
-		G4=1//Behler G4
+		UNKNOWN=0,
+		G3=1,//Behler G3
+		G4=2//Behler G4
 	};
-	static type load(const char* str);
+	static type read(const char* str);
+	static const char* name(const PhiAN::type& t);
 };
 std::ostream& operator<<(std::ostream& out, const PhiAN::type& t);
 
@@ -26,7 +27,9 @@ std::ostream& operator<<(std::ostream& out, const PhiAN::type& t);
 //*****************************************
 
 struct PhiA{
-	virtual ~PhiA(){};
+	//==== constructors/destructors ====
+	virtual ~PhiA(){}
+	//==== member functions - evaluation ====
 	virtual double val(double cos, const double r[3], const double c[3])const=0;
 	virtual double dist(const double r[3], const double c[3])const=0;
 	virtual double angle(double cos)const=0;
@@ -37,9 +40,14 @@ struct PhiA{
 	virtual void compute_angle(double cos, double& val, double& grad)const=0;
 	virtual void compute_dist(const double r[3], const double c[3], const double g[3], double& dist, double* gradd)const=0;
 };
+//==== operators ====
 std::ostream& operator<<(std::ostream& out, const PhiA& f);
 bool operator==(const PhiA& phia1, const PhiA& phia2);
 inline bool operator!=(const PhiA& phia1, const PhiA& phia2){return !(phia1==phia2);};
+
+//*****************************************
+// PhiA - serialization
+//*****************************************
 
 namespace serialize{
 	
@@ -47,19 +55,19 @@ namespace serialize{
 	// byte measures
 	//**********************************************
 	
-	template <> unsigned int nbytes(const PhiA& obj);
+	template <> int nbytes(const PhiA& obj);
 	
 	//**********************************************
 	// packing
 	//**********************************************
 	
-	template <> unsigned int pack(const PhiA& obj, char* arr);
+	template <> int pack(const PhiA& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> unsigned int unpack(PhiA& obj, const char* arr);
+	template <> int unpack(PhiA& obj, const char* arr);
 	
 }
 

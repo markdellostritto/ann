@@ -9,13 +9,19 @@
 // ann - serialization
 #include "serialize.h"
 
-//Behler G4
+//*****************************************
+// PHIA - G4 - Behler
+//*****************************************
+
 struct PhiA_G4: public PhiA{
+	//==== function parameters ====
 	double eta;//radial exponential width
 	double zeta;//angular exponential width
 	int lambda;//sign of cosine window
+	//==== constructors/destructors ====
 	PhiA_G4():PhiA(),eta(0.0),zeta(0.0),lambda(0.0){}
 	PhiA_G4(double eta_, double zeta_, int lambda_):PhiA(),eta(eta_),zeta(zeta_),lambda(lambda_){}
+	//==== member functions - evaluation ====
 	double val(double cos, const double r[3], const double c[3])const;
 	double dist(const double r[3], const double c[3])const;
 	double angle(double cos)const;
@@ -26,9 +32,14 @@ struct PhiA_G4: public PhiA{
 	void compute_angle(double cos, double& val, double& grad)const;
 	void compute_dist(const double r[3], const double c[3], const double g[3], double& dist, double* gradd)const;
 };
+//==== operators ====
 std::ostream& operator<<(std::ostream& out, const PhiA_G4& f);
 bool operator==(const PhiA_G4& phia1, const PhiA_G4& phia2);
 inline bool operator!=(const PhiA_G4& phia1, const PhiA_G4& phia2){return !(phia1==phia2);}
+
+//*****************************************
+// PHIA - G4 - Behler - serialization
+//*****************************************
 
 namespace serialize{
 	
@@ -36,19 +47,19 @@ namespace serialize{
 	// byte measures
 	//**********************************************
 	
-	template <> unsigned int nbytes(const PhiA_G4& obj);
+	template <> int nbytes(const PhiA_G4& obj);
 	
 	//**********************************************
 	// packing
 	//**********************************************
 	
-	template <> unsigned int pack(const PhiA_G4& obj, char* arr);
+	template <> int pack(const PhiA_G4& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
 	//**********************************************
 	
-	template <> unsigned int unpack(PhiA_G4& obj, const char* arr);
+	template <> int unpack(PhiA_G4& obj, const char* arr);
 	
 }
 

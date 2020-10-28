@@ -26,15 +26,13 @@ PairStyle(nn,PairNN)
 // Eigen
 #include <Eigen/Dense>
 // ann library - basis functions - sum of symmetry functions
-#include "cutoff.h"
 #include "basis_radial.h"
 #include "basis_angular.h"
 // ann - neural network
 #include "nn.h"
+#include "nnh.h"
 // ann - lower triangular matrix
 #include "lmat.h"
-// ann - serialization
-#include "serialize.h"
 // ann - atom
 #include "atom_ann.h"
 
@@ -50,7 +48,7 @@ PairStyle(nn,PairNN)
 #define PAIR_NN_PRINT_DATA 0
 #endif
 
-//#define PAIR_NN_PRINT_INPUT //define to print input statistics
+//#define PAIR_NN_PRINT_INPUT
 
 namespace LAMMPS_NS{
 
@@ -58,30 +56,20 @@ class PairNN: public Pair{
 protected:
 	//==== global cutoff ====
 	double rc_;
-	//==== basis for valence species (X-specie) (symmetry functions) ====
-	std::vector<std::vector<BasisR> > basisR_;//radial basis functions (nspecies x nspecies)
-	std::vector<LMat<BasisA> > basisA_;//angular basis functions (nspecies (nspecies x (nspecies+1)/2))
-	std::vector<unsigned int> nInput_;//number of radial + angular symmetry functions (nspecies)
-	std::vector<unsigned int> nInputR_;//number of radial symmetry functions (nspecies)
-	std::vector<unsigned int> nInputA_;//number of angular symmetry functions (nspecies)
-	unsigned int nInputMax_;//max number of radial + angular symmetry functions
-	std::vector<std::vector<unsigned int> > offsetR_;//offset for the given radial basis
-	std::vector<LMat<unsigned int> > offsetA_;//offset for the given radial basis
 	//==== element nn's ====
-	std::vector<NN::Network> nn_;//neural networks for each specie (nspecies)
-	//std::vector<double> energyAtom_;//energy of isolated atom
-	std::vector<AtomANN> atoms_;//atoms (id,name,mass,energy)
+	std::vector<NNH> nnh_;//neural network Hamiltonians for each specie (nspecies)
 	//==== symmetry functions ====
-	std::vector<Eigen::VectorXd,Eigen::aligned_allocator<Eigen::VectorXd> > symm_;//(nspecies)
-	std::vector<Eigen::VectorXd,Eigen::aligned_allocator<Eigen::VectorXd> > dEdG_;//(nspecies)
+	std::vector<Eigen::VectorXd> symm_;//(nspecies)
+	std::vector<Eigen::VectorXd> dEdG_;//(nspecies)
 	//==== allocate data ====
 	virtual void allocate();
 	//==== input statistics ===
-	std::vector<Eigen::VectorXd,Eigen::aligned_allocator<Eigen::VectorXd> > avg_;
-	std::vector<Eigen::VectorXd,Eigen::aligned_allocator<Eigen::VectorXd> > var_;
-	std::vector<Eigen::VectorXd,Eigen::aligned_allocator<Eigen::VectorXd> > m2_;
+	std::vector<Eigen::VectorXd> avg_;
+	std::vector<Eigen::VectorXd> var_;
+	std::vector<Eigen::VectorXd> m2_;
 	//==== utilties ====
 	Eigen::Vector3d rIJ,rIK,rJK,ffj,ffk;
+	Eigen::VectorXd dEdG;
 public:
 	//constructors/destructors
 	PairNN(class LAMMPS *);
