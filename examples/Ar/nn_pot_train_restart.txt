@@ -4,18 +4,18 @@
 		#mode			symm # test nn 
 		#mode			test # test nn 
 	# training data
-		#data_train		data_deform_iso_train.txt
-		data_train		data_deform_iso_train_bin.txt
+		data_train		data_deform_iso_train.txt
+		#data_train		data_deform_iso_train_bin.txt
 	# validation data
-		#data_val		data_md_nve.txt
-		data_val		data_md_nve_bin.txt
+		data_val		data_md_nve.txt
+		#data_val		data_md_nve_bin.txt
 	# test data
 		#data_test		data_md_nve.txt
 	# format
 		#format			VASP_XML # file format - vasp xml
-		#format			QE # file format - qe standard output
+		format			QE # file format - qe standard output
 		#format			AME # file format - ame format
-		format			BINARY # file format - binary format
+		#format			BINARY # file format - binary format
 	# units
 		units			metal # same as LAMMPS units
 
@@ -26,14 +26,16 @@
 	atom			Ar nh 7 4 2
 
 # READING
-	#read_pot		Ar ann_Ar
 	read_restart		nn_pot_train
 
 # WRITING
-	write_basis		true		# print basis (radial and angular)
-	write_energy		true		# print energies
-	write_force		false		# print forces
-	write_corr		false		# write correlation (not implemented)
+	write_basis		false		# write basis (radial and angular sf's)
+	write_energy		true		# write energies
+	write_ewald		false		# write ewald energies
+	write_force		false		# write forces
+	write_input		false		# write inputs
+	write_corr		false		# write input correlations
+	write_symm		false		# write symmetry functionns to binary files
 	
 # OPTIMIZATION
 	#algo			sdg		# steepest-descent
@@ -46,10 +48,11 @@
 	#algo			rmsprop		# RMSprop
 	#algo			rprop		# irprop+ (Igel, C.; Hüsken, M. Improving the Rprop Learning Algorithm; 2000)
 	#algo			bfgs		# BFGS conjugate gradient
+	#decay			const		# decay schedule - constant
 	decay			exp		# decay schedule - exponential
 	#decay			sqrt		# decay schedule - square root
-	#decay			pow		# decay schedule - power
 	#decay			inv		# decay schedule - inverse
+	#decay			pow		# decay schedule - power
 	opt_val			ftol_abs	# type of break condition
 	tol			1e-14		# break condition - make small
 	max_iter		1000000		# max number of iterations
@@ -58,21 +61,28 @@
 	#gamma			1e-3		# step size for gradient descent
 	eta			0.9		# memory term (nag,adagrad,adam)
 	alpha			1e-6		# decay term
-	seed			1		# random seed
+	seed			-1		# random seed (-1 -> random)
 	lambda			0		# regularization parameter
-	write_symm		false		# whether to write symmetry functions
 
 # NN POTENTIAL
 	r_cut			10		# max cutoff distance
-	init			he		# initialization - He	
+	init			he		# initialization - He
 	idev			1.0		# initialization - deviation
-	#transfer		tanh		# transfer function
-	transfer		arctan		# transfer function
-	n_batch			8		# number of systems in batch (superceded by p_batch)
+	transfer		tanh		# transfer function - tanh
+	#transfer		sigmoid		# transfer function - sigmoid
+	#transfer		arctan		# transfer function - arctan
+	#transfer		isru		# transfer function - inverse square root unit
+	#transfer		relu		# transfer function - rectified linear unit
+	#transfer		elu		# transfer function - exponential linear unit
+	#transfer		gelu		# transfer function - gaussian error linear unit
+	#transfer		softplus	# transfer function - softplus
+	#transfer		softplus2	# transfer function - softplus - ln(2)
+	#transfer		softsign	# transfer function - softsign
+	#transfer		linear		# transfer function - linear
+	n_batch			4		# number of systems in batch (superceded by p_batch)
 	p_batch			0		# percentage of system in batch
 	pre_cond		0		# whether to pre-condition the network inputs
-	#post_cond		0		# whether to post-condition the network outputs (deprecated)
-	calc_force		true		# whether to compute the force at the end of optimization
+	calc_force		false		# whether to compute the forces
 	
 # algorithm performance (gamma=0.001,eta=0.9,t=10000)
 # more * implies better performance
