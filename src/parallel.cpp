@@ -75,14 +75,16 @@ std::ostream& operator<<(std::ostream& out, const Comm& comm){
 * This function splits a given communicator into a set of smaller communicators.
 * The size of the groups are determined by the number of objects.
 * If there are more objects than there are processors in "world", then the size of
-* each group will be 1, as each processor will be operating on multiple objects.
+* 	each group will be 1, as each processor will be operating on multiple objects.
+*	The processors will thus be split into N groups, where N=number of processors in "world".
 * If there are fewer objects than there are processors in "world", then the size of
-* each group will be number of processors per object, as multiple processors
-* will be operating on one object.
-* This function, and indeed the class, is intended when multipling processors will
-* be performing operations on a single object simultaneously.
+* 	each group will be number of processors per object, as multiple processors
+* 	will be operating on one object.  The processors will thus be split into N groups,
+*	where N=number of objects
+* This function, and indeed the class, is intended when multiple processors will
+* 	be performing operations on a single object simultaneously.
 * Thus, this function and class are intended for situations where there are a larger
-* number of processors than there are objects, though it will work otherwise.
+* 	number of processors than there are objects, though it will work otherwise.
 * NOTE: this sets only the size and color, the ngroup and rank must be set separately
 */
 Comm& Comm::split(const Comm& world, Comm& group, int nobj){

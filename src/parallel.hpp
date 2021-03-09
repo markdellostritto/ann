@@ -46,7 +46,7 @@ void bcast(MPI_Comm comm, int root, T& obj){
 /**
 * Stores the distribution of data over a given number of processors.
 * The data is local, only the number of objects owned by the local processor
-* as well as the offset of the data, as indexed in a global array.
+* as well as the offset of the data, as if indexed in a global array.
 */
 class Dist{
 private:
@@ -55,6 +55,7 @@ private:
 public:
 	//==== constructors/destructors ====
 	Dist():size_(-1),offset_(-1){}
+	Dist(int nprocs, int nrank, int nobj){init(nprocs,nrank,nobj);}
 	~Dist(){}
 	
 	//==== operators ====
@@ -66,6 +67,7 @@ public:
 	
 	//==== member functions ====
 	void init(int nprocs, int rank, int nobj);
+	int index(int i){return offset_+i;}
 	
 	//==== static functions ====
 	static int* size(int nrank, int nobj, int* size);
@@ -94,7 +96,7 @@ class Comm{
 private:
 	int rank_;//the rank of the processor within the group
 	int color_;//the color of the processor group (group rank)
-	int size_;//the total size of the group
+	int size_;//the total number of processors in the group
 	int ngroup_;//the total number of groups
 	MPI_Comm label_;//the label of the group
 public:
