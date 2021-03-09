@@ -14,6 +14,7 @@
 // ann - format
 #include "ann.hpp"
 #include "xyz.hpp"
+#include "cp2k.hpp"
 // ann - units
 #include "units.hpp"
 // ann - compiler
@@ -128,6 +129,20 @@ int main(int argc, char* argv[]){
 			serialize::pack(struc2,arr2);
 			std::cout<<"err - byte = "<<std::memcmp(arr1,arr2,size1)<<"\n";
 		}
+	}
+	std::cout<<print::title("XYZ",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
+	
+	//cp2k
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("CP2K",str)<<"\n";
+	{
+		Structure struc;
+		AtomType atomT;
+		atomT.posn=true; atomT.name=true; 
+		//read from file
+		CP2K::read("cp2k_energy_n0.out",atomT,struc);
+		std::cout<<struc<<"\n";
 	}
 	std::cout<<print::title("XYZ",str)<<"\n";
 	std::cout<<print::buf(str)<<"\n";
