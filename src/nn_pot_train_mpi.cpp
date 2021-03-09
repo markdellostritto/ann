@@ -2,7 +2,11 @@
 #include <mpi.h>
 // c libraries
 #include <cstdio>
-#include <ctime>
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
+#include <cmath>
+#elif (defined __ICC || defined __INTEL_COMPILER)
+#include <mathimf.h> //intel math library
+#endif
 // c++ libraries
 #include <iostream>
 #include <exception>
@@ -16,6 +20,7 @@
 #include "qe.hpp"
 #include "ann.hpp"
 #include "xyz.hpp"
+#include "cp2k.hpp"
 #include "string.hpp"
 // ann - units
 #include "units.hpp"
@@ -32,8 +37,12 @@
 #include "list.hpp"
 // ann - nn_pot - train - mpi
 #include "nn_pot_train_mpi.hpp"
+#include "math_func.hpp"
+// ann - time
+#include "time.hpp"
 
-static int myrand(int i){return std::rand()%i;}
+//#define unlikely(expr) __builtin_expect(!!(expr), 0)
+//#define likely(expr) __builtin_expect(!!(expr), 1)
 
 static bool compare_pair(const std::pair<int,double>& p1, const std::pair<int,double>& p2){
 	return p1.first<p2.first;
@@ -43,8 +52,8 @@ static bool compare_pair(const std::pair<int,double>& p1, const std::pair<int,do
 // MPI Communicators
 //************************************************************
 
-parallel::Comm WORLD;
-parallel::Comm BATCH;
+parallel::Comm WORLD;//all processors
+parallel::Comm BATCH;//group of nproc/nbatch processors handling each element of the batch
 
 //************************************************************
 // serialization
@@ -64,20 +73,22 @@ template <> int nbytes(const NNPotOpt& obj){
 	//optimization
 		size+=nbytes(obj.data_);
 		switch(obj.data_.algo()){
-			case Opt::ALGO::SGD:      size+=nbytes(static_cast<const Opt::SGD&>(*obj.model_)); break;
-			case Opt::ALGO::SDM:      size+=nbytes(static_cast<const Opt::SDM&>(*obj.model_)); break;
-			case Opt::ALGO::NAG:      size+=nbytes(static_cast<const Opt::NAG&>(*obj.model_)); break;
-			case Opt::ALGO::ADAGRAD:  size+=nbytes(static_cast<const Opt::ADAGRAD&>(*obj.model_)); break;
-			case Opt::ALGO::ADADELTA: size+=nbytes(static_cast<const Opt::ADADELTA&>(*obj.model_)); break;
-			case Opt::ALGO::RMSPROP:  size+=nbytes(static_cast<const Opt::RMSPROP&>(*obj.model_)); break;
-			case Opt::ALGO::ADAM:     size+=nbytes(static_cast<const Opt::ADAM&>(*obj.model_)); break;
-			case Opt::ALGO::NADAM:    size+=nbytes(static_cast<const Opt::NADAM&>(*obj.model_)); break;
-			case Opt::ALGO::BFGS:     size+=nbytes(static_cast<const Opt::BFGS&>(*obj.model_)); break;
-			case Opt::ALGO::RPROP:    size+=nbytes(static_cast<const Opt::RPROP&>(*obj.model_)); break;
+			case Opt::ALGO::SGD:		size+=nbytes(static_cast<const Opt::SGD&>(*obj.model_)); break;
+			case Opt::ALGO::SDM:		size+=nbytes(static_cast<const Opt::SDM&>(*obj.model_)); break;
+			case Opt::ALGO::NAG:		size+=nbytes(static_cast<const Opt::NAG&>(*obj.model_)); break;
+			case Opt::ALGO::ADAGRAD:	size+=nbytes(static_cast<const Opt::ADAGRAD&>(*obj.model_)); break;
+			case Opt::ALGO::ADADELTA:	size+=nbytes(static_cast<const Opt::ADADELTA&>(*obj.model_)); break;
+			case Opt::ALGO::RMSPROP:	size+=nbytes(static_cast<const Opt::RMSPROP&>(*obj.model_)); break;
+			case Opt::ALGO::ADAM:		size+=nbytes(static_cast<const Opt::ADAM&>(*obj.model_)); break;
+			case Opt::ALGO::NADAM:		size+=nbytes(static_cast<const Opt::NADAM&>(*obj.model_)); break;
+			case Opt::ALGO::AMSGRAD:	size+=nbytes(static_cast<const Opt::AMSGRAD&>(*obj.model_)); break;
+			case Opt::ALGO::BFGS:		size+=nbytes(static_cast<const Opt::BFGS&>(*obj.model_)); break;
+			case Opt::ALGO::RPROP:		size+=nbytes(static_cast<const Opt::RPROP&>(*obj.model_)); break;
 			default: throw std::runtime_error("nbytes(const NNPotOpt&): Invalid optimization method."); break;
 		}
 	//nn
 		size+=sizeof(bool);//pre-conditioning
+		size+=sizeof(NeuralNet::LossN);
 		size+=nbytes(obj.nnpot_);
 	//return the size
 		return size;
@@ -103,12 +114,14 @@ template <> int pack(const NNPotOpt& obj, char* arr){
 			case Opt::ALGO::RMSPROP:  pos+=pack(static_cast<const Opt::RMSPROP&>(*obj.model_),arr+pos); break;
 			case Opt::ALGO::ADAM:     pos+=pack(static_cast<const Opt::ADAM&>(*obj.model_),arr+pos); break;
 			case Opt::ALGO::NADAM:    pos+=pack(static_cast<const Opt::NADAM&>(*obj.model_),arr+pos); break;
+			case Opt::ALGO::AMSGRAD:  pos+=pack(static_cast<const Opt::AMSGRAD&>(*obj.model_),arr+pos); break;
 			case Opt::ALGO::BFGS:     pos+=pack(static_cast<const Opt::BFGS&>(*obj.model_),arr+pos); break;
 			case Opt::ALGO::RPROP:    pos+=pack(static_cast<const Opt::RPROP&>(*obj.model_),arr+pos); break;
 			default: throw std::runtime_error("pack(const NNPotOpt&,char*): Invalid optimization method."); break;
 		}
 	//nn
 		std::memcpy(arr+pos,&obj.preCond_,sizeof(bool)); pos+=sizeof(bool);
+		std::memcpy(arr+pos,&obj.loss_,sizeof(NeuralNet::LossN)); pos+=sizeof(NeuralNet::LossN);
 		pos+=pack(obj.nnpot_,arr+pos);
 	//return bytes written
 		return pos;
@@ -158,6 +171,10 @@ template <> int unpack(NNPotOpt& obj, const char* arr){
 				obj.model_.reset(new Opt::NADAM());
 				pos+=unpack(static_cast<Opt::NADAM&>(*obj.model_),arr+pos);
 			break;
+			case Opt::ALGO::AMSGRAD:
+				obj.model_.reset(new Opt::AMSGRAD());
+				pos+=unpack(static_cast<Opt::AMSGRAD&>(*obj.model_),arr+pos);
+			break;
 			case Opt::ALGO::BFGS:
 				obj.model_.reset(new Opt::BFGS());
 				pos+=unpack(static_cast<Opt::BFGS&>(*obj.model_),arr+pos);
@@ -172,6 +189,7 @@ template <> int unpack(NNPotOpt& obj, const char* arr){
 		}
 	//nn
 		std::memcpy(&obj.preCond_,arr+pos,sizeof(bool)); pos+=sizeof(bool);
+		std::memcpy(&obj.loss_,arr+pos,sizeof(NeuralNet::LossN)); pos+=sizeof(NeuralNet::LossN);
 		pos+=unpack(obj.nnpot_,arr+pos);
 	//return bytes read
 		return pos;
@@ -217,15 +235,14 @@ std::ostream& operator<<(std::ostream& out, const NNPotOpt& nnPotOpt){
 	char* str=new char[print::len_buf];
 	out<<print::buf(str)<<"\n";
 	out<<print::title("NN - POT - OPT",str)<<"\n";
-	out<<"SEED         = "<<nnPotOpt.seed_<<"\n";
-	out<<"P_BATCH      = "<<nnPotOpt.pBatch_<<"\n";
 	out<<"N_BATCH      = "<<nnPotOpt.nBatch_<<"\n";
+	out<<"LOSS         = "<<nnPotOpt.loss_<<"\n";
 	out<<"CHARGE       = "<<nnPotOpt.charge_<<"\n";
 	out<<"CALC_FORCE   = "<<nnPotOpt.calcForce_<<"\n";
 	out<<"CALC_SYMM    = "<<nnPotOpt.calcSymm_<<"\n";
 	out<<"WRITE_SYMM   = "<<nnPotOpt.writeSymm_<<"\n";
 	out<<"RESTART      = "<<nnPotOpt.restart_<<"\n";
-	out<<"RESTART_FILE = "<<nnPotOpt.restart_file_<<"\n";
+	out<<"RESTART_FILE = "<<nnPotOpt.file_restart_<<"\n";
 	out<<"ATOMS = \n";
 	for(int i=0; i<nnPotOpt.atoms_.size(); ++i){
 		std::cout<<"\t"<<nnPotOpt.atoms_[i]<<"\n";
@@ -242,6 +259,7 @@ std::ostream& operator<<(std::ostream& out, const NNPotOpt& nnPotOpt){
 		}
 		std::cout<<"\n";
 	}
+	out<<nnPotOpt.init_<<"\n";
 	out<<print::title("NN - POT - OPT",str)<<"\n";
 	out<<print::buf(str);
 	delete[] str;
@@ -253,7 +271,6 @@ NNPotOpt::NNPotOpt(){
 	strucTrain_=NULL;
 	strucVal_=NULL;
 	strucTest_=NULL;
-	writer_error_=NULL;
 	defaults();
 };
 
@@ -274,37 +291,34 @@ void NNPotOpt::defaults(){
 		nElements_=0;
 		gElement_.clear();
 		pElement_.clear();
-		gTemp_.clear();
-		gTempSum_.clear();
+		gTotal_.clear();
+		gLocal_.clear();
 	//batch
 		nBatch_=0;
-		pBatch_=1.0;
 		batch_.clear();
 		indices_.clear();
 		cBatch_=0;
 	//nn
-		seed_=-1;
 		nParams_=0;
 		nnpot_.clear();
-		inb_.clear();
-		inw_.clear();
 		preCond_=false;
 		charge_=false;
+		init_.clear();
+		loss_=NeuralNet::LossN::MSE;
 	//input/output
 		calcForce_=true;
 		calcSymm_=true;
 		writeSymm_=false;
 		restart_=false;
-		restart_file_="nn_pot_train";
+		norm_=false;
+		file_error_="nn_pot_error.dat";
+		file_restart_="nn_pot_train.restart";
+		file_ann_="ann";
 	//optimization
 		identity_=Eigen::VectorXd::Identity(1,1);
 	//error
 		error_train_=0;
-		error_val_=0;
-	//file i/o
-		if(writer_error_!=NULL) fclose(writer_error_);
-		writer_error_=NULL;
-		file_error_=std::string("nn_pot_error.dat");
+		error_val_=0;	
 }
 
 void NNPotOpt::clear(){
@@ -324,8 +338,8 @@ void NNPotOpt::clear(){
 		nElements_=0;
 		gElement_.clear();
 		pElement_.clear();
-		gTemp_.clear();
-		gTempSum_.clear();
+		gTotal_.clear();
+		gLocal_.clear();
 	//batch
 		batch_.clear();
 		indices_.clear();
@@ -333,17 +347,13 @@ void NNPotOpt::clear(){
 	//nn
 		nParams_=0;
 		nnpot_.clear();
-		inb_.clear();
-		inw_.clear();
+		init_.clear();
 	//optimization
 		data_.clear();
 		identity_=Eigen::VectorXd::Identity(1,1);
 	//error
 		error_train_=0;
 		error_val_=0;
-	//file i/o
-		if(writer_error_!=NULL) fclose(writer_error_);
-		writer_error_=NULL;
 }
 
 void NNPotOpt::write_restart(const char* file){
@@ -417,10 +427,10 @@ void NNPotOpt::train(int batchSize){
 	if(NN_POT_TRAIN_PRINT_FUNC>0) std::cout<<"NNPotOpt::train(NNPot&,std::vector<Structure>&,int):\n";
 	//====== local function variables ======
 	//statistics
-		VecList avg_in;//average of the inputs for each element (nnpot_.nSpecies_ x nInput_)
-		VecList max_in;//max of the inputs for each element (nnpot_.nSpecies_ x nInput_)
-		VecList min_in;//min of the inputs for each element (nnpot_.nSpecies_ x nInput_)
-		VecList dev_in;//average of the stddev for each element (nnpot_.nSpecies_ x nInput_)
+		std::vector<Eigen::VectorXd> avg_in;//average of the inputs for each element (nnpot_.nSpecies_ x nInput_)
+		std::vector<Eigen::VectorXd> max_in;//max of the inputs for each element (nnpot_.nSpecies_ x nInput_)
+		std::vector<Eigen::VectorXd> min_in;//min of the inputs for each element (nnpot_.nSpecies_ x nInput_)
+		std::vector<Eigen::VectorXd> dev_in;//average of the stddev for each element (nnpot_.nSpecies_ x nInput_)
 	//misc
 		int count=0;
 	
@@ -470,7 +480,7 @@ void NNPotOpt::train(int batchSize){
 	//indices
 	indices_.resize(strucTrain_->size());
 	for(int i=0; i<indices_.size(); ++i) indices_[i]=i;
-	std::random_shuffle(indices_.begin(),indices_.end(),myrand);
+	std::random_shuffle(indices_.begin(),indices_.end());
 	parallel::bcast(BATCH.label(),0,indices_);
 	//batch
 	batch_.resize(batchSize,0);
@@ -504,7 +514,7 @@ void NNPotOpt::train(int batchSize){
 		}
 	}
 	//accumulate the number
-	for(int i=0; i<avg_in.size(); ++i){
+	for(int i=0; i<nElements_; ++i){
 		double Nloc=(1.0*N[i])/BATCH.size();
 		double temp=0;
 		MPI_Allreduce(&Nloc,&temp,1,MPI_DOUBLE,MPI_SUM,WORLD.label());
@@ -596,28 +606,27 @@ void NNPotOpt::train(int batchSize){
 	}
 	
 	//====== precondition the input ======
+	std::vector<Eigen::VectorXd> inb_(nElements_);//input bias
+	std::vector<Eigen::VectorXd> inw_(nElements_);//input weight
+	for(int n=0; n<nElements_; ++n){
+		inb_[n]=Eigen::VectorXd::Constant(nnpot_.nnh(n).nInput(),0.0);
+		inw_[n]=Eigen::VectorXd::Constant(nnpot_.nnh(n).nInput(),1.0);
+	}
 	if(preCond_){
 		if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"pre-conditioning input\n";
 		//set the preconditioning vectors
-		inb_=avg_in;//resize only
+		//inb_=avg_in;//resize only
 		for(int i=0; i<inb_.size(); ++i){
 			for(int j=0; j<inb_[i].size(); ++j){
 				inb_[i][j]=-1*avg_in[i][j];
 			}
 		}
-		inw_=dev_in;//resize only
+		//inw_=dev_in;//resize only
 		for(int i=0; i<inw_.size(); ++i){
 			for(int j=0; j<inw_[i].size(); ++j){
 				if(inw_[i][j]==0) inw_[i][j]=1;
 				else inw_[i][j]=1.0/(1.0*inw_[i][j]);
 			}
-		}
-	} else {
-		inb_.resize(nElements_);
-		inw_.resize(nElements_);
-		for(int n=0; n<nElements_; ++n){
-			inb_[n]=Eigen::VectorXd::Constant(nnpot_.nnh(n).nInput(),0.0);
-			inw_[n]=Eigen::VectorXd::Constant(nnpot_.nnh(n).nInput(),1.0);
 		}
 	}
 	
@@ -635,14 +644,14 @@ void NNPotOpt::train(int batchSize){
 	//set parameters for each element
 	pElement_.resize(nElements_);
 	gElement_.resize(nElements_);
-	gTemp_.resize(nElements_);
-	gTempSum_.resize(nElements_);
+	gTotal_.resize(nElements_);
+	gLocal_.resize(nElements_);
 	nParams_=0;
 	for(int n=0; n<nElements_; ++n){
 		nnpot_.nnh(n).nn()>>pElement_[n];//resizes vector and sets values
 		nnpot_.nnh(n).nn()>>gElement_[n];//resizes vector
-		nnpot_.nnh(n).nn()>>gTemp_[n];   //resizes vector
-		nnpot_.nnh(n).nn()>>gTempSum_[n];//resizes vector
+		nnpot_.nnh(n).nn()>>gTotal_[n];  //resizes vector
+		nnpot_.nnh(n).nn()>>gLocal_[n];  //resizes vector
 		gElement_[n]=Eigen::VectorXd::Random(gElement_[n].size())*1e-6;
 		nParams_+=pElement_[n].size();
 	}
@@ -689,6 +698,13 @@ void NNPotOpt::train(int batchSize){
 		delete[] str;
 	}
 	
+	//====== resize gradient data ======
+	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"resizing gradient data\n";
+	cost_.resize(nnpot_.nspecies());
+	for(int i=0; i<nnpot_.nspecies(); ++i){
+		cost_[i].resize(nnpot_.nnh(i).nn());
+	}
+	
 	//====== execute the optimization ======
 	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"executing the optimization\n";
 	//optimization variables
@@ -719,27 +735,27 @@ void NNPotOpt::train(int batchSize){
 	//train the nn potential
 	const double nBatchi_=1.0/nBatch_;
 	const double nVali_=1.0/nVal_;
-	const clock_t start=std::clock();
+	if(WORLD.rank()==0) printf("opt gamma err_t err_v\n");
+	Clock clock;
+	clock.begin();
 	for(int iter=0; iter<data_.max(); ++iter){
 		double error_train_sum_=0,error_val_sum_=0;
-		//compute the value and gradient
+		//compute the error and gradient
 		error(data_.p());
-		for(int n=0; n<nElements_; ++n) gTemp_[n].setZero();
 		//accumulate error
 		MPI_Reduce(&error_train_,&error_train_sum_,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label());
 		MPI_Reduce(&error_val_,&error_val_sum_,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label());
 		//accumulate gradient
 		for(int n=0; n<nElements_; ++n){
-			MPI_Reduce(gElement_[n].data(),gTemp_[n].data(),gElement_[n].size(),MPI_DOUBLE,MPI_SUM,0,WORLD.label());
+			gTotal_[n].setZero();
+			MPI_Reduce(gElement_[n].data(),gTotal_[n].data(),gElement_[n].size(),MPI_DOUBLE,MPI_SUM,0,WORLD.label());
 		}
 		if(WORLD.rank()==0){
-			//compute error
+			//compute error averaged over the batch
 			error_train_=error_train_sum_*nBatchi_;
 			error_val_=error_val_sum_*nVali_;
-			//compute gradient
-			for(int n=0; n<nElements_; ++n) gElement_[n].noalias()=gTemp_[n]*nBatchi_;
-			//compute regularization
-			if(NN_POT_TRAIN_PRINT_STATUS>1) std::cout<<"computing regularization\n";
+			//compute gradient averaged over the batch
+			for(int n=0; n<nElements_; ++n) gElement_[n].noalias()=gTotal_[n]*nBatchi_;
 			//pack the gradient
 			count=0;
 			for(int n=0; n<nElements_; ++n){
@@ -750,19 +766,21 @@ void NNPotOpt::train(int batchSize){
 			//print/write error
 			if(data_.step()%data_.nPrint()==0){
 				const int t=iter/data_.nPrint();
-				step[t]=data_.step();
+				step[t]=data_.count();
 				gamma[t]=model_->gamma();
 				err_t[t]=std::sqrt(2.0*error_train_);
 				err_v[t]=std::sqrt(2.0*error_val_);
-				printf("opt %8i gamma %12.10f err_t %12.10f err_v %12.10f\n",step[t],gamma[t],err_t[t],err_v[t]);
+				printf("%8i %12.10f %12.10f %12.10f\n",step[t],gamma[t],err_t[t],err_v[t]);
 			}
 			//write the basis and potentials
 			if(data_.step()%data_.nWrite()==0){
 				if(NN_POT_TRAIN_PRINT_STATUS>1) std::cout<<"writing the restart file and potentials\n";
-				nnpot_.tail()=std::string(".")+std::to_string(data_.step());
-				nnpot_.write();
-				const std::string file=restart_file_+".restart."+std::to_string(data_.step());
-				this->write_restart(file.c_str());
+				//write restart file
+				const std::string file_restart=file_restart_+"."+std::to_string(data_.count());
+				this->write_restart(file_restart.c_str());
+				//write potential file
+				const std::string file_ann=file_ann_+"."+std::to_string(data_.count());
+				NNPot::write(file_ann.c_str(),nnpot_);
 			}
 			//compute the new position
 			data_.val()=error_train_;
@@ -793,13 +811,19 @@ void NNPotOpt::train(int batchSize){
 		if(fbreak) break;
 		//increment step
 		++data_.step();
+		++data_.count();
 	}
-	const clock_t stop=std::clock();
-	const double time_train=((double)(stop-start))/CLOCKS_PER_SEC;
+	//compute the training time
+	clock.end();
+	const double time_train=clock.duration();
+	double time_train_avg=0;
+	MPI_Allreduce(&time_train,&time_train_avg,1,MPI_DOUBLE,MPI_SUM,WORLD.label());
+	time_train_avg/=WORLD.size();
 	MPI_Barrier(WORLD.label());
 	
-	//write the error
+	//====== write the error ======
 	if(WORLD.rank()==0){
+		FILE* writer_error_=NULL;
 		if(!restart_){
 			writer_error_=fopen(file_error_.c_str(),"w");
 			fprintf(writer_error_,"#STEP GAMMA ERROR_RMS_TRAIN ERROR_RMS_VAL\n");
@@ -835,7 +859,7 @@ void NNPotOpt::train(int batchSize){
 		std::cout<<print::title("OPT - SUMMARY",str)<<"\n";
 		std::cout<<"N-STEPS    = "<<data_.step()<<"\n";
 		std::cout<<"OPT-VAL    = "<<data_.val()<<"\n";
-		std::cout<<"TIME-TRAIN = "<<time_train<<"\n";
+		std::cout<<"TIME-TRAIN = "<<time_train_avg<<"\n";
 		if(NN_POT_TRAIN_PRINT_DATA>1){
 			std::cout<<"p = "; for(int i=0; i<data_.p().size(); ++i) std::cout<<data_.p()[i]<<" "; std::cout<<"\n";
 		}
@@ -847,7 +871,7 @@ void NNPotOpt::train(int batchSize){
 
 double NNPotOpt::error(const Eigen::VectorXd& x){
 	if(NN_POT_TRAIN_PRINT_FUNC>0) std::cout<<"NNPotOpt::error(const Eigen::VectorXd&):\n";
-	
+	//====== local variables ======
 	parallel::Dist dist_atom;
 	
 	//====== reset the error ======
@@ -875,7 +899,7 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 	for(int i=0; i<batch_.size(); ++i) batch_[i]=indices_[(cBatch_++)%indices_.size()];
 	std::sort(batch_.begin(),batch_.end());
 	if(cBatch_>=indices_.size()){
-		std::random_shuffle(indices_.begin(),indices_.end(),myrand);
+		std::random_shuffle(indices_.begin(),indices_.end());
 		parallel::bcast(BATCH.label(),0,indices_);
 		cBatch_=0;
 	}
@@ -884,62 +908,79 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 	//====== compute training error and gradient ======
 	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"computing training error and gradient\n";
 	for(int i=0; i<batch_.size(); ++i){
-		for(int j=0; j<nElements_; ++j) gTempSum_[j].setZero();
+		for(int j=0; j<nElements_; ++j) gLocal_[j].setZero();
 		//set the local simulation reference
 		const Structure& strucl=(*strucTrain_)[batch_[i]];
-		//set the atom distributions
+		//set the distribution of the atoms over the BATCH communicator
 		dist_atom.init(BATCH.size(),BATCH.rank(),strucl.nAtoms());
 		//compute the energy
 		double energyl=0;
 		for(int n=0; n<dist_atom.size(); ++n){
 			//get the atom index
-			const int m=n+dist_atom.offset();
+			const int m=dist_atom.index(n);
 			//find the element index in the nn
 			const int index=nnpot_.index(strucl.name(m));
 			//execute the network
 			nnpot_.nnh(index).nn().execute(strucl.symm(m));
 			//add the atom energy to the total
 			energyl+=nnpot_.nnh(index).nn().out()[0]+nnpot_.nnh(index).atom().energy();
-			//compute the gradient - here dcda (first argument) is one, dcda is pulled out and multiplied later
-			nnpot_.nnh(index).nn().grad(identity_,gTemp_[index]);
+			//compute the gradient - here dcda (2nd argument) is one, as dcda is pulled out and multiplied later
+			cost_[index].grad(nnpot_.nnh(index).nn(),identity_);
 			//add the gradient to the total
-			gTempSum_[index].noalias()+=gTemp_[index];
+			gLocal_[index].noalias()+=cost_[index].grad();
 		}
-		//accumulate energy
+		//accumulate energy across BATCH communicator
 		double energyt=0;
 		MPI_Allreduce(&energyl,&energyt,1,MPI_DOUBLE,MPI_SUM,BATCH.label());
-		//accumulate gradient
-		for(int j=0; j<nElements_; ++j) gTemp_[j].setZero();
+		//accumulate gradient across the BATCH communicator
 		for(int j=0; j<nElements_; ++j){
-			MPI_Allreduce(gTempSum_[j].data(),gTemp_[j].data(),gElement_[j].size(),MPI_DOUBLE,MPI_SUM,BATCH.label());
+			gTotal_[j].setZero();
+			MPI_Allreduce(gLocal_[j].data(),gTotal_[j].data(),gTotal_[j].size(),MPI_DOUBLE,MPI_SUM,BATCH.label());
 		}
-		//compute the gradient of cost (c) w.r.t. output (a) normalized by number of atoms
+		//compute the gradient (dc/da) of cost (c) w.r.t. output (a) normalized by number of atoms
 		const double dcda=(energyt-strucl.energy())/strucl.nAtoms();
-		//add to the error
-		error_train_+=0.5*dcda*dcda;
-		//multiply the element gradients by error in energy normalized by number of atoms (the dcda we pulled out earlier)
-		for(int j=0; j<nElements_; ++j){
-			gElement_[j].noalias()+=gTemp_[j]*dcda/strucl.nAtoms();
+		switch(loss_){
+			case NeuralNet::LossN::MSE:{
+				error_train_+=0.5*dcda*dcda;
+				for(int j=0; j<nElements_; ++j){
+					gElement_[j].noalias()+=gTotal_[j]*(dcda/strucl.nAtoms());
+				}
+			} break;
+			case NeuralNet::LossN::MAE:{
+				error_train_+=std::fabs(dcda);
+				for(int j=0; j<nElements_; ++j){
+					gElement_[j].noalias()+=gTotal_[j]*math::func::sign(dcda)*1.0/strucl.nAtoms();
+				}
+			} break;
+			case NeuralNet::LossN::HUBER:{
+				const double w=1.0;
+				const double sqrtf=sqrt(1.0+(dcda*dcda)/(w*w));
+				error_train_+=w*w*(sqrtf-1.0);
+				for(int j=0; j<nElements_; ++j){
+					gElement_[j].noalias()+=gTotal_[j]*dcda/(strucl.nAtoms()*sqrtf);
+				}
+			} break;
+			default: break;
 		}
 	}
 	
 	//====== compute validation error and gradient ======
-	if(strucVal_!=NULL && (data_.step()%data_.nWrite()==0 || data_.step()%data_.nPrint()==0)){
+	if(data_.step()%data_.nPrint()==0 || data_.step()%data_.nWrite()==0){
 		error_val_=0;
 		if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"computing validation error and gradient\n";
 		for(int i=0; i<strucVal_->size(); ++i){
 			//set the local simulation reference
 			const Structure& strucl=(*strucVal_)[i];
-			//set the atom distributions
+			//set the distribution of the atoms over the BATCH communicator
 			dist_atom.init(BATCH.size(),BATCH.rank(),strucl.nAtoms());
 			//compute the energy
 			double energyl=0;
 			for(int n=0; n<dist_atom.size(); ++n){
-				const int nn=n+dist_atom.offset();
-				//find the element index in the nn
-				const int index=nnpot_.index(strucl.name(nn));
+				const int m=dist_atom.index(n);
+				//find the element index in the m
+				const int index=nnpot_.index(strucl.name(m));
 				//execute the network
-				nnpot_.nnh(index).nn().execute(strucl.symm(nn));
+				nnpot_.nnh(index).nn().execute(strucl.symm(m));
 				//add the energy to the total
 				energyl+=nnpot_.nnh(index).nn().out()[0]+nnpot_.nnh(index).atom().energy();
 			}
@@ -947,44 +988,26 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 			double energyt=0;
 			MPI_Allreduce(&energyl,&energyt,1,MPI_DOUBLE,MPI_SUM,BATCH.label());
 			//add to the error - normalized by the number of atoms
-			error_val_+=0.5*(energyt-strucl.energy())*(energyt-strucl.energy())/(strucl.nAtoms()*strucl.nAtoms());
-		}
-	}
-	
-	//====== print energy ======
-	if(NN_POT_TRAIN_PRINT_DATA>0 && WORLD.rank()==0 && data_.step()%data_.nPrint()==0){
-		std::vector<double> energy_train(strucTrain_->size());
-		std::vector<double> energy_exact(strucTrain_->size());
-		char* str=new char[print::len_buf];
-		std::cout<<print::buf(str)<<"\n";
-		std::cout<<print::title("ENERGIES",str)<<"\n";
-		for(int i=0; i<strucTrain_->size(); ++i){
-			//set the local simulation reference
-			const Structure& strucl=(*strucTrain_)[batch_[i]];
-			//compute the energy
-			double energy=0;
-			for(int n=0; n<strucl.nAtoms(); ++n){
-				//find the element index in the nn
-				const int index=nnpot_.index(strucl.name(n));
-				//execute the network
-				nnpot_.nnh(index).nn().execute(strucl.symm(n));
-				//add the energy to the total
-				energy+=nnpot_.nnh(index).nn().out()[0]+nnpot_.nnh(index).atom().energy();
+			const double dcda=(energyt-strucl.energy())/strucl.nAtoms();
+			switch(loss_){
+				case NeuralNet::LossN::MSE:{
+					error_val_+=0.5*dcda*dcda;
+				} break;
+				case NeuralNet::LossN::MAE:{
+					error_val_+=std::fabs(dcda);
+				} break;
+				case NeuralNet::LossN::HUBER:{
+					const double w=1.0;
+					error_val_+=w*w*(sqrt(1.0+(dcda*dcda)/(w*w))-1.0);
+				} break;
+				default: break;
 			}
-			//scale the energy
-			energy_train[i]=energy/strucl.nAtoms();
-			energy_exact[i]=strucl.energy()/strucl.nAtoms();
 		}
-		for(int i=0; i<strucTrain_->size(); ++i){
-			std::cout<<"struc "<<i<<" "<<energy_exact[i]<<" "<<energy_train[i]<<" "<<0.5*(energy_train[i]-energy_exact[i])*(energy_train[i]-energy_exact[i])<<"\n";
-		}
-		std::cout<<print::title("ENERGIES",str)<<"\n";
-		std::cout<<print::buf(str)<<"\n";
-		delete[] str;
 	}
 	
 	//====== normalize w.r.t. batch size ======
 	//note: we sum these quantities over WORLD, meaning that we are summing over duplicates in each BATCH
+	//this normalization step corrects for this double counting
 	const double batchsi=1.0/(1.0*BATCH.size());
 	error_train_*=batchsi;
 	error_val_*=batchsi;
@@ -1032,9 +1055,13 @@ int main(int argc, char* argv[]){
 		parallel::Dist dist_train; //data distribution - training
 		parallel::Dist dist_val;   //data distribution - validation
 		parallel::Dist dist_test;  //data distribution - testing
+		int* rank_batch=NULL;  //the BATCH ranks for each processor in WORLD
+		int* rank_head=NULL;   //the WORLD rank of the processors with rank 0 in BATCH
+		MPI_Group group_world; //the group associated with the WORLD communicator
+		MPI_Group group_head;  //the group associated with all the head ranks
+		MPI_Comm comm_head;    //the communicator between all the head ranks
 	//timing
-		clock_t start,stop;//starting/stopping time
-		clock_t start_wall,stop_wall;//starting/stopping wall time
+		Clock clock,clock_wall;     //time objects
 		double time_wall=0;         //total wall time
 		double time_energy_train=0; //compute time - energies - training
 		double time_energy_val=0;   //compute time - energies - validation
@@ -1075,7 +1102,7 @@ int main(int argc, char* argv[]){
 		MPI_Comm_rank(WORLD.label(),&WORLD.rank());
 		
 		//======== start wall clock ========
-		if(WORLD.rank()==0) start_wall=std::clock();
+		if(WORLD.rank()==0) clock_wall.begin();
 		
 		//======== print title ========
 		if(WORLD.rank()==0){
@@ -1102,11 +1129,11 @@ int main(int argc, char* argv[]){
 		//======== print mathematical constants ========
 		if(WORLD.rank()==0){
 			std::cout<<print::buf(strbuf)<<"\n";
-			std::cout<<print::title("MATH CONSTANTS",strbuf)<<"\n";
+			std::cout<<print::title("MATHEMATICAL CONSTANTS",strbuf)<<"\n";
 			std::printf("PI    = %.15f\n",math::constant::PI);
 			std::printf("RadPI = %.15f\n",math::constant::RadPI);
 			std::printf("Rad2  = %.15f\n",math::constant::Rad2);
-			std::cout<<print::title("MATH CONSTANTS",strbuf)<<"\n";
+			std::cout<<print::title("MATHEMATICAL CONSTANTS",strbuf)<<"\n";
 			std::cout<<print::buf(strbuf)<<"\n";
 		}
 		
@@ -1212,16 +1239,20 @@ int main(int argc, char* argv[]){
 				if(strlist.at(0)=="R_CUT"){//distance cutoff
 					nnPotOpt.nnpot_.rc()=std::atof(strlist.at(1).c_str());
 				} else if(strlist.at(0)=="SEED"){//random seed
-					nnPotOpt.seed_=std::atoi(strlist.at(1).c_str());
-				} else if(strlist.at(0)=="IDEV"){//initialization deviation
-					nnPotOpt.idev_=std::atof(strlist.at(1).c_str());
+					nnPotOpt.init_.seed()=std::atoi(strlist.at(1).c_str());
+				} else if(strlist.at(0)=="SIGMA"){//initialization deviation
+					nnPotOpt.init_.sigma()=std::atof(strlist.at(1).c_str());
+				} else if(strlist.at(0)=="DIST"){//initialization distribution
+					nnPotOpt.init_.distT()=rng::dist::Name::read(string::to_upper(strlist.at(1)).c_str());
 				} else if(strlist.at(0)=="INIT"){//initialization
-					nnPotOpt.initType_=NN::InitN::read(string::to_upper(strlist.at(1)).c_str());
+					nnPotOpt.init_.initType()=NeuralNet::InitN::read(string::to_upper(strlist.at(1)).c_str());
 				} else if(strlist.at(0)=="TRANSFER"){//transfer function
-					nnPotOpt.tfType_=NN::TransferN::read(string::to_upper(strlist.at(1)).c_str());
+					nnPotOpt.tfType_=NeuralNet::TransferN::read(string::to_upper(strlist.at(1)).c_str());
 				} else if(strlist.at(0)=="CHARGE"){//whether charge contributions to energy are included (n.y.i.)
 					nnPotOpt.charge_=string::boolean(strlist.at(1).c_str());
 					if(nnPotOpt.charge_) atomT.charge=true;
+				} else if(strlist.at(0)=="LOSS"){
+					nnPotOpt.loss_=NeuralNet::LossN::read(string::to_upper(strlist.at(1)).c_str());
 				}
 				//ewald
 				if(strlist.at(0)=="PREC"){//precision of ewald calculation
@@ -1234,17 +1265,16 @@ int main(int argc, char* argv[]){
 					nnPotOpt.preCond_=string::boolean(strlist.at(1).c_str());
 				} else if(strlist.at(0)=="N_BATCH"){//size of the batch
 					nnPotOpt.nBatch_=std::atoi(strlist.at(1).c_str());
-				} else if(strlist.at(0)=="P_BATCH"){//batch percentage
-					nnPotOpt.pBatch_=std::atof(strlist.at(1).c_str());
 				} else if(strlist.at(0)=="CALC_FORCE"){//compute force at end
 					nnPotOpt.calcForce_=string::boolean(strlist.at(1).c_str());
 					if(nnPotOpt.calcForce_) atomT.force=true;//must store forces
-				} else if(strlist.at(0)=="WRITE_SYMM"){//print symmetry functions
-					nnPotOpt.writeSymm_=string::boolean(strlist.at(1).c_str());
-				} else if(strlist.at(0)=="READ_RESTART"){//read restart file
-					nnPotOpt.restart_file_=strlist.at(1);
-					nnPotOpt.restart_=true;//restarting
-				} 
+				} else if(strlist.at(0)=="RESTART"){//read restart file
+					nnPotOpt.restart_=string::boolean(strlist.at(1).c_str());//restarting
+				} else if(strlist.at(0)=="FILE_ANN"){
+					nnPotOpt.file_ann_=strlist.at(1);//file storing the ann
+				} else if(strlist.at(0)=="FILE_RESTART"){
+					nnPotOpt.file_restart_=strlist.at(1);//restart file
+				}				
 				//writing
 				if(strlist.at(0)=="WRITE_BASIS"){//whether to write the basis (function of distance/angle)
 					write_basis=string::boolean(strlist.at(1).c_str());
@@ -1259,6 +1289,10 @@ int main(int argc, char* argv[]){
 					write_ewald=string::boolean(strlist.at(1).c_str());
 				} else if(strlist.at(0)=="WRITE_CORR"){//whether to write the final ewald energies
 					write_corr=string::boolean(strlist.at(1).c_str());
+				} else if(strlist.at(0)=="WRITE_SYMM"){//print symmetry functions
+					nnPotOpt.writeSymm_=string::boolean(strlist.at(1).c_str());
+				} else if(strlist.at(0)=="NORM"){//print symmetry functions
+					nnPotOpt.norm_=string::boolean(strlist.at(1).c_str());
 				} 
 			}
 			
@@ -1309,6 +1343,11 @@ int main(int argc, char* argv[]){
 					Opt::read(static_cast<Opt::NADAM&>(*nnPotOpt.model_),reader);
 					model_param_=new Opt::NADAM(static_cast<const Opt::NADAM&>(*nnPotOpt.model_));
 				break;
+				case Opt::ALGO::AMSGRAD:
+					nnPotOpt.model_.reset(new Opt::AMSGRAD());
+					Opt::read(static_cast<Opt::AMSGRAD&>(*nnPotOpt.model_),reader);
+					model_param_=new Opt::AMSGRAD(static_cast<const Opt::AMSGRAD&>(*nnPotOpt.model_));
+				break;
 				case Opt::ALGO::BFGS:
 					nnPotOpt.model_.reset(new Opt::BFGS());
 					Opt::read(static_cast<Opt::BFGS&>(*nnPotOpt.model_),reader);
@@ -1338,11 +1377,14 @@ int main(int argc, char* argv[]){
 			
 			//======== check the parameters ========
 			if(mode==MODE::UNKNOWN) throw std::invalid_argument("Invalid calculation mode");
-			else if(mode==MODE::TRAIN && data_train.size()==0) throw std::invalid_argument("No training data provided.");
-			else if(mode==MODE::TEST && data_test.size()==0) throw std::invalid_argument("No test data provided.");
-			if(nnPotOpt.pBatch_<0 || nnPotOpt.pBatch_>1) throw std::invalid_argument("Invalid batch size.");
+			else{
+				if(mode==MODE::TRAIN && data_train.size()==0) throw std::invalid_argument("No training data provided.");
+				if(mode==MODE::TRAIN && data_val.size()==0) throw std::invalid_argument("No validation data provided.");
+				if(mode==MODE::TEST && data_test.size()==0) throw std::invalid_argument("No test data provided.");
+			}
 			if(format==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
 			if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
+			if(nnPotOpt.loss_==NeuralNet::LossN::UNKNOWN) throw std::invalid_argument("Invalid loss function.");
 			
 		}
 		
@@ -1351,14 +1393,14 @@ int main(int argc, char* argv[]){
 		//general parameters
 		MPI_Bcast(&unitsys,1,MPI_INT,0,WORLD.label());
 		//nn_pot_opt
-		MPI_Bcast(&nnPotOpt.seed_,1,MPI_INT,0,WORLD.label());
 		MPI_Bcast(&nnPotOpt.nBatch_,1,MPI_INT,0,WORLD.label());
-		MPI_Bcast(&nnPotOpt.pBatch_,1,MPI_DOUBLE,0,WORLD.label());
 		MPI_Bcast(&nnPotOpt.preCond_,1,MPI_C_BOOL,0,WORLD.label());
 		MPI_Bcast(&nnPotOpt.restart_,1,MPI_C_BOOL,0,WORLD.label());
 		MPI_Bcast(&nnPotOpt.calcForce_,1,MPI_C_BOOL,0,WORLD.label());
 		MPI_Bcast(&nnPotOpt.calcSymm_,1,MPI_C_BOOL,0,WORLD.label());
 		MPI_Bcast(&nnPotOpt.writeSymm_,1,MPI_C_BOOL,0,WORLD.label());
+		MPI_Bcast(&nnPotOpt.norm_,1,MPI_C_BOOL,0,WORLD.label());
+		MPI_Bcast(&nnPotOpt.loss_,1,MPI_INT,0,WORLD.label());
 		//file i/o
 		MPI_Bcast(&format,1,MPI_INT,0,WORLD.label());
 		//writing
@@ -1375,6 +1417,7 @@ int main(int argc, char* argv[]){
 		MPI_Bcast(&prec,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
 		//atom type
 		parallel::bcast(WORLD.label(),0,atomT);
+		parallel::bcast(WORLD.label(),0,nnPotOpt.init_);
 		
 		//======== set the unit system ========
 		if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"setting the unit system\n";
@@ -1431,7 +1474,7 @@ int main(int argc, char* argv[]){
 			std::cout<<"WRITE_FORCE  = "<<write_force<<"\n";
 			std::cout<<print::title("WRITING",strbuf)<<"\n";
 			std::cout<<print::buf(strbuf)<<"\n";
-			std::cout<<nnPotOpt<<"\n";
+			//std::cout<<nnPotOpt<<"\n";
 		}
 		MPI_Barrier(WORLD.label());
 		
@@ -1531,23 +1574,53 @@ int main(int argc, char* argv[]){
 		}
 		
 		//======== set the batch size ========
-		if(nnPotOpt.pBatch_>0) nnPotOpt.nBatch_=std::ceil(nnPotOpt.pBatch_*nnPotOpt.nTrain_);
 		if(nnPotOpt.nBatch_<=0) throw std::invalid_argument("Invalid batch size.");
 		if(nnPotOpt.nBatch_>nnPotOpt.nTrain_) throw std::invalid_argument("Invalid batch size.");
 		if(WORLD.rank()==0){
-			std::cout<<"pbatch = "<<nnPotOpt.pBatch_<<"\n";
 			std::cout<<"nbatch = "<<nnPotOpt.nBatch_<<"\n";
 			if(nnPotOpt.nBatch_%WORLD.size()!=0) std::cout<<"WARNING: Using a batch size which is not a multiple of the number of processors can lead to sub-optimal performance.\n";
 		}
 		
 		//======== gen thread dist + offset, batch communicators ========
+		//split WORLD into BATCH
 		parallel::Comm::split(WORLD,BATCH,nnPotOpt.nBatch_);//create the BATCH groups
 		MPI_Comm_split(WORLD.label(),BATCH.color(),WORLD.rank(),&BATCH.label());//split using the BATCH color and key (WORLD rank), store label
 		MPI_Comm_rank(BATCH.label(),&BATCH.rank());//set the rank within the BATCH communicator
 		MPI_Comm_size(BATCH.label(),&BATCH.size());//set the size of the BATCH communicator
 		MPI_Allreduce(&BATCH.color(),&BATCH.ngroup(),1,MPI_INT,MPI_MAX,WORLD.label()); ++BATCH.ngroup();//compute the number of groups
+		//gather the batch ranks and head ranks
+		rank_batch=new int[WORLD.size()];
+		rank_head=new int[BATCH.ngroup()];
+		MPI_Allgather(&BATCH.rank(),1,MPI_INT,rank_batch,1,MPI_INT,WORLD.label());
+		{
+			int count=0;
+			for(int i=0; i<WORLD.size(); ++i){
+				if(rank_batch[i]==0) rank_head[count++]=i;
+			}
+		}
+		if(WORLD.rank()==0 && NN_POT_TRAIN_PRINT_STATUS>0){
+			std::cout<<"ngroup = "<<BATCH.ngroup()<<"\n";
+			for(int i=0; i<WORLD.size(); ++i){
+				std::cout<<"rank_world "<<i<<" rank_batch "<<rank_batch[i]<<"\n";
+			}
+			for(int i=0; i<BATCH.ngroup(); ++i){
+				std::cout<<"rank_head["<<i<<"] = "<<rank_head[i]<<"\n";
+			}
+		}
+		//create the HEAD communicator
+		MPI_Comm_group(WORLD.label(),&group_world);
+		MPI_Group_incl(group_world,BATCH.ngroup(),rank_head,&group_head);
+		MPI_Comm_create_group(WORLD.label(),group_head,0,&comm_head);
+		int rank_head=-1,size_head=-1;
+		if(MPI_COMM_NULL!=comm_head){
+			MPI_Comm_rank(comm_head, &rank_head);
+			MPI_Comm_size(comm_head, &size_head);
+		}
+		MPI_Barrier(WORLD.label());
 		//print batch communicators
 		{
+			std::cout<<print::buf(strbuf)<<"\n";
+			std::cout<<print::title("BATCH Communicators",strbuf)<<"\n";
 			const int sizeb=serialize::nbytes(BATCH);
 			const int sizet=WORLD.size()*serialize::nbytes(BATCH);
 			char* arrb=new char[sizeb];
@@ -1563,6 +1636,8 @@ int main(int argc, char* argv[]){
 			}
 			delete[] arrb;
 			delete[] arrt;
+			std::cout<<print::title("BATCH Communicators",strbuf)<<"\n";
+			std::cout<<print::buf(strbuf)<<"\n";
 		}
 		//thread dist - divide structures equally among the batch groups
 		dist_batch.init(BATCH.ngroup(),BATCH.color(),nnPotOpt.nBatch_);
@@ -1616,9 +1691,9 @@ int main(int argc, char* argv[]){
 			for(int i=0; i<indices_train.size(); ++i) indices_train[i]=i;
 			for(int i=0; i<indices_val.size(); ++i) indices_val[i]=i;
 			for(int i=0; i<indices_test.size(); ++i) indices_test[i]=i;
-			std::random_shuffle(indices_train.begin(),indices_train.end(),myrand);
-			std::random_shuffle(indices_val.begin(),indices_val.end(),myrand);
-			std::random_shuffle(indices_test.begin(),indices_test.end(),myrand);
+			std::random_shuffle(indices_train.begin(),indices_train.end());
+			std::random_shuffle(indices_val.begin(),indices_val.end());
+			std::random_shuffle(indices_test.begin(),indices_test.end());
 		}
 		//======== bcast randomized indices ========
 		parallel::bcast(WORLD.label(),0,indices_train);
@@ -1634,28 +1709,32 @@ int main(int argc, char* argv[]){
 			if(BATCH.rank()==0){
 				if(format==FILE_FORMAT::VASP_XML){
 					for(int i=0; i<dist_train.size(); ++i){
-						VASP::XML::read(files_train[indices_train[dist_train.offset()+i]].c_str(),0,atomT,struc_train[i]);
+						VASP::XML::read(files_train[indices_train[dist_train.index(i)]].c_str(),0,atomT,struc_train[i]);
 					}
 				} else if(format==FILE_FORMAT::QE){
 					for(int i=0; i<dist_train.size(); ++i){
-						QE::OUT::read(files_train[indices_train[dist_train.offset()+i]].c_str(),atomT,struc_train[i]);
+						QE::OUT::read(files_train[indices_train[dist_train.index(i)]].c_str(),atomT,struc_train[i]);
 					}
 				} else if(format==FILE_FORMAT::ANN){
 					for(int i=0; i<dist_train.size(); ++i){
-						ANN::read(files_train[indices_train[dist_train.offset()+i]].c_str(),atomT,struc_train[i]);
+						ANN::read(files_train[indices_train[dist_train.index(i)]].c_str(),atomT,struc_train[i]);
 					}
 				} else if(format==FILE_FORMAT::XYZ){
 					for(int i=0; i<dist_train.size(); ++i){
-						XYZ::read(files_train[indices_train[dist_train.offset()+i]].c_str(),atomT,struc_train[i]);
+						XYZ::read(files_train[indices_train[dist_train.index(i)]].c_str(),atomT,struc_train[i]);
+					}
+				} else if(format==FILE_FORMAT::CP2K){
+					for(int i=0; i<dist_train.size(); ++i){
+						CP2K::read(files_train[indices_train[dist_train.index(i)]].c_str(),atomT,struc_train[i]);
 					}
 				} else if(format==FILE_FORMAT::BINARY){
 					for(int i=0; i<dist_train.size(); ++i){
-						Structure::read_binary(struc_train[i],files_train[indices_train[dist_train.offset()+i]].c_str());
+						Structure::read_binary(struc_train[i],files_train[indices_train[dist_train.index(i)]].c_str());
 					}
 				}
 				if(NN_POT_TRAIN_PRINT_DATA>1){
 					for(int i=0; i<files_train.size(); ++i){
-						std::cout<<"\t"<<files_train[indices_train[dist_train.offset()+i]]<<" "<<struc_train[i].energy()<<"\n";
+						std::cout<<"\t"<<files_train[indices_train[dist_train.index(i)]]<<" "<<struc_train[i].energy()<<"\n";
 					}
 				}
 			}
@@ -1672,28 +1751,32 @@ int main(int argc, char* argv[]){
 			if(BATCH.rank()==0){
 				if(format==FILE_FORMAT::VASP_XML){
 					for(int i=0; i<dist_val.size(); ++i){
-						VASP::XML::read(files_val[indices_val[dist_val.offset()+i]].c_str(),0,atomT,struc_val[i]);
+						VASP::XML::read(files_val[indices_val[dist_val.index(i)]].c_str(),0,atomT,struc_val[i]);
 					}
 				} else if(format==FILE_FORMAT::QE){
 					for(int i=0; i<dist_val.size(); ++i){
-						QE::OUT::read(files_val[indices_val[dist_val.offset()+i]].c_str(),atomT,struc_val[i]);
+						QE::OUT::read(files_val[indices_val[dist_val.index(i)]].c_str(),atomT,struc_val[i]);
 					}
 				} else if(format==FILE_FORMAT::ANN){
 					for(int i=0; i<dist_val.size(); ++i){
-						ANN::read(files_val[indices_val[dist_val.offset()+i]].c_str(),atomT,struc_val[i]);
+						ANN::read(files_val[indices_val[dist_val.index(i)]].c_str(),atomT,struc_val[i]);
 					}
 				} else if(format==FILE_FORMAT::XYZ){
 					for(int i=0; i<dist_val.size(); ++i){
-						XYZ::read(files_val[indices_val[dist_val.offset()+i]].c_str(),atomT,struc_val[i]);
+						XYZ::read(files_val[indices_val[dist_val.index(i)]].c_str(),atomT,struc_val[i]);
+					}
+				} else if(format==FILE_FORMAT::CP2K){
+					for(int i=0; i<dist_val.size(); ++i){
+						CP2K::read(files_val[indices_val[dist_val.index(i)]].c_str(),atomT,struc_val[i]);
 					}
 				} else if(format==FILE_FORMAT::BINARY){
 					for(int i=0; i<dist_val.size(); ++i){
-						Structure::read_binary(struc_val[i],files_val[indices_val[dist_val.offset()+i]].c_str());
+						Structure::read_binary(struc_val[i],files_val[indices_val[dist_val.index(i)]].c_str());
 					}
 				}
 				if(NN_POT_TRAIN_PRINT_DATA>1){
 					for(int i=0; i<dist_val.size(); ++i){
-						std::cout<<"\t"<<files_val[indices_val[dist_val.offset()+i]]<<" "<<struc_val[i].energy()<<"\n";
+						std::cout<<"\t"<<files_val[indices_val[dist_val.index(i)]]<<" "<<struc_val[i].energy()<<"\n";
 					}
 				}
 			}
@@ -1710,28 +1793,32 @@ int main(int argc, char* argv[]){
 			if(BATCH.rank()==0){
 				if(format==FILE_FORMAT::VASP_XML){
 					for(int i=0; i<dist_test.size(); ++i){
-						VASP::XML::read(files_test[indices_test[dist_test.offset()+i]].c_str(),0,atomT,struc_test[i]);
+						VASP::XML::read(files_test[indices_test[dist_test.index(i)]].c_str(),0,atomT,struc_test[i]);
 					}
 				} else if(format==FILE_FORMAT::QE){
 					for(int i=0; i<dist_test.size(); ++i){
-						QE::OUT::read(files_test[indices_test[dist_test.offset()+i]].c_str(),atomT,struc_test[i]);
+						QE::OUT::read(files_test[indices_test[dist_test.index(i)]].c_str(),atomT,struc_test[i]);
 					}
 				} else if(format==FILE_FORMAT::ANN){
 					for(int i=0; i<dist_test.size(); ++i){
-						ANN::read(files_test[indices_test[dist_test.offset()+i]].c_str(),atomT,struc_test[i]);
+						ANN::read(files_test[indices_test[dist_test.index(i)]].c_str(),atomT,struc_test[i]);
 					}
 				} else if(format==FILE_FORMAT::XYZ){
 					for(int i=0; i<dist_test.size(); ++i){
-						XYZ::read(files_test[indices_test[dist_test.offset()+i]].c_str(),atomT,struc_test[i]);
+						XYZ::read(files_test[indices_test[dist_test.index(i)]].c_str(),atomT,struc_test[i]);
+					}
+				} else if(format==FILE_FORMAT::CP2K){
+					for(int i=0; i<dist_test.size(); ++i){
+						CP2K::read(files_test[indices_test[dist_test.index(i)]].c_str(),atomT,struc_test[i]);
 					}
 				} else if(format==FILE_FORMAT::BINARY){
 					for(int i=0; i<dist_test.size(); ++i){
-						Structure::read_binary(struc_test[i],files_test[indices_test[dist_test.offset()+i]].c_str());
+						Structure::read_binary(struc_test[i],files_test[indices_test[dist_test.index(i)]].c_str());
 					}
 				}
 				if(NN_POT_TRAIN_PRINT_DATA>1){
 					for(int i=0; i<dist_test.size(); ++i){
-						std::cout<<"\t"<<files_test[indices_test[dist_test.offset()+i]]<<" "<<struc_test[i].energy()<<"\n";
+						std::cout<<"\t"<<files_test[indices_test[dist_test.index(i)]]<<" "<<struc_test[i].energy()<<"\n";
 					}
 				}
 			}
@@ -1747,7 +1834,7 @@ int main(int argc, char* argv[]){
 		//==== training structures ====
 		if(BATCH.rank()==0){
 			for(int i=0; i<dist_train.size(); ++i){
-				const std::string filename=files_train[indices_train[dist_train.offset()+i]];
+				const std::string filename=files_train[indices_train[dist_train.index(i)]];
 				const Structure& strucl=struc_train[i];
 				if(strucl.nAtoms()==0) throw std::runtime_error(std::string("ERROR: Structure \"")+filename+std::string(" has zero atoms."));
 				if(std::isinf(strucl.energy())) throw std::runtime_error(std::string("ERROR: Structure \"")+filename+std::string(" has inf energy."));
@@ -1761,12 +1848,12 @@ int main(int argc, char* argv[]){
 					}
 				}
 			}
-			if(NN_POT_TRAIN_PRINT_DATA>1) for(int i=0; i<dist_train.size(); ++i) std::cout<<"\t"<<files_train[indices_train[dist_train.offset()+i]]<<" "<<struc_train[i].energy()<<"\n";
+			if(NN_POT_TRAIN_PRINT_DATA>1) for(int i=0; i<dist_train.size(); ++i) std::cout<<"\t"<<files_train[indices_train[dist_train.index(i)]]<<" "<<struc_train[i].energy()<<"\n";
 		}
 		//==== validation structures ====
 		if(BATCH.rank()==0){
 			for(int i=0; i<dist_val.size(); ++i){
-				const std::string filename=files_val[indices_val[dist_val.offset()+i]];
+				const std::string filename=files_val[indices_val[dist_val.index(i)]];
 				const Structure& strucl=struc_val[i];
 				if(strucl.nAtoms()==0) throw std::runtime_error(std::string("ERROR: Structure \"")+filename+std::string(" has zero atoms."));
 				if(std::isinf(strucl.energy())) throw std::runtime_error(std::string("ERROR: Structure \"")+filename+std::string(" has inf energy."));
@@ -1780,12 +1867,12 @@ int main(int argc, char* argv[]){
 					}
 				}
 			}
-			if(NN_POT_TRAIN_PRINT_DATA>1) for(int i=0; i<dist_val.size(); ++i) std::cout<<"\t"<<files_val[dist_val.offset()+i]<<" "<<struc_val[i].energy()<<"\n";
+			if(NN_POT_TRAIN_PRINT_DATA>1) for(int i=0; i<dist_val.size(); ++i) std::cout<<"\t"<<files_val[dist_val.index(i)]<<" "<<struc_val[i].energy()<<"\n";
 		}
 		//==== testing structures ====
 		if(BATCH.rank()==0){
 			for(int i=0; i<dist_test.size(); ++i){
-				const std::string filename=files_test[indices_test[dist_test.offset()+i]];
+				const std::string filename=files_test[indices_test[dist_test.index(i)]];
 				const Structure& strucl=struc_test[i];
 				if(strucl.nAtoms()==0) throw std::runtime_error(std::string("ERROR: Structure \"")+filename+std::string(" has zero atoms."));
 				if(std::isinf(strucl.energy())) throw std::runtime_error(std::string("ERROR: Structure \"")+filename+std::string(" has inf energy."));
@@ -1799,7 +1886,7 @@ int main(int argc, char* argv[]){
 					}
 				}
 			}
-			if(NN_POT_TRAIN_PRINT_DATA>1) for(int i=0; i<dist_test.size(); ++i) std::cout<<"\t"<<files_test[indices_test[dist_test.offset()+i]]<<" "<<struc_test[i].energy()<<"\n";
+			if(NN_POT_TRAIN_PRINT_DATA>1) for(int i=0; i<dist_test.size(); ++i) std::cout<<"\t"<<files_test[indices_test[dist_test.index(i)]]<<" "<<struc_test[i].energy()<<"\n";
 		}
 		
 		//======== set the data - optimization object ========
@@ -1821,19 +1908,18 @@ int main(int argc, char* argv[]){
 				if(NN_POT_TRAIN_PRINT_STATUS>-1) std::cout<<"reading basis files\n";
 				if(nnPotOpt.files_basis_.size()!=nnPotOpt.nnpot_.nspecies()) throw std::runtime_error("main(int,char**): invalid number of basis files.");
 				for(int i=0; i<nnPotOpt.nnpot_.nspecies(); ++i){
-					nnPotOpt.nnpot_.nnh(i).read_basis(nnPotOpt.files_basis_[i]);
-					if(nnPotOpt.nnpot_.nnh(i).atom().id()!=nnPotOpt.atoms_[i].id()) throw std::runtime_error("main(int,char**): conflict b/w input atom and basis file.");
+					const char* file=nnPotOpt.files_basis_[i].c_str();
+					const char* atomName=nnPotOpt.nnpot_.nnh(i).atom().name().c_str();
+					nnPotOpt.nnpot_.read_basis(file,nnPotOpt.nnpot_,atomName);
 				}
-				//initialize the neural networks
-				if(NN_POT_TRAIN_PRINT_STATUS>-1) std::cout<<"initializing neural networks\n";
+				//initialize the neural network hamiltonians
+				if(NN_POT_TRAIN_PRINT_STATUS>-1) std::cout<<"initializing neural network hamiltonians\n";
 				for(int i=0; i<nnPotOpt.nnpot_.nspecies(); ++i){
 					NNH& nnhl=nnPotOpt.nnpot_.nnh(i);
 					nnhl.atom()=nnPotOpt.atoms_[i];
-					nnhl.nn().seed()=nnPotOpt.seed_;
-					nnhl.nn().idev()=nnPotOpt.idev_;
-					nnhl.nn().initType()=nnPotOpt.initType_;
 					nnhl.nn().tfType()=nnPotOpt.tfType_;
-					nnhl.nn().resize(nnhl.nInput(),nnPotOpt.nh_[i],1);
+					nnhl.nn().resize(nnPotOpt.init_,nnhl.nInput(),nnPotOpt.nh_[i],1);
+					nnhl.dOutDVal().resize(nnhl.nn());
 				}
 			}
 			
@@ -1848,7 +1934,7 @@ int main(int argc, char* argv[]){
 			//======== read restart file ========
 			if(nnPotOpt.restart_){
 				if(NN_POT_TRAIN_PRINT_STATUS>-1) std::cout<<"reading restart file\n";
-				const std::string file=nnPotOpt.restart_file_+".restart";
+				const std::string file=nnPotOpt.file_restart_;
 				nnPotOpt.read_restart(file.c_str());
 			}
 			
@@ -1917,6 +2003,12 @@ int main(int argc, char* argv[]){
 					if(pModel_.gamma()>0) nnModel_.gamma()=pModel_.gamma();
 					nnModel_.decay()=pModel_.decay();
 				}break;
+				case Opt::ALGO::AMSGRAD:{
+					Opt::AMSGRAD& nnModel_=static_cast<Opt::AMSGRAD&>(*nnPotOpt.model_);
+					Opt::AMSGRAD& pModel_=static_cast<Opt::AMSGRAD&>(*model_param_);
+					if(pModel_.gamma()>0) nnModel_.gamma()=pModel_.gamma();
+					nnModel_.decay()=pModel_.decay();
+				}break;
 				case Opt::ALGO::BFGS:{
 					Opt::BFGS& nnModel_=static_cast<Opt::BFGS&>(*nnPotOpt.model_);
 					Opt::BFGS& pModel_=static_cast<Opt::BFGS&>(*model_param_);
@@ -1939,6 +2031,7 @@ int main(int argc, char* argv[]){
 				case Opt::ALGO::RMSPROP: std::cout<<static_cast<Opt::RMSPROP&>(*nnPotOpt.model_)<<"\n"; break;
 				case Opt::ALGO::ADAM: std::cout<<static_cast<Opt::ADAM&>(*nnPotOpt.model_)<<"\n"; break;
 				case Opt::ALGO::NADAM: std::cout<<static_cast<Opt::NADAM&>(*nnPotOpt.model_)<<"\n"; break;
+				case Opt::ALGO::AMSGRAD: std::cout<<static_cast<Opt::AMSGRAD&>(*nnPotOpt.model_)<<"\n"; break;
 				case Opt::ALGO::BFGS: std::cout<<static_cast<Opt::BFGS&>(*nnPotOpt.model_)<<"\n"; break;
 				case Opt::ALGO::RPROP: std::cout<<static_cast<Opt::RPROP&>(*nnPotOpt.model_)<<"\n"; break;
 			}
@@ -1984,6 +2077,10 @@ int main(int argc, char* argv[]){
 			case Opt::ALGO::NADAM:
 				if(WORLD.rank()!=0) nnPotOpt.model_.reset(new Opt::NADAM());
 				parallel::bcast(WORLD.label(),0,static_cast<Opt::NADAM&>(*nnPotOpt.model_));
+			break;
+			case Opt::ALGO::AMSGRAD:
+				if(WORLD.rank()!=0) nnPotOpt.model_.reset(new Opt::AMSGRAD());
+				parallel::bcast(WORLD.label(),0,static_cast<Opt::AMSGRAD&>(*nnPotOpt.model_));
 			break;
 			case Opt::ALGO::BFGS:
 				if(WORLD.rank()!=0) nnPotOpt.model_.reset(new Opt::BFGS());
@@ -2077,7 +2174,7 @@ int main(int argc, char* argv[]){
 			
 			//======== compute the symmetry functions ========
 			//==== training ====
-			start=std::clock();
+			clock.begin();
 			if(dist_train.size()>0){
 				if(NN_POT_TRAIN_PRINT_STATUS>-1) std::cout<<"setting the inputs (symmetry functions) - training - color "<<BATCH.color()<<" rank "<<BATCH.rank()<<"\n";
 				//compute symmetry functions
@@ -2095,10 +2192,10 @@ int main(int argc, char* argv[]){
 				}
 				MPI_Barrier(BATCH.label());
 			}
-			stop=std::clock();
-			time_symm_train=((double)(stop-start))/CLOCKS_PER_SEC;
+			clock.end();
+			time_symm_train=clock.duration();
 			//==== validation ====
-			start=std::clock();
+			clock.begin();
 			if(dist_val.size()>0){
 				if(NN_POT_TRAIN_PRINT_STATUS>-1) std::cout<<"setting the inputs (symmetry functions) - validation - color "<<BATCH.color()<<" rank "<<BATCH.rank()<<"\n";
 				//compute symmetry functions
@@ -2116,10 +2213,10 @@ int main(int argc, char* argv[]){
 				}
 				MPI_Barrier(BATCH.label());
 			}
-			stop=std::clock();
-			time_symm_val=((double)(stop-start))/CLOCKS_PER_SEC;
+			clock.end();
+			time_symm_val=clock.duration();
 			//==== testing ====
-			start=std::clock();
+			clock.begin();
 			if(dist_test.size()>0){
 				if(NN_POT_TRAIN_PRINT_STATUS>-1) std::cout<<"setting the inputs (symmetry functions) - testing - color "<<BATCH.color()<<" rank "<<BATCH.rank()<<"\n";
 				//compute symmetry functions
@@ -2136,8 +2233,8 @@ int main(int argc, char* argv[]){
 				}
 				MPI_Barrier(BATCH.label());
 			}
-			stop=std::clock();
-			time_symm_test=((double)(stop-start))/CLOCKS_PER_SEC;
+			clock.end();
+			time_symm_test=clock.duration();
 			MPI_Barrier(WORLD.label());
 			
 			//======== write the inputs ========
@@ -2148,7 +2245,7 @@ int main(int argc, char* argv[]){
 						// structures - training
 						for(int j=0; j<dist_train.size(); ++j){
 							//create filename
-							std::string file_t=files_train[indices_train[dist_train.offset()+j]];
+							std::string file_t=files_train[indices_train[dist_train.index(j)]];
 							std::string filename=file_t.substr(0,file_t.find_last_of('.'));
 							filename=filename+".dat";
 							//filename=filename+".ann";
@@ -2159,7 +2256,7 @@ int main(int argc, char* argv[]){
 						// structures - validation
 						for(int j=0; j<dist_val.size(); ++j){
 							//create filename
-							std::string file_v=files_val[indices_val[dist_val.offset()+j]];
+							std::string file_v=files_val[indices_val[dist_val.index(j)]];
 							std::string filename=file_v.substr(0,file_v.find_last_of('.'));
 							filename=filename+".dat";
 							//filename=filename+".ann";
@@ -2170,7 +2267,7 @@ int main(int argc, char* argv[]){
 						// structures - testing
 						for(int j=0; j<dist_test.size(); ++j){
 							//create filename
-							std::string file_t=files_test[indices_test[dist_test.offset()+j]];
+							std::string file_t=files_test[indices_test[dist_test.index(j)]];
 							std::string filename=file_t.substr(0,file_t.find_last_of('.'));
 							filename=filename+".dat";
 							//filename=filename+".ann";
@@ -2235,40 +2332,6 @@ int main(int argc, char* argv[]){
 			delete[] mem_test;
 		}
 		
-		//==== print the inputs ====
-		if(NN_POT_TRAIN_PRINT_DATA>1){
-			if(WORLD.rank()==0) std::cout<<print::buf(strbuf)<<"\n";
-			if(WORLD.rank()==0) std::cout<<print::title("INPUTS",strbuf)<<"\n";
-			for(int ii=0; ii<WORLD.size(); ++ii){
-				if(WORLD.rank()==ii){
-					for(int n=0; n<dist_train.size(); ++n){
-						std::cout<<"struc["<<n<<"] = \n";
-						for(int i=0; i<struc_train[n].nAtoms(); ++i){
-							std::cout<<struc_train[n].name(i)<<struc_train[n].index(i)+1<<" "<<struc_train[n].symm(i).transpose()<<"\n";
-						}
-					}
-					FILE* writer=fopen("nn_pot_inputs.dat","wa");
-					if(writer!=NULL){
-						for(int n=0; n<dist_train.size(); ++n){
-							for(int i=0; i<struc_train[n].nAtoms(); ++i){
-								fprintf(writer,"%s%i ",struc_train[n].name(i).c_str(),struc_train[n].index(i)+1);
-								for(int j=0; j<struc_train[n].symm(i).size(); ++j){
-									fprintf(writer,"%f ",struc_train[n].symm(i)[j]);
-								}
-								fprintf(writer,"\n");
-							}
-						}
-						fclose(writer);
-						writer=NULL;
-					}
-				}
-				MPI_Barrier(WORLD.label());
-			}
-			if(WORLD.rank()==0) std::cout<<print::title("INPUTS",strbuf)<<"\n";
-			if(WORLD.rank()==0) std::cout<<print::buf(strbuf)<<"\n";
-			MPI_Barrier(WORLD.label());
-		}
-			
 		//************************************************************************************
 		// TRAINING
 		//************************************************************************************
@@ -2288,7 +2351,7 @@ int main(int argc, char* argv[]){
 		//==== training systems ====
 		if(dist_train.size()>0){
 			if(WORLD.rank()==0) std::cout<<"final energies - training set\n";
-			//global variables
+			//global energy arrays
 			double* energy_nn_t=NULL;
 			double* energy_exact_t=NULL;
 			int* natoms_t=NULL;
@@ -2297,98 +2360,73 @@ int main(int argc, char* argv[]){
 				energy_exact_t=new double[nnPotOpt.nTrain_];
 				natoms_t=new int[nnPotOpt.nTrain_];
 			}
-			//local variables
+			//local energy arrays
 			double* energy_nn=new double[dist_train.size()];
 			double* energy_exact=new double[dist_train.size()];
 			int* natoms=new int[dist_train.size()];
 			//compute energies
-			start=std::clock();
+			clock.begin();
 			for(int n=0; n<dist_train.size(); ++n){
 				if(NN_POT_TRAIN_PRINT_STATUS>0) std::cout<<"structure-train["<<WORLD.rank()<<"]["<<n<<"]\n";
 				energy_nn[n]=nnPotOpt.nnpot_.energy(struc_train[n],false);
 				energy_exact[n]=struc_train[n].energy();
 				natoms[n]=struc_train[n].nAtoms();
 			}
-			stop=std::clock();
-			time_energy_train=((double)(stop-start))/CLOCKS_PER_SEC;
+			clock.end();
+			time_energy_train=clock.duration();
 			MPI_Barrier(WORLD.label());
-			//gather energies
-			if(WORLD.rank()==0){
-				for(int i=0; i<dist_train.size(); ++i){
-					energy_nn_t[dist_train.offset()+i]=energy_nn[i];
-					energy_exact_t[dist_train.offset()+i]=energy_exact[i];
-					natoms_t[dist_train.offset()+i]=natoms[i];
-				}
-			}
-			for(int n=1; n<WORLD.size(); ++n){
-				if(WORLD.rank()==0 || WORLD.rank()==n){
-					int size=0,offset=0;
-					if(WORLD.rank()==n) size=dist_train.size();
-					if(WORLD.rank()==n) offset=dist_train.offset();
-					//send size
-					if(WORLD.rank()==n) MPI_Send(&size,1,MPI_INT,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(&size,1,MPI_INT,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//send offset
-					if(WORLD.rank()==n) MPI_Send(&offset,1,MPI_INT,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(&offset,1,MPI_INT,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//allocate local arrays
-					double* energy_nn_l=new double[size];
-					double* energy_exact_l=new double[size];
-					int* natoms_l=new int[size];
-					//send nn energy
-					if(WORLD.rank()==n) MPI_Send(energy_nn,size,MPI_DOUBLE,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(energy_nn_l,size,MPI_DOUBLE,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//send exact energy
-					if(WORLD.rank()==n) MPI_Send(energy_exact,size,MPI_DOUBLE,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(energy_exact_l,size,MPI_DOUBLE,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//send natoms
-					if(WORLD.rank()==n) MPI_Send(natoms,size,MPI_INT,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(natoms_l,size,MPI_INT,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//record nn energy
-					if(WORLD.rank()==0){
-						for(int i=0; i<size; ++i){
-							energy_nn_t[offset+i]=energy_nn_l[i];
-							energy_exact_t[offset+i]=energy_exact_l[i];
-							natoms_t[offset+i]=natoms_l[i];
+			if(comm_head!=MPI_COMM_NULL){
+				//gather energies
+				int* dist_size=new int[BATCH.ngroup()];
+				int* dist_offset=new int[BATCH.ngroup()];
+				//compute dist
+				MPI_Gather(&dist_train.size(),1,MPI_INT,dist_size,1,MPI_INT,0,comm_head);
+				MPI_Gather(&dist_train.offset(),1,MPI_INT,dist_offset,1,MPI_INT,0,comm_head);
+				//gather energies
+				MPI_Gatherv(energy_exact,dist_train.size(),MPI_DOUBLE,energy_exact_t,dist_size,dist_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(energy_nn,dist_train.size(),MPI_DOUBLE,energy_nn_t,dist_size,dist_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(natoms,dist_train.size(),MPI_INT,natoms_t,dist_size,dist_offset,MPI_INT,0,comm_head);
+				if(WORLD.rank()==0){
+					//accumulate statistics
+					for(int n=0; n<nnPotOpt.nTrain_; ++n){
+						acc1d_energy_train_n.push(std::fabs(energy_exact_t[n]-energy_nn_t[n])/natoms_t[n]);
+						acc2d_energy_train.push(energy_exact_t[n]/natoms_t[n],energy_nn_t[n]/natoms_t[n]);
+					}
+					//normalize
+					if(nnPotOpt.norm_){
+						for(int n=0; n<nnPotOpt.nTrain_; ++n){
+							energy_exact_t[n]/=natoms_t[n];
+							energy_nn_t[n]/=natoms_t[n];
 						}
 					}
-					//free memory
-					delete[] energy_nn_l;
-					delete[] energy_exact_l;
-					delete[] natoms_l;
-				}
-				MPI_Barrier(WORLD.label());
-			}
-			if(WORLD.rank()==0){
-				//accumulate statistics
-				for(int n=0; n<nnPotOpt.nTrain_; ++n){
-					acc1d_energy_train_n.push(std::fabs(energy_exact_t[n]-energy_nn_t[n])/natoms_t[n]);
-					acc2d_energy_train.push(energy_exact_t[n]/natoms_t[n],energy_nn_t[n]/natoms_t[n]);
-				}
-				//write energies
-				if(write_energy){
-					const char* file="nn_pot_energy_train.dat";
-					FILE* writer=fopen(file,"w");
-					if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
-					else{
-						std::vector<std::pair<int,double> > energy_exact_pair(nnPotOpt.nTrain_);
-						std::vector<std::pair<int,double> > energy_nn_pair(nnPotOpt.nTrain_);
-						for(int n=0; n<nnPotOpt.nTrain_; ++n){
-							energy_exact_pair[n].first=indices_train[n];
-							energy_exact_pair[n].second=energy_exact_t[n];
-							energy_nn_pair[n].first=indices_train[n];
-							energy_nn_pair[n].second=energy_nn_t[n];
+					//write energies
+					if(write_energy){
+						const char* file="nn_pot_energy_train.dat";
+						FILE* writer=fopen(file,"w");
+						if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
+						else{
+							std::vector<std::pair<int,double> > energy_exact_pair(nnPotOpt.nTrain_);
+							std::vector<std::pair<int,double> > energy_nn_pair(nnPotOpt.nTrain_);
+							for(int n=0; n<nnPotOpt.nTrain_; ++n){
+								energy_exact_pair[n].first=indices_train[n];
+								energy_exact_pair[n].second=energy_exact_t[n];
+								energy_nn_pair[n].first=indices_train[n];
+								energy_nn_pair[n].second=energy_nn_t[n];
+							}
+							std::sort(energy_exact_pair.begin(),energy_exact_pair.end(),compare_pair);
+							std::sort(energy_nn_pair.begin(),energy_nn_pair.end(),compare_pair);
+							fprintf(writer,"#STRUCTURE ENERGY_EXACT ENERGY_NN\n");
+							for(int n=0; n<nnPotOpt.nTrain_; ++n){
+								fprintf(writer,"%s %f %f\n",files_train[n].c_str(),energy_exact_pair[n].second,energy_nn_pair[n].second);
+							}
+							fclose(writer);
+							writer=NULL;
 						}
-						std::sort(energy_exact_pair.begin(),energy_exact_pair.end(),compare_pair);
-						std::sort(energy_nn_pair.begin(),energy_nn_pair.end(),compare_pair);
-						fprintf(writer,"#STRUCTURE ENERGY_EXACT ENERGY_NN\n");
-						for(int n=0; n<nnPotOpt.nTrain_; ++n){
-							fprintf(writer,"%s %f %f\n",files_train[n].c_str(),energy_exact_pair[n].second,energy_nn_pair[n].second);
-						}
-						fclose(writer);
-						writer=NULL;
 					}
 				}
+				//free memory
+				delete[] dist_size;
+				delete[] dist_offset;
 			}
 			//free memory
 			delete[] energy_nn;
@@ -2404,7 +2442,7 @@ int main(int argc, char* argv[]){
 		//==== validation systems ====
 		if(dist_val.size()>0){
 			if(WORLD.rank()==0) std::cout<<"final energies - validation set\n";
-			//global variables
+			//global energy arrays
 			double* energy_nn_t=NULL;
 			double* energy_exact_t=NULL;
 			int* natoms_t=NULL;
@@ -2413,98 +2451,73 @@ int main(int argc, char* argv[]){
 				energy_exact_t=new double[nnPotOpt.nVal_];
 				natoms_t=new int[nnPotOpt.nVal_];
 			}
-			//local variables
+			//local energy arrays
 			double* energy_nn=new double[dist_val.size()];
 			double* energy_exact=new double[dist_val.size()];
 			int* natoms=new int[dist_val.size()];
 			//compute energies
-			start=std::clock();
+			clock.begin();
 			for(int n=0; n<dist_val.size(); ++n){
 				if(NN_POT_TRAIN_PRINT_STATUS>0) std::cout<<"structure-val["<<WORLD.rank()<<"]["<<n<<"]\n";
 				energy_nn[n]=nnPotOpt.nnpot_.energy(struc_val[n],false);
 				energy_exact[n]=struc_val[n].energy();
 				natoms[n]=struc_val[n].nAtoms();
 			}
-			stop=std::clock();
-			time_energy_val=((double)(stop-start))/CLOCKS_PER_SEC;
+			clock.end();
+			time_energy_val=clock.duration();
 			MPI_Barrier(WORLD.label());
-			//gather energies
-			if(WORLD.rank()==0){
-				for(int i=0; i<dist_val.size(); ++i){
-					energy_nn_t[dist_val.offset()+i]=energy_nn[i];
-					energy_exact_t[dist_val.offset()+i]=energy_exact[i];
-					natoms_t[dist_val.offset()+i]=natoms[i];
-				}
-			}
-			for(int n=1; n<WORLD.size(); ++n){
-				if(WORLD.rank()==0 || WORLD.rank()==n){
-					int size=0,offset=0;
-					if(WORLD.rank()==n) size=dist_val.size();
-					if(WORLD.rank()==n) offset=dist_val.offset();
-					//send size
-					if(WORLD.rank()==n) MPI_Send(&size,1,MPI_INT,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(&size,1,MPI_INT,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//send offset
-					if(WORLD.rank()==n) MPI_Send(&offset,1,MPI_INT,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(&offset,1,MPI_INT,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//allocate local arrays
-					double* energy_nn_l=new double[size];
-					double* energy_exact_l=new double[size];
-					int* natoms_l=new int[size];
-					//send nn energy
-					if(WORLD.rank()==n) MPI_Send(energy_nn,size,MPI_DOUBLE,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(energy_nn_l,size,MPI_DOUBLE,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//send exact energy
-					if(WORLD.rank()==n) MPI_Send(energy_exact,size,MPI_DOUBLE,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(energy_exact_l,size,MPI_DOUBLE,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//send natoms
-					if(WORLD.rank()==n) MPI_Send(natoms,size,MPI_INT,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(natoms_l,size,MPI_INT,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//record nn energy
-					if(WORLD.rank()==0){
-						for(int i=0; i<size; ++i){
-							energy_nn_t[offset+i]=energy_nn_l[i];
-							energy_exact_t[offset+i]=energy_exact_l[i];
-							natoms_t[offset+i]=natoms_l[i];
+			if(comm_head!=MPI_COMM_NULL){
+				//gather energies
+				int* dist_size=new int[BATCH.ngroup()];
+				int* dist_offset=new int[BATCH.ngroup()];
+				//compute dist
+				MPI_Gather(&dist_val.size(),1,MPI_INT,dist_size,1,MPI_INT,0,comm_head);
+				MPI_Gather(&dist_val.offset(),1,MPI_INT,dist_offset,1,MPI_INT,0,comm_head);
+				//gather energies
+				MPI_Gatherv(energy_exact,dist_val.size(),MPI_DOUBLE,energy_exact_t,dist_size,dist_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(energy_nn,dist_val.size(),MPI_DOUBLE,energy_nn_t,dist_size,dist_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(natoms,dist_val.size(),MPI_INT,natoms_t,dist_size,dist_offset,MPI_INT,0,comm_head);
+				if(WORLD.rank()==0){
+					//accumulate statistics
+					for(int n=0; n<nnPotOpt.nVal_; ++n){
+						acc1d_energy_val_n.push(std::fabs(energy_exact_t[n]-energy_nn_t[n])/natoms_t[n]);
+						acc2d_energy_val.push(energy_exact_t[n]/natoms_t[n],energy_nn_t[n]/natoms_t[n]);
+					}
+					//normalize
+					if(nnPotOpt.norm_){
+						for(int n=0; n<nnPotOpt.nVal_; ++n){
+							energy_exact_t[n]/=natoms_t[n];
+							energy_nn_t[n]/=natoms_t[n];
 						}
 					}
-					//free memory
-					delete[] energy_nn_l;
-					delete[] energy_exact_l;
-					delete[] natoms_l;
-				}
-				MPI_Barrier(WORLD.label());
-			}
-			if(WORLD.rank()==0){
-				//accumulate statistics
-				for(int n=0; n<nnPotOpt.nVal_; ++n){
-					acc1d_energy_val_n.push(std::fabs(energy_exact_t[n]-energy_nn_t[n])/natoms_t[n]);
-					acc2d_energy_val.push(energy_exact_t[n]/natoms_t[n],energy_nn_t[n]/natoms_t[n]);
-				}
-				//write energies
-				if(write_energy){
-					const char* file="nn_pot_energy_val.dat";
-					FILE* writer=fopen(file,"w");
-					if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
-					else{
-						std::vector<std::pair<int,double> > energy_exact_pair(nnPotOpt.nVal_);
-						std::vector<std::pair<int,double> > energy_nn_pair(nnPotOpt.nVal_);
-						for(int n=0; n<nnPotOpt.nVal_; ++n){
-							energy_exact_pair[n].first=indices_val[n];
-							energy_exact_pair[n].second=energy_exact_t[n];
-							energy_nn_pair[n].first=indices_val[n];
-							energy_nn_pair[n].second=energy_nn_t[n];
+					//write energies
+					if(write_energy){
+						const char* file="nn_pot_energy_val.dat";
+						FILE* writer=fopen(file,"w");
+						if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
+						else{
+							std::vector<std::pair<int,double> > energy_exact_pair(nnPotOpt.nVal_);
+							std::vector<std::pair<int,double> > energy_nn_pair(nnPotOpt.nVal_);
+							for(int n=0; n<nnPotOpt.nVal_; ++n){
+								energy_exact_pair[n].first=indices_val[n];
+								energy_exact_pair[n].second=energy_exact_t[n];
+								energy_nn_pair[n].first=indices_val[n];
+								energy_nn_pair[n].second=energy_nn_t[n];
+							}
+							std::sort(energy_exact_pair.begin(),energy_exact_pair.end(),compare_pair);
+							std::sort(energy_nn_pair.begin(),energy_nn_pair.end(),compare_pair);
+							fprintf(writer,"#STRUCTURE ENERGY_EXACT ENERGY_NN\n");
+							for(int n=0; n<nnPotOpt.nVal_; ++n){
+								fprintf(writer,"%s %f %f\n",files_val[n].c_str(),energy_exact_pair[n].second,energy_nn_pair[n].second);
+							}
+							fclose(writer);
+							writer=NULL;
 						}
-						std::sort(energy_exact_pair.begin(),energy_exact_pair.end(),compare_pair);
-						std::sort(energy_nn_pair.begin(),energy_nn_pair.end(),compare_pair);
-						fprintf(writer,"#STRUCTURE ENERGY_EXACT ENERGY_NN\n");
-						for(int n=0; n<nnPotOpt.nVal_; ++n){
-							fprintf(writer,"%s %f %f\n",files_val[n].c_str(),energy_exact_pair[n].second,energy_nn_pair[n].second);
-						}
-						fclose(writer);
-						writer=NULL;
 					}
 				}
+				//free memory
+				delete[] dist_size;
+				delete[] dist_offset;
 			}
 			//free memory
 			delete[] energy_nn;
@@ -2520,7 +2533,7 @@ int main(int argc, char* argv[]){
 		//==== test systems ====
 		if(dist_test.size()>0){
 			if(WORLD.rank()==0) std::cout<<"final energies - test set\n";
-			//global variables
+			//global energy arrays
 			double* energy_nn_t=NULL;
 			double* energy_exact_t=NULL;
 			int* natoms_t=NULL;
@@ -2529,98 +2542,73 @@ int main(int argc, char* argv[]){
 				energy_exact_t=new double[nnPotOpt.nTest_];
 				natoms_t=new int[nnPotOpt.nTest_];
 			}
-			//local variables
+			//local energy arrays
 			double* energy_nn=new double[dist_test.size()];
 			double* energy_exact=new double[dist_test.size()];
 			int* natoms=new int[dist_test.size()];
 			//compute energies
-			start=std::clock();
+			clock.begin();
 			for(int n=0; n<dist_test.size(); ++n){
 				if(NN_POT_TRAIN_PRINT_STATUS>0) std::cout<<"structure-test["<<WORLD.rank()<<"]["<<n<<"]\n";
 				energy_nn[n]=nnPotOpt.nnpot_.energy(struc_test[n],false);
 				energy_exact[n]=struc_test[n].energy();
 				natoms[n]=struc_test[n].nAtoms();
 			}
-			stop=std::clock();
-			time_energy_test=((double)(stop-start))/CLOCKS_PER_SEC;
+			clock.end();
+			time_energy_test=clock.duration();
 			MPI_Barrier(WORLD.label());
-			//gather energies
-			if(WORLD.rank()==0){
-				for(int i=0; i<dist_test.size(); ++i){
-					energy_nn_t[dist_test.offset()+i]=energy_nn[i];
-					energy_exact_t[dist_test.offset()+i]=energy_exact[i];
-					natoms_t[dist_test.offset()+i]=natoms[i];
-				}
-			}
-			for(int n=1; n<WORLD.size(); ++n){
-				if(WORLD.rank()==0 || WORLD.rank()==n){
-					int size=0,offset=0;
-					if(WORLD.rank()==n) size=dist_test.size();
-					if(WORLD.rank()==n) offset=dist_test.offset();
-					//send size
-					if(WORLD.rank()==n) MPI_Send(&size,1,MPI_INT,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(&size,1,MPI_INT,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//send offset
-					if(WORLD.rank()==n) MPI_Send(&offset,1,MPI_INT,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(&offset,1,MPI_INT,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//allocate local arrays
-					double* energy_nn_l=new double[size];
-					double* energy_exact_l=new double[size];
-					int* natoms_l=new int[size];
-					//send nn energy
-					if(WORLD.rank()==n) MPI_Send(energy_nn,size,MPI_DOUBLE,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(energy_nn_l,size,MPI_DOUBLE,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//send exact energy
-					if(WORLD.rank()==n) MPI_Send(energy_exact,size,MPI_DOUBLE,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(energy_exact_l,size,MPI_DOUBLE,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//send natoms
-					if(WORLD.rank()==n) MPI_Send(natoms,size,MPI_INT,0,0,WORLD.label());
-					if(WORLD.rank()==0) MPI_Recv(natoms_l,size,MPI_INT,n,0,WORLD.label(),MPI_STATUS_IGNORE);
-					//record nn energy
-					if(WORLD.rank()==0){
-						for(int i=0; i<size; ++i){
-							energy_nn_t[offset+i]=energy_nn_l[i];
-							energy_exact_t[offset+i]=energy_exact_l[i];
-							natoms_t[offset+i]=natoms_l[i];
+			if(comm_head!=MPI_COMM_NULL){
+				//gather energies
+				int* dist_size=new int[BATCH.ngroup()];
+				int* dist_offset=new int[BATCH.ngroup()];
+				//compute dist
+				MPI_Gather(&dist_test.size(),1,MPI_INT,dist_size,1,MPI_INT,0,comm_head);
+				MPI_Gather(&dist_test.offset(),1,MPI_INT,dist_offset,1,MPI_INT,0,comm_head);
+				//gather energies
+				MPI_Gatherv(energy_exact,dist_test.size(),MPI_DOUBLE,energy_exact_t,dist_size,dist_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(energy_nn,dist_test.size(),MPI_DOUBLE,energy_nn_t,dist_size,dist_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(natoms,dist_test.size(),MPI_INT,natoms_t,dist_size,dist_offset,MPI_INT,0,comm_head);
+				if(WORLD.rank()==0){
+					//accumulate statistics
+					for(int n=0; n<nnPotOpt.nTest_; ++n){
+						acc1d_energy_test_n.push(std::fabs(energy_exact_t[n]-energy_nn_t[n])/natoms_t[n]);
+						acc2d_energy_test.push(energy_exact_t[n]/natoms_t[n],energy_nn_t[n]/natoms_t[n]);
+					}
+					//normalize
+					if(nnPotOpt.norm_){
+						for(int n=0; n<nnPotOpt.nTest_; ++n){
+							energy_exact_t[n]/=natoms_t[n];
+							energy_nn_t[n]/=natoms_t[n];
 						}
 					}
-					//free memory
-					delete[] energy_nn_l;
-					delete[] energy_exact_l;
-					delete[] natoms_l;
-				}
-				MPI_Barrier(WORLD.label());
-			}
-			if(WORLD.rank()==0){
-				//accumulate statistics
-				for(int n=0; n<nnPotOpt.nTest_; ++n){
-					acc1d_energy_test_n.push(std::fabs(energy_exact_t[n]-energy_nn_t[n])/natoms_t[n]);
-					acc2d_energy_test.push(energy_exact_t[n]/natoms_t[n],energy_nn_t[n]/natoms_t[n]);
-				}
-				//write energies
-				if(write_energy){
-					const char* file="nn_pot_energy_test.dat";
-					FILE* writer=fopen(file,"w");
-					if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
-					else{
-						std::vector<std::pair<int,double> > energy_exact_pair(nnPotOpt.nTest_);
-						std::vector<std::pair<int,double> > energy_nn_pair(nnPotOpt.nTest_);
-						for(int n=0; n<nnPotOpt.nTest_; ++n){
-							energy_exact_pair[n].first=indices_test[n];
-							energy_exact_pair[n].second=energy_exact_t[n];
-							energy_nn_pair[n].first=indices_test[n];
-							energy_nn_pair[n].second=energy_nn_t[n];
+					//write energies
+					if(write_energy){
+						const char* file="nn_pot_energy_test.dat";
+						FILE* writer=fopen(file,"w");
+						if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
+						else{
+							std::vector<std::pair<int,double> > energy_exact_pair(nnPotOpt.nTest_);
+							std::vector<std::pair<int,double> > energy_nn_pair(nnPotOpt.nTest_);
+							for(int n=0; n<nnPotOpt.nTest_; ++n){
+								energy_exact_pair[n].first=indices_test[n];
+								energy_exact_pair[n].second=energy_exact_t[n];
+								energy_nn_pair[n].first=indices_test[n];
+								energy_nn_pair[n].second=energy_nn_t[n];
+							}
+							std::sort(energy_exact_pair.begin(),energy_exact_pair.end(),compare_pair);
+							std::sort(energy_nn_pair.begin(),energy_nn_pair.end(),compare_pair);
+							fprintf(writer,"#STRUCTURE ENERGY_EXACT ENERGY_NN\n");
+							for(int n=0; n<nnPotOpt.nTest_; ++n){
+								fprintf(writer,"%s %f %f\n",files_test[n].c_str(),energy_exact_pair[n].second,energy_nn_pair[n].second);
+							}
+							fclose(writer);
+							writer=NULL;
 						}
-						std::sort(energy_exact_pair.begin(),energy_exact_pair.end(),compare_pair);
-						std::sort(energy_nn_pair.begin(),energy_nn_pair.end(),compare_pair);
-						fprintf(writer,"#STRUCTURE ENERGY_EXACT ENERGY_NN\n");
-						for(int n=0; n<nnPotOpt.nTest_; ++n){
-							fprintf(writer,"%s %f %f\n",files_test[n].c_str(),energy_exact_pair[n].second,energy_nn_pair[n].second);
-						}
-						fclose(writer);
-						writer=NULL;
 					}
 				}
+				//free memory
+				delete[] dist_size;
+				delete[] dist_offset;
 			}
 			//free memory
 			delete[] energy_nn;
@@ -2638,133 +2626,535 @@ int main(int argc, char* argv[]){
 		//==== training systems ====
 		if(dist_train.size()>0 && nnPotOpt.charge_ && write_ewald){
 			if(WORLD.rank()==0) std::cout<<"writing ewald - training set\n";
-			//local variables
-			int* thread_dist_train=new int[WORLD.size()];
-			int* thread_offset_train=new int[WORLD.size()];
-			double* ewald_train_l=new double[dist_train.size()];
-			for(int i=0; i<dist_train.size(); ++i) ewald_train_l[i]=struc_train[i].ewald();
-			double* ewald_train_t=NULL;
-			if(WORLD.rank()==0) ewald_train_t=new double[nnPotOpt.nTrain_];
-			//compute dist
-			MPI_Gather(&dist_train.size(),1,MPI_INT,thread_dist_train,1,MPI_INT,0,WORLD.label());
-			MPI_Gather(&dist_train.offset(),1,MPI_INT,thread_offset_train,1,MPI_INT,0,WORLD.label());
+			//global energy arrays
+			double* ewald_t=NULL;
+			if(WORLD.rank()==0) ewald_t=new double[nnPotOpt.nTrain_];
+			//local energy arrays
+			double* ewald_l=new double[dist_train.size()];
+			for(int i=0; i<dist_train.size(); ++i) ewald_l[i]=struc_train[i].ewald();
 			//gather energies
-			MPI_Gatherv(ewald_train_l,dist_train.size(),MPI_DOUBLE,ewald_train_t,thread_dist_train,thread_offset_train,MPI_DOUBLE,0,WORLD.label());
-			//write energies
-			if(WORLD.rank()==0){
-				const char* file="nn_pot_ewald_train.dat";
-				FILE* writer=fopen(file,"w");
-				if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
-				else{
-					std::vector<std::pair<int,double> > ewald_train_pair(nnPotOpt.nTrain_);
-					for(int n=0; n<nnPotOpt.nTrain_; ++n){
-						ewald_train_pair[n].first=indices_train[n];
-						ewald_train_pair[n].second=ewald_train_t[n];
+			if(comm_head!=MPI_COMM_NULL){
+				//compute dist
+				int* dist_size=new int[BATCH.ngroup()];
+				int* dist_offset=new int[BATCH.ngroup()];
+				MPI_Gather(&dist_train.size(),1,MPI_INT,dist_size,1,MPI_INT,0,comm_head);
+				MPI_Gather(&dist_train.offset(),1,MPI_INT,dist_offset,1,MPI_INT,0,comm_head);
+				//gather energies
+				MPI_Gatherv(ewald_l,dist_train.size(),MPI_DOUBLE,ewald_t,dist_size,dist_offset,MPI_DOUBLE,0,comm_head);
+				//write energies
+				if(WORLD.rank()==0){
+					const char* file="nn_pot_ewald_train.dat";
+					FILE* writer=fopen(file,"w");
+					if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
+					else{
+						std::vector<std::pair<int,double> > ewald_pair(nnPotOpt.nTrain_);
+						for(int n=0; n<nnPotOpt.nTrain_; ++n){
+							ewald_pair[n].first=indices_train[n];
+							ewald_pair[n].second=ewald_t[n];
+						}
+						std::sort(ewald_pair.begin(),ewald_pair.end(),compare_pair);
+						fprintf(writer,"#STRUCTURE ENERGY_EWALD\n");
+						for(int n=0; n<nnPotOpt.nTrain_; ++n){
+							fprintf(writer,"%s %f\n",files_train[n].c_str(),ewald_pair[n].second);
+						}
+						fclose(writer);
+						writer=NULL;
 					}
-					std::sort(ewald_train_pair.begin(),ewald_train_pair.end(),compare_pair);
-					fprintf(writer,"#STRUCTURE ENERGY_EWALD\n");
-					for(int n=0; n<nnPotOpt.nTrain_; ++n){
-						fprintf(writer,"%s %f\n",files_train[n].c_str(),ewald_train_pair[n].second);
-					}
-					fclose(writer);
-					writer=NULL;
 				}
+				//free memory
+				delete[] dist_size;
+				delete[] dist_offset;
 			}
-			delete[] thread_dist_train;
-			delete[] thread_offset_train;
-			delete[] ewald_train_l;
-			if(WORLD.rank()==0) delete[] ewald_train_t;
+			//free memory
+			delete[] ewald_l;
+			if(WORLD.rank()==0) delete[] ewald_t;
 		}
 		//==== validation systems ====
 		if(dist_val.size()>0 && nnPotOpt.charge_ && write_ewald){
 			if(WORLD.rank()==0) std::cout<<"writing ewald - validation set\n";
-			//local variables
-			int* thread_dist_val=new int[WORLD.size()];
-			int* thread_offset_val=new int[WORLD.size()];
-			double* ewald_val_l=new double[dist_val.size()];
-			for(int i=0; i<dist_val.size(); ++i) ewald_val_l[i]=struc_val[i].ewald();
-			double* ewald_val_t=NULL;
-			if(WORLD.rank()==0) ewald_val_t=new double[nnPotOpt.nVal_];
-			//compute dist
-			MPI_Gather(&dist_val.size(),1,MPI_INT,thread_dist_val,1,MPI_INT,0,WORLD.label());
-			MPI_Gather(&dist_val.offset(),1,MPI_INT,thread_offset_val,1,MPI_INT,0,WORLD.label());
+			//global energy arrays
+			double* ewald_t=NULL;
+			if(WORLD.rank()==0) ewald_t=new double[nnPotOpt.nVal_];
+			//local energy arrays
+			double* ewald_l=new double[dist_val.size()];
+			for(int i=0; i<dist_val.size(); ++i) ewald_l[i]=struc_val[i].ewald();
 			//gather energies
-			MPI_Gatherv(ewald_val_l,dist_val.size(),MPI_DOUBLE,ewald_val_t,thread_dist_val,thread_offset_val,MPI_DOUBLE,0,WORLD.label());
-			//write energies
-			if(WORLD.rank()==0){
-				const char* file="nn_pot_ewald_val.dat";
-				FILE* writer=fopen(file,"w");
-				if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
-				else{
-					std::vector<std::pair<int,double> > ewald_val_pair(nnPotOpt.nVal_);
-					for(int n=0; n<nnPotOpt.nVal_; ++n){
-						ewald_val_pair[n].first=indices_val[n];
-						ewald_val_pair[n].second=ewald_val_t[n];
+			if(comm_head!=MPI_COMM_NULL){
+				//compute dist
+				int* dist_size=new int[BATCH.ngroup()];
+				int* dist_offset=new int[BATCH.ngroup()];
+				MPI_Gather(&dist_val.size(),1,MPI_INT,dist_size,1,MPI_INT,0,comm_head);
+				MPI_Gather(&dist_val.offset(),1,MPI_INT,dist_offset,1,MPI_INT,0,comm_head);
+				//gather energies
+				MPI_Gatherv(ewald_l,dist_val.size(),MPI_DOUBLE,ewald_t,dist_size,dist_offset,MPI_DOUBLE,0,comm_head);
+				//write energies
+				if(WORLD.rank()==0){
+					const char* file="nn_pot_ewald_val.dat";
+					FILE* writer=fopen(file,"w");
+					if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
+					else{
+						std::vector<std::pair<int,double> > ewald_pair(nnPotOpt.nVal_);
+						for(int n=0; n<nnPotOpt.nVal_; ++n){
+							ewald_pair[n].first=indices_val[n];
+							ewald_pair[n].second=ewald_t[n];
+						}
+						std::sort(ewald_pair.begin(),ewald_pair.end(),compare_pair);
+						fprintf(writer,"#STRUCTURE ENERGY_EWALD\n");
+						for(int n=0; n<nnPotOpt.nVal_; ++n){
+							fprintf(writer,"%s %f\n",files_val[n].c_str(),ewald_pair[n].second);
+						}
+						fclose(writer);
+						writer=NULL;
 					}
-					std::sort(ewald_val_pair.begin(),ewald_val_pair.end(),compare_pair);
-					fprintf(writer,"#STRUCTURE ENERGY_EWALD\n");
-					for(int n=0; n<nnPotOpt.nVal_; ++n){
-						fprintf(writer,"%s %f\n",files_val[n].c_str(),ewald_val_pair[n].second);
-					}
-					fclose(writer);
-					writer=NULL;
 				}
+				//free memory
+				delete[] dist_size;
+				delete[] dist_offset;
 			}
-			delete[] thread_dist_val;
-			delete[] thread_offset_val;
-			delete[] ewald_val_l;
-			if(WORLD.rank()==0) delete[] ewald_val_t;
+			//free memory
+			delete[] ewald_l;
+			if(WORLD.rank()==0) delete[] ewald_t;
 		}
 		//==== test systems ====
 		if(dist_test.size()>0 && nnPotOpt.charge_ && write_ewald){
-			if(WORLD.rank()==0) std::cout<<"writing ewald - testing set\n";
-			//local variables
-			int* thread_dist_test=new int[WORLD.size()];
-			int* thread_offset_test=new int[WORLD.size()];
-			double* ewald_test_l=new double[dist_test.size()];
-			for(int i=0; i<dist_test.size(); ++i) ewald_test_l[i]=struc_test[i].ewald();
-			double* ewald_test_t=NULL;
-			if(WORLD.rank()==0) ewald_test_t=new double[nnPotOpt.nTest_];
-			//compute dist
-			MPI_Gather(&dist_test.size(),1,MPI_INT,thread_dist_test,1,MPI_INT,0,WORLD.label());
-			MPI_Gather(&dist_test.offset(),1,MPI_INT,thread_offset_test,1,MPI_INT,0,WORLD.label());
+			if(WORLD.rank()==0) std::cout<<"writing ewald - test set\n";
+			//global energy arrays
+			double* ewald_t=NULL;
+			if(WORLD.rank()==0) ewald_t=new double[nnPotOpt.nTest_];
+			//local energy arrays
+			double* ewald_l=new double[dist_test.size()];
+			for(int i=0; i<dist_test.size(); ++i) ewald_l[i]=struc_test[i].ewald();
 			//gather energies
-			MPI_Gatherv(ewald_test_l,dist_test.size(),MPI_DOUBLE,ewald_test_t,thread_dist_test,thread_offset_test,MPI_DOUBLE,0,WORLD.label());
-			//write energies
-			if(WORLD.rank()==0){
-				const char* file="nn_pot_ewald_test.dat";
-				FILE* writer=fopen(file,"w");
-				if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
-				else{
-					std::vector<std::pair<int,double> > ewald_test_pair(nnPotOpt.nTest_);
-					for(int n=0; n<nnPotOpt.nTest_; ++n){
-						ewald_test_pair[n].first=indices_test[n];
-						ewald_test_pair[n].second=ewald_test_t[n];
+			if(comm_head!=MPI_COMM_NULL){
+				//compute dist
+				int* dist_size=new int[BATCH.ngroup()];
+				int* dist_offset=new int[BATCH.ngroup()];
+				MPI_Gather(&dist_test.size(),1,MPI_INT,dist_size,1,MPI_INT,0,comm_head);
+				MPI_Gather(&dist_test.offset(),1,MPI_INT,dist_offset,1,MPI_INT,0,comm_head);
+				//gather energies
+				MPI_Gatherv(ewald_l,dist_test.size(),MPI_DOUBLE,ewald_t,dist_size,dist_offset,MPI_DOUBLE,0,comm_head);
+				//write energies
+				if(WORLD.rank()==0){
+					const char* file="nn_pot_ewald_test.dat";
+					FILE* writer=fopen(file,"w");
+					if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
+					else{
+						std::vector<std::pair<int,double> > ewald_pair(nnPotOpt.nTest_);
+						for(int n=0; n<nnPotOpt.nTest_; ++n){
+							ewald_pair[n].first=indices_test[n];
+							ewald_pair[n].second=ewald_t[n];
+						}
+						std::sort(ewald_pair.begin(),ewald_pair.end(),compare_pair);
+						fprintf(writer,"#STRUCTURE ENERGY_EWALD\n");
+						for(int n=0; n<nnPotOpt.nTest_; ++n){
+							fprintf(writer,"%s %f\n",files_test[n].c_str(),ewald_pair[n].second);
+						}
+						fclose(writer);
+						writer=NULL;
 					}
-					std::sort(ewald_test_pair.begin(),ewald_test_pair.end(),compare_pair);
-					fprintf(writer,"#STRUCTURE ENERGY_EWALD\n");
-					for(int n=0; n<nnPotOpt.nTest_; ++n){
-						fprintf(writer,"%s %f\n",files_test[n].c_str(),ewald_test_pair[n].second);
+				}
+				//free memory
+				delete[] dist_size;
+				delete[] dist_offset;
+			}
+			//free memory
+			delete[] ewald_l;
+			if(WORLD.rank()==0) delete[] ewald_t;
+		}
+		
+		//======== compute the final forces ========
+		//==== training structures ====
+		if(dist_train.size()>0 && nnPotOpt.calcForce_){
+			if(WORLD.rank()==0) std::cout<<"computing final forces - training set\n";
+			//global force arrays
+			double* forces_nn_t=NULL;
+			double* forces_exact_t=NULL;
+			int* natoms_t=NULL;
+			if(WORLD.rank()==0) natoms_t=new int[nnPotOpt.nTrain_];
+			//local force arrays
+			int count=0,ndata=0,ndata_t=0;
+			int* natoms=new int[dist_train.size()];
+			double* forces_nn=NULL;
+			double* forces_exact=NULL;
+			std::vector<std::vector<Eigen::Vector3d> > forces_exact_v(dist_train.size());
+			std::vector<std::vector<Eigen::Vector3d> > forces_nn_v(dist_train.size());
+			//compute forces
+			for(int n=0; n<dist_train.size(); ++n){
+				forces_exact_v[n].resize(struc_train[n].nAtoms());
+				for(int j=0; j<struc_train[n].nAtoms(); ++j) forces_exact_v[n][j]=struc_train[n].force(j);
+				ndata+=forces_exact_v[n].size()*3;
+			}
+			clock.begin();
+			for(int n=0; n<dist_train.size(); ++n){
+				if(NN_POT_TRAIN_PRINT_STATUS>0) std::cout<<"structure-train["<<n<<"]\n";
+				nnPotOpt.nnpot_.forces(struc_train[n],false);
+			}
+			clock.end();
+			time_force_train=clock.duration();
+			for(int n=0; n<dist_train.size(); ++n){
+				forces_nn_v[n].resize(struc_train[n].nAtoms());
+				for(int j=0; j<struc_train[n].nAtoms(); ++j) forces_nn_v[n][j]=struc_train[n].force(j);
+			}
+			MPI_Barrier(WORLD.label());
+			//gather forces
+			if(comm_head!=MPI_COMM_NULL){
+				//compute dist
+				int* dist_size=new int[BATCH.ngroup()];//the number of structures in each batch
+				int* dist_offset=new int[BATCH.ngroup()];//the offset of each group of structurs in each batch
+				MPI_Gather(&dist_train.size(),1,MPI_INT,dist_size,1,MPI_INT,0,comm_head);
+				MPI_Gather(&dist_train.offset(),1,MPI_INT,dist_offset,1,MPI_INT,0,comm_head);
+				//gather ndata
+				int* dist_data_size=new int[BATCH.ngroup()];
+				int* dist_data_offset=new int[BATCH.ngroup()];
+				MPI_Reduce(&ndata,&ndata_t,1,MPI_INT,MPI_SUM,0,comm_head);
+				MPI_Gather(&ndata,1,MPI_INT,dist_data_size,1,MPI_INT,0,comm_head);
+				dist_data_offset[0]=0;
+				for(int i=1; i<BATCH.ngroup(); ++i) dist_data_offset[i]=dist_data_offset[i-1]+dist_data_size[i-1];
+				//pack forces into 1D arrays
+				forces_nn=new double[ndata];
+				forces_exact=new double[ndata];
+				if(WORLD.rank()==0){
+					forces_nn_t=new double[ndata_t];
+					forces_exact_t=new double[ndata_t];
+				}
+				count=0;
+				for(int n=0; n<forces_exact_v.size(); ++n){
+					for(int j=0; j<forces_exact_v[n].size(); ++j){
+						forces_exact[count++]=forces_exact_v[n][j][0];
+						forces_exact[count++]=forces_exact_v[n][j][1];
+						forces_exact[count++]=forces_exact_v[n][j][2];
 					}
-					fclose(writer);
-					writer=NULL;
+				}
+				count=0;
+				for(int n=0; n<forces_nn_v.size(); ++n){
+					for(int j=0; j<forces_nn_v[n].size(); ++j){
+						forces_nn[count++]=forces_nn_v[n][j][0];
+						forces_nn[count++]=forces_nn_v[n][j][1];
+						forces_nn[count++]=forces_nn_v[n][j][2];
+					}
+				}
+				//gather 1D force arrays
+				MPI_Gatherv(forces_nn,ndata,MPI_DOUBLE,forces_nn_t,dist_data_size,dist_data_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(forces_exact,ndata,MPI_DOUBLE,forces_exact_t,dist_data_size,dist_data_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(natoms,dist_train.size(),MPI_INT,natoms_t,dist_size,dist_offset,MPI_INT,0,comm_head);
+				//accumulate statistics
+				if(WORLD.rank()==0){
+					for(int i=0; i<ndata_t; i+=3){
+						Eigen::Vector3d f_exact,f_nn;
+						f_exact[0]=forces_exact_t[i+0];
+						f_exact[1]=forces_exact_t[i+1];
+						f_exact[2]=forces_exact_t[i+2];
+						f_nn[0]=forces_nn_t[i+0];
+						f_nn[1]=forces_nn_t[i+1];
+						f_nn[2]=forces_nn_t[i+2];
+						acc1d_force_train_a.push((f_exact-f_nn).norm());
+						acc2d_forcex_train.push(f_exact[0],f_nn[0]);
+						acc2d_forcey_train.push(f_exact[1],f_nn[1]);
+						acc2d_forcez_train.push(f_exact[2],f_nn[2]);
+					}
+					//write forces
+					if(write_force){
+						const char* file="nn_pot_force_train.dat";
+						FILE* writer=fopen(file,"w");
+						if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
+						else{
+							for(int i=0; i<ndata_t; i+=3){
+								Eigen::Vector3d f_exact,f_nn;
+								f_exact[0]=forces_exact_t[i+0];
+								f_exact[1]=forces_exact_t[i+1];
+								f_exact[2]=forces_exact_t[i+2];
+								f_nn[0]=forces_nn_t[i+0];
+								f_nn[1]=forces_nn_t[i+1];
+								f_nn[2]=forces_nn_t[i+2];
+								fprintf(writer,"%f %f %f %f %f %f\n",
+									f_exact[0],f_exact[1],f_exact[2],
+									f_nn[0],f_nn[1],f_nn[2]
+								);
+							}
+							fclose(writer); writer=NULL;
+						}
+					}
+				}
+				//free memory
+				delete[] dist_size;
+				delete[] dist_offset;
+				delete[] dist_data_size;
+				delete[] dist_data_offset;
+				delete[] forces_exact;
+				delete[] forces_nn;
+				if(WORLD.rank()==0){
+					delete[] forces_nn_t;
+					delete[] forces_exact_t;
 				}
 			}
-			delete[] thread_dist_test;
-			delete[] thread_offset_test;
-			delete[] ewald_test_l;
-			if(WORLD.rank()==0) delete[] ewald_test_t;
+			MPI_Barrier(WORLD.label());
+			if(WORLD.rank()==0) delete[] natoms_t;
+			delete[] natoms;
+		}
+		//==== validation structures ====
+		if(dist_val.size()>0 && nnPotOpt.calcForce_){
+			if(WORLD.rank()==0) std::cout<<"computing final forces - validation set\n";
+			//global force arrays
+			double* forces_nn_t=NULL;
+			double* forces_exact_t=NULL;
+			//local force arrays
+			int count=0,ndata=0,ndata_t=0;
+			int* natoms=new int[dist_val.size()];
+			int* natoms_t=NULL;
+			double* forces_nn=NULL;
+			double* forces_exact=NULL;
+			std::vector<std::vector<Eigen::Vector3d> > forces_exact_v(dist_val.size());
+			std::vector<std::vector<Eigen::Vector3d> > forces_nn_v(dist_val.size());
+			//compute forces
+			for(int n=0; n<dist_val.size(); ++n){
+				forces_exact_v[n].resize(struc_val[n].nAtoms());
+				for(int j=0; j<struc_val[n].nAtoms(); ++j) forces_exact_v[n][j]=struc_val[n].force(j);
+				ndata+=forces_exact_v[n].size()*3;
+			}
+			clock.begin();
+			for(int n=0; n<dist_val.size(); ++n){
+				if(NN_POT_TRAIN_PRINT_STATUS>0) std::cout<<"structure-val["<<n<<"]\n";
+				nnPotOpt.nnpot_.forces(struc_val[n],false);
+			}
+			clock.end();
+			time_force_val=clock.duration();
+			for(int n=0; n<dist_val.size(); ++n){
+				forces_nn_v[n].resize(struc_val[n].nAtoms());
+				for(int j=0; j<struc_val[n].nAtoms(); ++j) forces_nn_v[n][j]=struc_val[n].force(j);
+			}
+			MPI_Barrier(WORLD.label());
+			//gather forces
+			if(comm_head!=MPI_COMM_NULL){
+				//compute dist
+				int* dist_size=new int[BATCH.ngroup()];//the number of structures in each batch
+				int* dist_offset=new int[BATCH.ngroup()];//the offset of each group of structurs in each batch
+				MPI_Gather(&dist_val.size(),1,MPI_INT,dist_size,1,MPI_INT,0,comm_head);
+				MPI_Gather(&dist_val.offset(),1,MPI_INT,dist_offset,1,MPI_INT,0,comm_head);
+				//gather forces
+				int* dist_data_size=new int[BATCH.ngroup()];
+				int* dist_data_offset=new int[BATCH.ngroup()];
+				MPI_Reduce(&ndata,&ndata_t,1,MPI_INT,MPI_SUM,0,comm_head);
+				MPI_Gather(&ndata,1,MPI_INT,dist_data_size,1,MPI_INT,0,comm_head);
+				dist_data_offset[0]=0;
+				for(int i=1; i<BATCH.ngroup(); ++i) dist_data_offset[i]=dist_data_offset[i-1]+dist_data_size[i-1];
+				forces_nn=new double[ndata];
+				forces_exact=new double[ndata];
+				if(WORLD.rank()==0){
+					forces_nn_t=new double[ndata_t];
+					forces_exact_t=new double[ndata_t];
+					natoms_t=new int[nnPotOpt.nTrain_];
+				}
+				count=0;
+				for(int n=0; n<forces_exact_v.size(); ++n){
+					for(int j=0; j<forces_exact_v[n].size(); ++j){
+						forces_exact[count++]=forces_exact_v[n][j][0];
+						forces_exact[count++]=forces_exact_v[n][j][1];
+						forces_exact[count++]=forces_exact_v[n][j][2];
+					}
+				}
+				count=0;
+				for(int n=0; n<forces_nn_v.size(); ++n){
+					for(int j=0; j<forces_nn_v[n].size(); ++j){
+						forces_nn[count++]=forces_nn_v[n][j][0];
+						forces_nn[count++]=forces_nn_v[n][j][1];
+						forces_nn[count++]=forces_nn_v[n][j][2];
+					}
+				}
+				MPI_Gatherv(forces_nn,ndata,MPI_DOUBLE,forces_nn_t,dist_data_size,dist_data_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(forces_exact,ndata,MPI_DOUBLE,forces_exact_t,dist_data_size,dist_data_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(natoms,dist_val.size(),MPI_INT,natoms_t,dist_size,dist_offset,MPI_INT,0,comm_head);
+				//accumulate statistics
+				if(WORLD.rank()==0){
+					for(int i=0; i<ndata_t; i+=3){
+						Eigen::Vector3d f_exact,f_nn;
+						f_exact[0]=forces_exact_t[i+0];
+						f_exact[1]=forces_exact_t[i+1];
+						f_exact[2]=forces_exact_t[i+2];
+						f_nn[0]=forces_nn_t[i+0];
+						f_nn[1]=forces_nn_t[i+1];
+						f_nn[2]=forces_nn_t[i+2];
+						acc1d_force_val_a.push((f_exact-f_nn).norm());
+						acc2d_forcex_val.push(f_exact[0],f_nn[0]);
+						acc2d_forcey_val.push(f_exact[1],f_nn[1]);
+						acc2d_forcez_val.push(f_exact[2],f_nn[2]);
+					}
+					//write forces
+					if(write_force){
+						const char* file="nn_pot_force_val.dat";
+						FILE* writer=fopen(file,"w");
+						if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
+						else{
+							for(int i=0; i<ndata_t; i+=3){
+								Eigen::Vector3d f_exact,f_nn;
+								f_exact[0]=forces_exact_t[i+0];
+								f_exact[1]=forces_exact_t[i+1];
+								f_exact[2]=forces_exact_t[i+2];
+								f_nn[0]=forces_nn_t[i+0];
+								f_nn[1]=forces_nn_t[i+1];
+								f_nn[2]=forces_nn_t[i+2];
+								fprintf(writer,"%f %f %f %f %f %f\n",
+									f_exact[0],f_exact[1],f_exact[2],
+									f_nn[0],f_nn[1],f_nn[2]
+								);
+							}
+							fclose(writer); writer=NULL;
+						}
+					}
+				}
+				//free memory
+				delete[] dist_size;
+				delete[] dist_offset;
+				delete[] dist_data_size;
+				delete[] dist_data_offset;
+				delete[] forces_exact;
+				delete[] forces_nn;
+				if(WORLD.rank()==0){
+					delete[] forces_nn_t;
+					delete[] forces_exact_t;
+					delete[] natoms_t;
+				}
+			}
+			MPI_Barrier(WORLD.label());
+			delete[] natoms;
+		}
+		//==== test structures ====
+		if(dist_test.size()>0 && nnPotOpt.calcForce_){
+			if(WORLD.rank()==0) std::cout<<"computing final forces - test set\n";
+			//global force arrays
+			double* forces_nn_t=NULL;
+			double* forces_exact_t=NULL;
+			//local force arrays
+			int count=0,ndata=0,ndata_t=0;
+			int* natoms=new int[dist_test.size()];
+			int* natoms_t=NULL;
+			double* forces_nn=NULL;
+			double* forces_exact=NULL;
+			std::vector<std::vector<Eigen::Vector3d> > forces_exact_v(dist_test.size());
+			std::vector<std::vector<Eigen::Vector3d> > forces_nn_v(dist_test.size());
+			//compute forces
+			for(int n=0; n<dist_test.size(); ++n){
+				forces_exact_v[n].resize(struc_test[n].nAtoms());
+				for(int j=0; j<struc_test[n].nAtoms(); ++j) forces_exact_v[n][j]=struc_test[n].force(j);
+				ndata+=forces_exact_v[n].size()*3;
+			}
+			clock.begin();
+			for(int n=0; n<dist_test.size(); ++n){
+				if(NN_POT_TRAIN_PRINT_STATUS>0) std::cout<<"structure-val["<<n<<"]\n";
+				nnPotOpt.nnpot_.forces(struc_test[n],false);
+			}
+			clock.end();
+			time_force_test=clock.duration();
+			for(int n=0; n<dist_test.size(); ++n){
+				forces_nn_v[n].resize(struc_test[n].nAtoms());
+				for(int j=0; j<struc_test[n].nAtoms(); ++j) forces_nn_v[n][j]=struc_test[n].force(j);
+			}
+			MPI_Barrier(WORLD.label());
+			//gather forces
+			if(comm_head!=MPI_COMM_NULL){
+				//compute dist
+				int* dist_size=new int[BATCH.ngroup()];//the number of structures in each batch
+				int* dist_offset=new int[BATCH.ngroup()];//the offset of each group of structurs in each batch
+				MPI_Gather(&dist_test.size(),1,MPI_INT,dist_size,1,MPI_INT,0,comm_head);
+				MPI_Gather(&dist_test.offset(),1,MPI_INT,dist_offset,1,MPI_INT,0,comm_head);
+				//gather forces
+				int* dist_data_size=new int[BATCH.ngroup()];
+				int* dist_data_offset=new int[BATCH.ngroup()];
+				MPI_Reduce(&ndata,&ndata_t,1,MPI_INT,MPI_SUM,0,comm_head);
+				MPI_Gather(&ndata,1,MPI_INT,dist_data_size,1,MPI_INT,0,comm_head);
+				dist_data_offset[0]=0;
+				for(int i=1; i<BATCH.ngroup(); ++i) dist_data_offset[i]=dist_data_offset[i-1]+dist_data_size[i-1];
+				forces_nn=new double[ndata];
+				forces_exact=new double[ndata];
+				if(WORLD.rank()==0){
+					forces_nn_t=new double[ndata_t];
+					forces_exact_t=new double[ndata_t];
+					natoms_t=new int[nnPotOpt.nTrain_];
+				}
+				count=0;
+				for(int n=0; n<forces_exact_v.size(); ++n){
+					for(int j=0; j<forces_exact_v[n].size(); ++j){
+						forces_exact[count++]=forces_exact_v[n][j][0];
+						forces_exact[count++]=forces_exact_v[n][j][1];
+						forces_exact[count++]=forces_exact_v[n][j][2];
+					}
+				}
+				count=0;
+				for(int n=0; n<forces_nn_v.size(); ++n){
+					for(int j=0; j<forces_nn_v[n].size(); ++j){
+						forces_nn[count++]=forces_nn_v[n][j][0];
+						forces_nn[count++]=forces_nn_v[n][j][1];
+						forces_nn[count++]=forces_nn_v[n][j][2];
+					}
+				}
+				MPI_Gatherv(forces_nn,ndata,MPI_DOUBLE,forces_nn_t,dist_data_size,dist_data_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(forces_exact,ndata,MPI_DOUBLE,forces_exact_t,dist_data_size,dist_data_offset,MPI_DOUBLE,0,comm_head);
+				MPI_Gatherv(natoms,dist_test.size(),MPI_INT,natoms_t,dist_size,dist_offset,MPI_INT,0,comm_head);
+				//accumulate statistics
+				if(WORLD.rank()==0){
+					for(int i=0; i<ndata_t; i+=3){
+						Eigen::Vector3d f_exact,f_nn;
+						f_exact[0]=forces_exact_t[i+0];
+						f_exact[1]=forces_exact_t[i+1];
+						f_exact[2]=forces_exact_t[i+2];
+						f_nn[0]=forces_nn_t[i+0];
+						f_nn[1]=forces_nn_t[i+1];
+						f_nn[2]=forces_nn_t[i+2];
+						acc1d_force_test_a.push((f_exact-f_nn).norm());
+						acc2d_forcex_test.push(f_exact[0],f_nn[0]);
+						acc2d_forcey_test.push(f_exact[1],f_nn[1]);
+						acc2d_forcez_test.push(f_exact[2],f_nn[2]);
+					}
+					//write forces
+					if(write_force){
+						const char* file="nn_pot_force_test.dat";
+						FILE* writer=fopen(file,"w");
+						if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
+						else{
+							for(int i=0; i<ndata_t; i+=3){
+								Eigen::Vector3d f_exact,f_nn;
+								f_exact[0]=forces_exact_t[i+0];
+								f_exact[1]=forces_exact_t[i+1];
+								f_exact[2]=forces_exact_t[i+2];
+								f_nn[0]=forces_nn_t[i+0];
+								f_nn[1]=forces_nn_t[i+1];
+								f_nn[2]=forces_nn_t[i+2];
+								fprintf(writer,"%f %f %f %f %f %f\n",
+									f_exact[0],f_exact[1],f_exact[2],
+									f_nn[0],f_nn[1],f_nn[2]
+								);
+							}
+							fclose(writer); writer=NULL;
+						}
+					}
+				}
+				//free memory
+				delete[] dist_size;
+				delete[] dist_offset;
+				delete[] dist_data_size;
+				delete[] dist_data_offset;
+				delete[] forces_exact;
+				delete[] forces_nn;
+				if(WORLD.rank()==0){
+					delete[] forces_nn_t;
+					delete[] forces_exact_t;
+					delete[] natoms_t;
+				}
+			}
+			MPI_Barrier(WORLD.label());
+			delete[] natoms;
 		}
 		
 		//======== write the inputs ========
 		//==== training structures ====
 		if(dist_train.size()>0 && write_input){
+			const char* file_inputs_train="nn_pot_inputs_train.dat";
 			if(WORLD.rank()==0){
-				FILE* writer=fopen("nn_pot_inputs_train.dat","w");
+				FILE* writer=fopen(file_inputs_train,"w");
 				if(writer!=NULL){
 					for(int n=0; n<dist_train.size(); ++n){
 						for(int i=0; i<struc_train[n].nAtoms(); ++i){
-							fprintf(writer,"%s%i ",struc_train[n].name(i).c_str(),struc_train[n].index(i)+1);
+							//fprintf(writer,"%s%i ",struc_train[n].name(i).c_str(),struc_train[n].index(i)+1);
+							fprintf(writer,"%s%i ",struc_train[n].name(i).c_str(),i);
 							for(int j=0; j<struc_train[n].symm(i).size(); ++j){
 								fprintf(writer,"%f ",struc_train[n].symm(i)[j]);
 							}
@@ -2773,16 +3163,17 @@ int main(int argc, char* argv[]){
 					}
 					fclose(writer);
 					writer=NULL;
-				}
+				} else std::cout<<"WARNING: Could not open inputs file for training structures\n";
 			}
 			MPI_Barrier(WORLD.label());
 			for(int ii=1; ii<WORLD.size(); ++ii){
 				if(WORLD.rank()==ii){
-					FILE* writer=fopen("nn_pot_inputs_train.dat","wa");
+					FILE* writer=fopen(file_inputs_train,"a");
 					if(writer!=NULL){
 						for(int n=0; n<dist_train.size(); ++n){
 							for(int i=0; i<struc_train[n].nAtoms(); ++i){
-								fprintf(writer,"%s%i ",struc_train[n].name(i).c_str(),struc_train[n].index(i)+1);
+								//fprintf(writer,"%s%i ",struc_train[n].name(i).c_str(),struc_train[n].index(i)+1);
+								fprintf(writer,"%s%i ",struc_train[n].name(i).c_str(),i);
 								for(int j=0; j<struc_train[n].symm(i).size(); ++j){
 									fprintf(writer,"%f ",struc_train[n].symm(i)[j]);
 								}
@@ -2791,19 +3182,21 @@ int main(int argc, char* argv[]){
 						}
 						fclose(writer);
 						writer=NULL;
-					}
+					} else std::cout<<"WARNING: Could not open inputs file for training structures\n";
 				}
 				MPI_Barrier(WORLD.label());
 			}
 		}
 		//==== validation structures ====
 		if(dist_val.size()>0 && write_input){
+			const char* file_inputs_val="nn_pot_inputs_val.dat";
 			if(WORLD.rank()==0){
-				FILE* writer=fopen("nn_pot_inputs_val.dat","w");
+				FILE* writer=fopen(file_inputs_val,"w");
 				if(writer!=NULL){
 					for(int n=0; n<dist_val.size(); ++n){
 						for(int i=0; i<struc_val[n].nAtoms(); ++i){
-							fprintf(writer,"%s%i ",struc_val[n].name(i).c_str(),struc_val[n].index(i)+1);
+							//fprintf(writer,"%s%i ",struc_val[n].name(i).c_str(),struc_val[n].index(i)+1);
+							fprintf(writer,"%s%i ",struc_val[n].name(i).c_str(),i);
 							for(int j=0; j<struc_val[n].symm(i).size(); ++j){
 								fprintf(writer,"%f ",struc_val[n].symm(i)[j]);
 							}
@@ -2812,16 +3205,17 @@ int main(int argc, char* argv[]){
 					}
 					fclose(writer);
 					writer=NULL;
-				}
+				} else std::cout<<"WARNING: Could not open inputs file for validation structures\n";
 			}
 			MPI_Barrier(WORLD.label());
 			for(int ii=1; ii<WORLD.size(); ++ii){
 				if(WORLD.rank()==ii){
-					FILE* writer=fopen("nn_pot_inputs_val.dat","wa");
+					FILE* writer=fopen(file_inputs_val,"a");
 					if(writer!=NULL){
 						for(int n=0; n<dist_val.size(); ++n){
 							for(int i=0; i<struc_val[n].nAtoms(); ++i){
-								fprintf(writer,"%s%i ",struc_val[n].name(i).c_str(),struc_val[n].index(i)+1);
+								//fprintf(writer,"%s%i ",struc_val[n].name(i).c_str(),struc_val[n].index(i)+1);
+								fprintf(writer,"%s%i ",struc_val[n].name(i).c_str(),i);
 								for(int j=0; j<struc_val[n].symm(i).size(); ++j){
 									fprintf(writer,"%f ",struc_val[n].symm(i)[j]);
 								}
@@ -2830,19 +3224,21 @@ int main(int argc, char* argv[]){
 						}
 						fclose(writer);
 						writer=NULL;
-					}
+					} else std::cout<<"WARNING: Could not open inputs file for validation structures\n";
 				}
 				MPI_Barrier(WORLD.label());
 			}
 		}
 		//==== testing structures ====
 		if(dist_test.size()>0 && write_input){
+			const char* file_inputs_test="nn_pot_inputs_test.dat";
 			if(WORLD.rank()==0){
-				FILE* writer=fopen("nn_pot_inputs_test.dat","w");
+				FILE* writer=fopen(file_inputs_test,"w");
 				if(writer!=NULL){
 					for(int n=0; n<dist_test.size(); ++n){
 						for(int i=0; i<struc_test[n].nAtoms(); ++i){
-							fprintf(writer,"%s%i ",struc_test[n].name(i).c_str(),struc_test[n].index(i)+1);
+							//fprintf(writer,"%s%i ",struc_test[n].name(i).c_str(),struc_test[n].index(i)+1);
+							fprintf(writer,"%s%i ",struc_test[n].name(i).c_str(),i);
 							for(int j=0; j<struc_test[n].symm(i).size(); ++j){
 								fprintf(writer,"%f ",struc_test[n].symm(i)[j]);
 							}
@@ -2851,16 +3247,17 @@ int main(int argc, char* argv[]){
 					}
 					fclose(writer);
 					writer=NULL;
-				}
+				} else std::cout<<"WARNING: Could not open inputs file for testing structures\n";
 			}
 			MPI_Barrier(WORLD.label());
 			for(int ii=1; ii<WORLD.size(); ++ii){
 				if(WORLD.rank()==ii){
-					FILE* writer=fopen("nn_pot_inputs_test.dat","wa");
+					FILE* writer=fopen(file_inputs_test,"a");
 					if(writer!=NULL){
 						for(int n=0; n<dist_test.size(); ++n){
 							for(int i=0; i<struc_test[n].nAtoms(); ++i){
-								fprintf(writer,"%s%i ",struc_test[n].name(i).c_str(),struc_test[n].index(i)+1);
+								//fprintf(writer,"%s%i ",struc_test[n].name(i).c_str(),struc_test[n].index(i)+1);
+								fprintf(writer,"%s%i ",struc_test[n].name(i).c_str(),i);
 								for(int j=0; j<struc_test[n].symm(i).size(); ++j){
 									fprintf(writer,"%f ",struc_test[n].symm(i)[j]);
 								}
@@ -2869,372 +3266,9 @@ int main(int argc, char* argv[]){
 						}
 						fclose(writer);
 						writer=NULL;
-					}
+					} else std::cout<<"WARNING: Could not open inputs file for testing structures\n";
 				}
 				MPI_Barrier(WORLD.label());
-			}
-		}
-		
-		//======== compute the final forces ========
-		//==== training structures ====
-		if(dist_train.size()>0 && nnPotOpt.calcForce_){
-			if(WORLD.rank()==0) std::cout<<"computing final forces - training set\n";
-			//local variables
-			int count=0,ndata=0,ndata_t=0;
-			int* thread_dist_train=new int[WORLD.size()];
-			int* thread_offset_train=new int[WORLD.size()];
-			int* natoms=new int[dist_train.size()];
-			int* natoms_t=NULL;
-			double* forces_nn=NULL;
-			double* forces_exact=NULL;
-			double* forces_nn_t=NULL;
-			double* forces_exact_t=NULL;
-			std::vector<std::vector<Eigen::Vector3d> > forces_exact_v(dist_train.size());
-			std::vector<std::vector<Eigen::Vector3d> > forces_nn_v(dist_train.size());
-			//compute dist
-			MPI_Gather(&dist_train.size(),1,MPI_INT,thread_dist_train,1,MPI_INT,0,WORLD.label());
-			MPI_Gather(&dist_train.offset(),1,MPI_INT,thread_offset_train,1,MPI_INT,0,WORLD.label());
-			//compute forces
-			for(int n=0; n<dist_train.size(); ++n){
-				forces_exact_v[n].resize(struc_train[n].nAtoms());
-				for(int j=0; j<struc_train[n].nAtoms(); ++j) forces_exact_v[n][j]=struc_train[n].force(j);
-				ndata+=forces_exact_v[n].size()*3;
-			}
-			start=std::clock();
-			for(int n=0; n<dist_train.size(); ++n){
-				if(NN_POT_TRAIN_PRINT_STATUS>0) std::cout<<"structure-train["<<n<<"]\n";
-				nnPotOpt.nnpot_.forces(struc_train[n],false);
-			}
-			stop=std::clock();
-			for(int n=0; n<dist_train.size(); ++n){
-				forces_nn_v[n].resize(struc_train[n].nAtoms());
-				for(int j=0; j<struc_train[n].nAtoms(); ++j) forces_nn_v[n][j]=struc_train[n].force(j);
-			}
-			time_force_train=((double)(stop-start))/CLOCKS_PER_SEC;
-			MPI_Barrier(WORLD.label());
-			//gather forces
-			int* thread_dist=new int[WORLD.size()];
-			int* thread_offset=new int[WORLD.size()];
-			MPI_Reduce(&ndata,&ndata_t,1,MPI_INT,MPI_SUM,0,WORLD.label());
-			MPI_Gather(&ndata,1,MPI_INT,thread_dist,1,MPI_INT,0,WORLD.label());
-			thread_offset[0]=0;
-			for(int i=1; i<WORLD.size(); ++i) thread_offset[i]=thread_offset[i-1]+thread_dist[i-1];
-			forces_nn=new double[ndata];
-			forces_exact=new double[ndata];
-			if(WORLD.rank()==0){
-				forces_nn_t=new double[ndata_t];
-				forces_exact_t=new double[ndata_t];
-				natoms_t=new int[nnPotOpt.nTrain_];
-			}
-			count=0;
-			for(int n=0; n<forces_exact_v.size(); ++n){
-				for(int j=0; j<forces_exact_v[n].size(); ++j){
-					forces_exact[count++]=forces_exact_v[n][j][0];
-					forces_exact[count++]=forces_exact_v[n][j][1];
-					forces_exact[count++]=forces_exact_v[n][j][2];
-				}
-			}
-			count=0;
-			for(int n=0; n<forces_nn_v.size(); ++n){
-				for(int j=0; j<forces_nn_v[n].size(); ++j){
-					forces_nn[count++]=forces_nn_v[n][j][0];
-					forces_nn[count++]=forces_nn_v[n][j][1];
-					forces_nn[count++]=forces_nn_v[n][j][2];
-				}
-			}
-			MPI_Gatherv(forces_nn,ndata,MPI_DOUBLE,forces_nn_t,thread_dist,thread_offset,MPI_DOUBLE,0,WORLD.label());
-			MPI_Gatherv(forces_exact,ndata,MPI_DOUBLE,forces_exact_t,thread_dist,thread_offset,MPI_DOUBLE,0,WORLD.label());
-			MPI_Gatherv(natoms,dist_train.size(),MPI_INT,natoms_t,thread_dist_train,thread_offset_train,MPI_INT,0,WORLD.label());
-			//accumulate statistics
-			if(WORLD.rank()==0){
-				for(int i=0; i<ndata_t; i+=3){
-					Eigen::Vector3d f_exact,f_nn;
-					f_exact[0]=forces_exact_t[i+0];
-					f_exact[1]=forces_exact_t[i+1];
-					f_exact[2]=forces_exact_t[i+2];
-					f_nn[0]=forces_nn_t[i+0];
-					f_nn[1]=forces_nn_t[i+1];
-					f_nn[2]=forces_nn_t[i+2];
-					acc1d_force_train_a.push((f_exact-f_nn).norm());
-					acc2d_forcex_train.push(f_exact[0],f_nn[0]);
-					acc2d_forcey_train.push(f_exact[1],f_nn[1]);
-					acc2d_forcez_train.push(f_exact[2],f_nn[2]);
-				}
-				//write forces
-				if(write_force){
-					const char* file="nn_pot_force_train.dat";
-					FILE* writer=fopen(file,"w");
-					if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
-					else{
-						for(int i=0; i<ndata_t; i+=3){
-							Eigen::Vector3d f_exact,f_nn;
-							f_exact[0]=forces_exact_t[i+0];
-							f_exact[1]=forces_exact_t[i+1];
-							f_exact[2]=forces_exact_t[i+2];
-							f_nn[0]=forces_nn_t[i+0];
-							f_nn[1]=forces_nn_t[i+1];
-							f_nn[2]=forces_nn_t[i+2];
-							fprintf(writer,"%f %f %f %f %f %f\n",
-								f_exact[0],f_exact[1],f_exact[2],
-								f_nn[0],f_nn[1],f_nn[2]
-							);
-						}
-						fclose(writer); writer=NULL;
-					}
-				}
-			}
-			MPI_Barrier(WORLD.label());
-			delete[] thread_dist_train;
-			delete[] thread_offset_train;
-			delete[] thread_dist;
-			delete[] thread_offset;
-			delete[] forces_exact;
-			delete[] forces_nn;
-			delete[] natoms;
-			if(WORLD.rank()==0){
-				delete[] forces_nn_t;
-				delete[] forces_exact_t;
-				delete[] natoms_t;
-			}
-		}
-		//==== validation structures ====
-		if(dist_val.size()>0 && nnPotOpt.calcForce_){
-			if(WORLD.rank()==0) std::cout<<"computing final forces - validation set\n";
-			//local variables
-			int count=0,ndata=0,ndata_t=0;
-			int* thread_dist_val=new int[WORLD.size()];
-			int* thread_offset_val=new int[WORLD.size()];
-			int* natoms=new int[dist_val.size()];
-			int* natoms_t=NULL;
-			double* forces_nn=NULL;
-			double* forces_exact=NULL;
-			double* forces_nn_t=NULL;
-			double* forces_exact_t=NULL;
-			std::vector<std::vector<Eigen::Vector3d> > forces_exact_v(dist_val.size());
-			std::vector<std::vector<Eigen::Vector3d> > forces_nn_v(dist_val.size());
-			//compute dist
-			MPI_Gather(&dist_val.size(),1,MPI_INT,thread_dist_val,1,MPI_INT,0,WORLD.label());
-			MPI_Gather(&dist_val.offset(),1,MPI_INT,thread_offset_val,1,MPI_INT,0,WORLD.label());
-			//compute forces
-			for(int n=0; n<dist_val.size(); ++n){
-				forces_exact_v[n].resize(struc_val[n].nAtoms());
-				for(int j=0; j<struc_val[n].nAtoms(); ++j) forces_exact_v[n][j]=struc_val[n].force(j);
-				ndata+=forces_exact_v[n].size()*3;
-			}
-			start=std::clock();
-			for(int n=0; n<dist_val.size(); ++n){
-				if(NN_POT_TRAIN_PRINT_STATUS>0) std::cout<<"structure-val["<<n<<"]\n";
-				nnPotOpt.nnpot_.forces(struc_val[n],false);
-			}
-			stop=std::clock();
-			for(int n=0; n<dist_val.size(); ++n){
-				forces_nn_v[n].resize(struc_val[n].nAtoms());
-				for(int j=0; j<struc_val[n].nAtoms(); ++j) forces_nn_v[n][j]=struc_val[n].force(j);
-			}
-			time_force_val=((double)(stop-start))/CLOCKS_PER_SEC;
-			//gather forces
-			int* thread_dist=new int[WORLD.size()];
-			int* thread_offset=new int[WORLD.size()];
-			MPI_Reduce(&ndata,&ndata_t,1,MPI_INT,MPI_SUM,0,WORLD.label());
-			MPI_Gather(&ndata,1,MPI_INT,thread_dist,1,MPI_INT,0,WORLD.label());
-			thread_offset[0]=0;
-			for(int i=1; i<WORLD.size(); ++i) thread_offset[i]=thread_offset[i-1]+thread_dist[i-1];
-			forces_nn=new double[ndata];
-			forces_exact=new double[ndata];
-			if(WORLD.rank()==0){
-				forces_nn_t=new double[ndata_t];
-				forces_exact_t=new double[ndata_t];
-				natoms_t=new int[nnPotOpt.nTrain_];
-			}
-			count=0;
-			for(int n=0; n<forces_exact_v.size(); ++n){
-				for(int j=0; j<forces_exact_v[n].size(); ++j){
-					forces_exact[count++]=forces_exact_v[n][j][0];
-					forces_exact[count++]=forces_exact_v[n][j][1];
-					forces_exact[count++]=forces_exact_v[n][j][2];
-				}
-			}
-			count=0;
-			for(int n=0; n<forces_nn_v.size(); ++n){
-				for(int j=0; j<forces_nn_v[n].size(); ++j){
-					forces_nn[count++]=forces_nn_v[n][j][0];
-					forces_nn[count++]=forces_nn_v[n][j][1];
-					forces_nn[count++]=forces_nn_v[n][j][2];
-				}
-			}
-			MPI_Gatherv(forces_nn,ndata,MPI_DOUBLE,forces_nn_t,thread_dist,thread_offset,MPI_DOUBLE,0,WORLD.label());
-			MPI_Gatherv(forces_exact,ndata,MPI_DOUBLE,forces_exact_t,thread_dist,thread_offset,MPI_DOUBLE,0,WORLD.label());
-			MPI_Gatherv(natoms,dist_val.size(),MPI_INT,natoms_t,thread_dist_val,thread_offset_val,MPI_INT,0,WORLD.label());
-			//accumulate statistics
-			if(WORLD.rank()==0){
-				for(int i=0; i<ndata_t; i+=3){
-					Eigen::Vector3d f_exact,f_nn;
-					f_exact[0]=forces_exact_t[i+0];
-					f_exact[1]=forces_exact_t[i+1];
-					f_exact[2]=forces_exact_t[i+2];
-					f_nn[0]=forces_nn_t[i+0];
-					f_nn[1]=forces_nn_t[i+1];
-					f_nn[2]=forces_nn_t[i+2];
-					acc1d_force_val_a.push((f_exact-f_nn).norm());
-					acc2d_forcex_val.push(f_exact[0],f_nn[0]);
-					acc2d_forcey_val.push(f_exact[1],f_nn[1]);
-					acc2d_forcez_val.push(f_exact[2],f_nn[2]);
-				}
-				//write forces
-				if(write_force){
-					const char* file="nn_pot_force_val.dat";
-					FILE* writer=fopen(file,"w");
-					if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
-					else{
-						for(int i=0; i<ndata_t; i+=3){
-							Eigen::Vector3d f_exact,f_nn;
-							f_exact[0]=forces_exact_t[i+0];
-							f_exact[1]=forces_exact_t[i+1];
-							f_exact[2]=forces_exact_t[i+2];
-							f_nn[0]=forces_nn_t[i+0];
-							f_nn[1]=forces_nn_t[i+1];
-							f_nn[2]=forces_nn_t[i+2];
-							fprintf(writer,"%f %f %f %f %f %f\n",
-								f_exact[0],f_exact[1],f_exact[2],
-								f_nn[0],f_nn[1],f_nn[2]
-							);
-						}
-						fclose(writer); writer=NULL;
-					}
-				}
-			}
-			MPI_Barrier(WORLD.label());
-			delete[] thread_dist_val;
-			delete[] thread_offset_val;
-			delete[] thread_dist;
-			delete[] thread_offset;
-			delete[] forces_exact;
-			delete[] forces_nn;
-			delete[] natoms;
-			if(WORLD.rank()==0){
-				delete[] forces_nn_t;
-				delete[] forces_exact_t;
-				delete[] natoms_t;
-			}
-		}
-		//==== test structures ====
-		if(dist_test.size()>0 && nnPotOpt.calcForce_){
-			if(WORLD.rank()==0) std::cout<<"computing final forces - testing set\n";
-			//local variables
-			int count=0,ndata=0,ndata_t=0;
-			int* thread_dist_test=new int[WORLD.size()];
-			int* thread_offset_test=new int[WORLD.size()];
-			int* natoms=new int[dist_test.size()];
-			int* natoms_t=NULL;
-			double* forces_nn=NULL;
-			double* forces_exact=NULL;
-			double* forces_nn_t=NULL;
-			double* forces_exact_t=NULL;
-			std::vector<std::vector<Eigen::Vector3d> > forces_exact_v(dist_test.size());
-			std::vector<std::vector<Eigen::Vector3d> > forces_nn_v(dist_test.size());
-			//compute dist
-			MPI_Gather(&dist_test.size(),1,MPI_INT,thread_dist_test,1,MPI_INT,0,WORLD.label());
-			MPI_Gather(&dist_test.offset(),1,MPI_INT,thread_offset_test,1,MPI_INT,0,WORLD.label());
-			//compute forces
-			for(int n=0; n<dist_test.size(); ++n){
-				forces_exact_v[n].resize(struc_test[n].nAtoms());
-				for(int j=0; j<struc_test[n].nAtoms(); ++j) forces_exact_v[n][j]=struc_test[n].force(j);
-				ndata+=forces_exact_v[n].size()*3;
-			}
-			start=std::clock();
-			for(int n=0; n<dist_test.size(); ++n){
-				if(NN_POT_TRAIN_PRINT_STATUS>0) std::cout<<"structure-test["<<n<<"]\n";
-				nnPotOpt.nnpot_.forces(struc_test[n],false);
-			}
-			stop=std::clock();
-			for(int n=0; n<dist_test.size(); ++n){
-				forces_nn_v[n].resize(struc_test[n].nAtoms());
-				for(int j=0; j<struc_test[n].nAtoms(); ++j) forces_nn_v[n][j]=struc_test[n].force(j);
-			}
-			time_force_test=((double)(stop-start))/CLOCKS_PER_SEC;
-			//gather forces
-			int* thread_dist=new int[WORLD.size()];
-			int* thread_offset=new int[WORLD.size()];
-			MPI_Reduce(&ndata,&ndata_t,1,MPI_INT,MPI_SUM,0,WORLD.label());
-			MPI_Gather(&ndata,1,MPI_INT,thread_dist,1,MPI_INT,0,WORLD.label());
-			thread_offset[0]=0;
-			for(int i=1; i<WORLD.size(); ++i) thread_offset[i]=thread_offset[i-1]+thread_dist[i-1];
-			forces_nn=new double[ndata];
-			forces_exact=new double[ndata];
-			if(WORLD.rank()==0){
-				forces_nn_t=new double[ndata_t];
-				forces_exact_t=new double[ndata_t];
-				natoms_t=new int[nnPotOpt.nTrain_];
-			}
-			count=0;
-			for(int n=0; n<forces_exact_v.size(); ++n){
-				for(int j=0; j<forces_exact_v[n].size(); ++j){
-					forces_exact[count++]=forces_exact_v[n][j][0];
-					forces_exact[count++]=forces_exact_v[n][j][1];
-					forces_exact[count++]=forces_exact_v[n][j][2];
-				}
-			}
-			count=0;
-			for(int n=0; n<forces_nn_v.size(); ++n){
-				for(int j=0; j<forces_nn_v[n].size(); ++j){
-					forces_nn[count++]=forces_nn_v[n][j][0];
-					forces_nn[count++]=forces_nn_v[n][j][1];
-					forces_nn[count++]=forces_nn_v[n][j][2];
-				}
-			}
-			MPI_Gatherv(forces_nn,ndata,MPI_DOUBLE,forces_nn_t,thread_dist,thread_offset,MPI_DOUBLE,0,WORLD.label());
-			MPI_Gatherv(forces_exact,ndata,MPI_DOUBLE,forces_exact_t,thread_dist,thread_offset,MPI_DOUBLE,0,WORLD.label());
-			MPI_Gatherv(natoms,dist_test.size(),MPI_INT,natoms_t,thread_dist_test,thread_offset_test,MPI_INT,0,WORLD.label());
-			//accumulate statistics
-			if(WORLD.rank()==0){
-				for(int i=0; i<ndata_t; i+=3){
-					Eigen::Vector3d f_exact,f_nn;
-					f_exact[0]=forces_exact_t[i+0];
-					f_exact[1]=forces_exact_t[i+1];
-					f_exact[2]=forces_exact_t[i+2];
-					f_nn[0]=forces_nn_t[i+0];
-					f_nn[1]=forces_nn_t[i+1];
-					f_nn[2]=forces_nn_t[i+2];
-					acc1d_force_test_a.push((f_exact-f_nn).norm());
-					acc2d_forcex_test.push(f_exact[0],f_nn[0]);
-					acc2d_forcey_test.push(f_exact[1],f_nn[1]);
-					acc2d_forcez_test.push(f_exact[2],f_nn[2]);
-				}
-				//write forces
-				if(write_force){
-					const char* file="nn_pot_force_test.dat";
-					FILE* writer=fopen(file,"w");
-					if(writer==NULL) std::cout<<"WARNING: Could not open file: \""<<file<<"\"\n";
-					else{
-						for(int i=0; i<ndata_t; i+=3){
-							Eigen::Vector3d f_exact,f_nn;
-							f_exact[0]=forces_exact_t[i+0];
-							f_exact[1]=forces_exact_t[i+1];
-							f_exact[2]=forces_exact_t[i+2];
-							f_nn[0]=forces_nn_t[i+0];
-							f_nn[1]=forces_nn_t[i+1];
-							f_nn[2]=forces_nn_t[i+2];
-							fprintf(writer,"%f %f %f %f %f %f\n",
-								f_exact[0],f_exact[1],f_exact[2],
-								f_nn[0],f_nn[1],f_nn[2]
-							);
-						}
-						fclose(writer); writer=NULL;
-					}
-				}
-			}
-			MPI_Barrier(WORLD.label());
-			delete[] thread_dist_test;
-			delete[] thread_offset_test;
-			delete[] thread_dist;
-			delete[] thread_offset;
-			delete[] forces_exact;
-			delete[] forces_nn;
-			delete[] natoms;
-			if(WORLD.rank()==0){
-				delete[] forces_nn_t;
-				delete[] forces_exact_t;
-				delete[] natoms_t;
 			}
 		}
 		
@@ -3302,38 +3336,45 @@ int main(int argc, char* argv[]){
 			}
 		}
 		
+		//======== stop the wall clock ========
+		if(WORLD.rank()==0) clock_wall.end();
+		if(WORLD.rank()==0) time_wall=clock_wall.duration();
+		
 		//************************************************************************************
 		// OUTPUT
 		//************************************************************************************
 		
 		//======== print the timing info ========
-		if(WORLD.rank()==0){
-			//======== stop wall clock ========
-			stop_wall=std::clock();
-			time_wall=((double)(stop_wall-start_wall))/CLOCKS_PER_SEC;
+		{
+			double tmp;
+			MPI_Reduce(&time_symm_train,&tmp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_symm_train=tmp/WORLD.size();
+			MPI_Reduce(&time_energy_train,&tmp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_energy_train=tmp/WORLD.size();
+			MPI_Reduce(&time_force_train,&tmp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_force_train=tmp/WORLD.size();
+			MPI_Reduce(&time_symm_val,&tmp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_symm_val=tmp/WORLD.size();
+			MPI_Reduce(&time_energy_val,&tmp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_energy_val=tmp/WORLD.size();
+			MPI_Reduce(&time_force_val,&tmp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_force_val=tmp/WORLD.size();
+			MPI_Reduce(&time_symm_test,&tmp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_symm_test=tmp/WORLD.size();
+			MPI_Reduce(&time_energy_test,&tmp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_energy_test=tmp/WORLD.size();
+			MPI_Reduce(&time_force_test,&tmp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_force_test=tmp/WORLD.size();
 		}
-		double temp;
-		MPI_Reduce(&time_symm_train,&temp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_symm_train=temp;
-		MPI_Reduce(&time_energy_train,&temp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_energy_train=temp;
-		MPI_Reduce(&time_force_train,&temp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_force_train=temp;
-		MPI_Reduce(&time_symm_val,&temp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_symm_val=temp;
-		MPI_Reduce(&time_energy_val,&temp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_energy_val=temp;
-		MPI_Reduce(&time_force_val,&temp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_force_val=temp;
-		MPI_Reduce(&time_symm_test,&temp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_symm_test=temp;
-		MPI_Reduce(&time_energy_test,&temp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_energy_test=temp;
-		MPI_Reduce(&time_force_test,&temp,1,MPI_DOUBLE,MPI_SUM,0,WORLD.label()); if(WORLD.rank()==0) time_force_test=temp;
 		if(WORLD.rank()==0){
 		std::cout<<print::buf(strbuf)<<"\n";
 		std::cout<<print::title("TIMING (S)",strbuf)<<"\n";
+		if(struc_train.size()>0){
 		std::cout<<"time - symm   - train = "<<time_symm_train<<"\n";
 		std::cout<<"time - energy - train = "<<time_energy_train<<"\n";
 		std::cout<<"time - force  - train = "<<time_force_train<<"\n";
+		}
+		if(struc_val.size()>0){
 		std::cout<<"time - symm   - val   = "<<time_symm_val<<"\n";
 		std::cout<<"time - energy - val   = "<<time_energy_val<<"\n";
 		std::cout<<"time - force  - val   = "<<time_force_val<<"\n";
+		}
+		if(struc_test.size()>0){
 		std::cout<<"time - symm   - test  = "<<time_symm_test<<"\n";
 		std::cout<<"time - energy - test  = "<<time_energy_test<<"\n";
 		std::cout<<"time - force  - test  = "<<time_force_test<<"\n";
+		}
 		std::cout<<"time - wall           = "<<time_wall<<"\n";
 		std::cout<<print::title("TIMING (S)",strbuf)<<"\n";
 		std::cout<<print::buf(strbuf)<<"\n";
@@ -3471,19 +3512,20 @@ int main(int argc, char* argv[]){
 		//======== write the nn's ========
 		if(NN_POT_TRAIN_PRINT_STATUS>-1 && WORLD.rank()==0) std::cout<<"writing the nn's\n";
 		if(WORLD.rank()==0){
-			nnPotOpt.nnpot_.tail()="";
-			nnPotOpt.nnpot_.write();
+			NNPot::write(nnPotOpt.file_ann_.c_str(),nnPotOpt.nnpot_);
 		}
 		//======== write restart file ========
 		if(NN_POT_TRAIN_PRINT_STATUS>-1 && WORLD.rank()==0) std::cout<<"writing restart file\n";
 		if(WORLD.rank()==0){
-			std::string file=nnPotOpt.restart_file_+".restart";
-			nnPotOpt.write_restart(file.c_str());
+			nnPotOpt.write_restart(nnPotOpt.file_restart_.c_str());
 		}
 		
 		//======== finalize mpi ========
 		if(NN_POT_TRAIN_PRINT_STATUS>-1 && WORLD.rank()==0) std::cout<<"finalizing mpi\n";
 		std::cout<<std::flush;
+		MPI_Group_free(&group_world);
+		MPI_Group_free(&group_head);
+		if(MPI_COMM_NULL!=comm_head) MPI_Comm_free(&comm_head);
 		MPI_Comm_free(&BATCH.label());
 		MPI_Barrier(WORLD.label());
 		MPI_Finalize();
@@ -3496,6 +3538,8 @@ int main(int argc, char* argv[]){
 	delete[] paramfile;
 	delete[] input;
 	delete[] strbuf;
+	if(rank_batch!=NULL) delete[] rank_batch;
+	if(rank_head!=NULL) delete[] rank_head;
 	
 	return 0;
 }
