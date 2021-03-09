@@ -41,11 +41,7 @@ bool operator==(const PhiR_G2& phi1, const PhiR_G2& phi2){
 * @param c - cutoff as a function of rij
 */
 double PhiR_G2::val(double r, double cut)const noexcept{
-	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return std::exp(-eta*(r-rs)*(r-rs))*cut;
-	#elif defined __ICC || defined __INTEL_COMPILER
 	return exp(-eta*(r-rs)*(r-rs))*cut;
-	#endif
 }
 
 /**
@@ -55,11 +51,7 @@ double PhiR_G2::val(double r, double cut)const noexcept{
 * @param gcut - gradient of cutoff as a function of rij
 */
 double PhiR_G2::grad(double r, double cut, double gcut)const noexcept{
-	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return std::exp(-eta*(r-rs)*(r-rs))*(-2.0*eta*(r-rs)*cut+gcut);
-	#elif defined __ICC || defined __INTEL_COMPILER
 	return exp(-eta*(r-rs)*(r-rs))*(-2.0*eta*(r-rs)*cut+gcut);
-	#endif
 }
 
 //*****************************************
