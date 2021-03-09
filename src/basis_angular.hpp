@@ -23,12 +23,13 @@ private:
 	double norm_;//normalization factor
 	cutoff::Func* cutoff_;//cutoff function
 	PhiAN::type phiAN_;//type of angular functions
+	NormN::type normT_;//normalization scheme
 	int nfA_;//number of angular functions
 	PhiA** fA_;//angular functions
 	Eigen::VectorXd symm_;//symmetry function
 public:
 	//==== constructors/destructors ====
-	BasisA():phiAN_(PhiAN::UNKNOWN),nfA_(0),fA_(NULL),cutoff_(NULL){}
+	BasisA():normT_(NormN::UNKNOWN),phiAN_(PhiAN::UNKNOWN),nfA_(0),fA_(NULL),cutoff_(NULL){}
 	BasisA(const BasisA& basisA);
 	~BasisA();
 	
@@ -37,8 +38,8 @@ public:
 	friend std::ostream& operator<<(std::ostream& out, const BasisA& basisA);
 	
 	//==== initialization ====
-	void init_G3(int nA, cutoff::Name::type tcut, double rcut);
-	void init_G4(int nA, cutoff::Name::type tcut, double rcut);
+	void init_G3(int nA, NormN::type normT, cutoff::Name::type tcut, double rcut);
+	void init_G4(int nA, NormN::type normT, cutoff::Name::type tcut, double rcut);
 	
 	//==== reading/writing ====
 	static void write(const char* file,const BasisA& basis);
@@ -54,6 +55,8 @@ public:
 	const int& nfA()const{return nfA_;}
 	PhiAN::type& phiAN(){return phiAN_;}
 	const PhiAN::type& phiAN()const{return phiAN_;}
+	NormN::type& normT(){return normT_;}
+	const NormN::type& normT()const{return normT_;}
 	PhiA& fA(int i){return *fA_[i];}
 	const PhiA& fA(int i)const{return *fA_[i];}
 	Eigen::VectorXd& symm(){return symm_;}
@@ -65,7 +68,7 @@ public:
 	void force(double& phi, double* eta, double cos, const double d[3], const double* dEdG)const;
 	
 	//==== static functions ====
-	static double norm(double rc);
+	static double norm(NormN::type normT, double rc);
 };
 
 bool operator==(const BasisA& basis1, const BasisA& basis2);
