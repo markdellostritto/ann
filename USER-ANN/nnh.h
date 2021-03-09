@@ -3,14 +3,11 @@
 #define ANN_NN_POT_HPP
 
 // c++ libraries
-#include <string>
 #include <iosfwd>
 // ann - lower triangular matrix
 #include "lmat.h"
 // neural networks
 #include "nn.h"
-// ann - string
-#include "string_ann.h"
 // map
 #include "map.h"
 // basis functions
@@ -47,20 +44,56 @@
 //************************************************************
 
 //************************************************************
-// NEURAL NETWORK HAMILTONIAN
+// NEURAL NETWORK HAMILTONIAN (NNH)
 //************************************************************
+
+/*
+PRIVATE:
+	int nspecies_ - the total number of species in a neural network potential
+	Atom atom_ - the central atom of the NNH
+	NeuralNet::ANN nn_ - the neural network which determines the energy of the central atom
+	basisR_ - the radial basis functions
+		there is a radial basis for each species in the simulation (nspecies)
+		each basis for each species contains a set of radial symmetry functions
+		each symmetry function then corresponds to a unique input to the neural network
+	basisA_ - the angular basis functions
+		there is an angular basis for each unique pair of species in the simulation (nspecies x (nspecies-1)/2)
+		each basis for each pair contains a set of angular symmetry functions
+		each symmetry function then corresponds to a unique input to the neural network
+	nInput_ - the total number of inputs to the network
+		defined as the total number of radial and angular symmetry functions in each basis
+		the inputs are arranged with the radial inputs preceding the angular inputs
+	nInputR_ - the total number of radial inputs to the network
+		defined as the total number of radial symmetry functions in each basis
+	nInputA_ - the total number of angular inputs to the network
+		defined as the total number of angular symmetry functions in each basis
+	offsetR_ - the offset of each radial input
+		all symmetry functions must be serialized into a single vector - the input to the neural network
+		each radial symmetry function thus has an offset defined as the total number of symmetry functions
+		in all bases preceding the current basis
+	offsetA_ - the offset of each angular input
+		all symmetry functions must be serialized into a single vector - the input to the neural network
+		each angular symmetry function thus has an offset defined as the total number of symmetry functions
+		in all basis pairs preceding the current basis pair
+		note that the offset is from the beginning of the angular section of the inputs
+		thus, ths offset from the beginning of the input vector is nInputR_ + offsetA_(i,j)
+NOTES:
+	This class is not meant to be used independently, only as a part of the class NNPot.
+	This class alone does not have enough data to define a neural network potential.
+	Rather, this class accumulates all the data associated with the inputs and nueral network for a given atom.
+	Thus, if one has a valid symmetry function defining the the local symmetry around a given atom of the
+	correct species, this class can be used to compute the energy.
+	However, the class NNPot is required to define all species, define all neural network potentials, and to
+	compute the symmetry functions, total energies, and forces for a given atomic configuration.
+*/
 
 class NNH{
 private:
 	//hamiltonian
-	double rc_;
-	AtomANN atom_;
-	NN::Network nn_;
-	
-	//interacting species
-	int nspecies_;
-	std::vector<AtomANN> species_;
-	Map<int,int> map_;//map atom ids to nnpot index
+	int nspecies_;//the total number of species
+	AtomANN atom_;//atom - name, mass, energy, charge
+	NeuralNet::ANN nn_;//neural network hamiltonian
+	NeuralNet::DOutDVal dOutDVal_;//gradient of the output w.r.t. node values
 	
 	//basis for pair/triple interactions
 	std::vector<BasisR> basisR_;//radial basis functions (nspecies_)
@@ -83,19 +116,13 @@ public:
 	
 	//==== access ====
 	//hamiltonian
+		const int& nspecies()const{return nspecies_;}
 		AtomANN& atom(){return atom_;}
 		const AtomANN& atom()const{return atom_;}
-		NN::Network& nn(){return nn_;}
-		const NN::Network& nn()const{return nn_;}
-		double& rc(){return rc_;}
-		const double& rc()const{return rc_;}
-	//interacting species
-		const int& nspecies()const{return nspecies_;}
-		AtomANN& species(int i){return species_[i];}
-		const AtomANN& species(int i)const{return species_[i];}
-		Map<int,int>& map(){return map_;}
-		const Map<int,int>& map()const{return map_;}
-		int index(const std::string& name)const{return map_[string::hash(name)];}
+		NeuralNet::ANN& nn(){return nn_;}
+		const NeuralNet::ANN& nn()const{return nn_;}
+		NeuralNet::DOutDVal& dOutDVal(){return dOutDVal_;}
+		const NeuralNet::DOutDVal& dOutDVal()const{return dOutDVal_;}
 	//basis for pair/triple interactions
 		BasisR& basisR(int i){return basisR_[i];}
 		const BasisR& basisR(int i)const{return basisR_[i];}
@@ -113,21 +140,10 @@ public:
 		void defaults();//set defaults
 		void clear(){defaults();};//clear the potential
 	//resizing
-		void resize(const std::vector<AtomANN>& species);
+		void resize(int nspecies);
 		void init_input();//initialize the inputs
 	//output
 		double energy(const Eigen::VectorXd& symm);//compute energy of atom
-		//double force();//?
-	//reading/writing - all
-		void write(const std::string& filename)const;
-		void write(FILE* writer)const;
-		void read(const std::string& filename);
-		void read(FILE* reader);
-	//reading/writing - all
-		void write_basis(const std::string& filename)const;
-		void write_basis(FILE* reader)const;
-		void read_basis(const std::string& filename);
-		void read_basis(FILE* reader);
 };
 
 namespace serialize{
