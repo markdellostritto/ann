@@ -16,10 +16,10 @@ struct FILE_FORMAT{
 		OUTCAR,//VASP outcar file
 		VASP_XML,//VASP XML file
 		XYZ,//XYZ file
+		CP2K,//cp2k file
 		LAMMPS,//LAMMPS input,data,dump files
 		QE,//quantum espresso output files
-		AME,//ame format
-		ANN,//ame format
+		ANN,//ann format
 		BINARY
 	};
 	static FILE_FORMAT::type read(const char* str);
