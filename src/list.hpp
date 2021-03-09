@@ -1,8 +1,13 @@
 #ifndef LIST_HPP
 #define LIST_HPP
 
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
 #include <cmath>
+#elif (defined __ICC || defined __INTEL_COMPILER)
+#include <mathimf.h> //intel math library
+#endif
 #include <vector>
+#include "random.hpp"
 
 namespace list{
 
@@ -35,6 +40,20 @@ namespace sort{
 	//***************************************************************
 	//Sorting: Insertion
 	//***************************************************************
+	
+	template <class T>
+	T* insertion(T* arr, int N){
+		for(int i=1; i<N; ++i){
+			const T x=arr[i];
+			int j=i-1;
+			while(j>=0 && arr[j]>x){
+				arr[j+1]=arr[j];
+				--j;
+			}
+			arr[j+1]=x;
+		}
+		return arr;
+	}
 	
 	template <class T>
 	std::vector<T>& insertion(std::vector<T>& arr){
@@ -100,102 +119,114 @@ namespace sort{
 		
 		return arr;
 	}
-}
+	
+	}
 
-namespace search{
+	namespace search{
 	
-	//***************************************************************
-	//Searching
-	//***************************************************************
-	
-	//min/max
-	
-	template <class T>
-	T min(const std::vector<T>& arr){
-		T min=0;
-		for(int i=0; i<arr.size(); ++i) if(min>arr[i]) min=arr[i];
-		return min;
-	}
-	
-	template <class T>
-	T max(const std::vector<T>& arr){
-		T max=0;
-		for(int i=0; i<arr.size(); ++i) if(max<arr[i]) max=arr[i];
-		return max;
-	}
-	
-	//min/max index
-	
-	template <class T>
-	int minIndex(const std::vector<T>& arr){
-		T min=0;
-		int n=0;
-		for(int i=0; i<arr.size(); ++i) if(min>arr[i]){min=arr[i];n=i;}
-		return n;
-	}
-	
-	template <class T>
-	int maxIndex(const std::vector<T>& arr){
-		T max=0;
-		int n=0;
-		for(int i=0; i<arr.size(); ++i) if(max<arr[i]){max=arr[i];n=i;};
-		return n;
-	}
-	
-	//searching - linear 
-	
-	template <class T>
-	int find_exact_lin(const T& x, std::vector<T>& arr){
-		for(int i=0; i<arr.size(); i++) if(x==arr[i]) return i;
-		return -1;
-	}
-	
-	template <class T>
-	int find_approx_lin(const T& x, std::vector<T>& arr){
-		for(int i=0; i<arr.size(); i++) if(std::fabs(x-arr[i])<1e-6) return i;
-		return -1;
-	}
-	
-	/*References:
-		[1] Knuth, Donald E. (1997). "Shell's method". The Art of Computer Programming. 
-			Volume 3: Sorting and Searching (2nd ed.). Reading, Massachusetts: Addison-Wesley. 
-			pp. 83–95. ISBN 0-201-89685-0.
-	*/
-}
-
-namespace search_ordered{
-	
-	template <class T> T min(const std::vector<T>& arr){return arr[0];};
-	template <class T> T max(const std::vector<T>& arr){return arr.back();};
-	
-	template <class T>
-	int find_exact(const T& x, const std::vector<T>& arr){
-		int uLim=arr.size();//upper limit for Newton's method
-		int lLim=0;//lower limit for Newton's method
-		int mid;//middle point for Newton's method
-		while(uLim-lLim>1){
-			mid=lLim+(uLim-lLim)/2;
-			if(arr[lLim]<=x && x<=arr[mid]) uLim=mid;
-			else lLim=mid;
+		//***************************************************************
+		//Searching
+		//***************************************************************
+		
+		//min/max
+		
+		template <class T>
+		T min(const std::vector<T>& arr){
+			T min=0;
+			for(int i=0; i<arr.size(); ++i) if(min>arr[i]) min=arr[i];
+			return min;
 		}
-		if(arr[lLim]==x) return lLim;
-		else if(arr[uLim]==x) return uLim;
-		else return -1;
+		
+		template <class T>
+		T max(const std::vector<T>& arr){
+			T max=0;
+			for(int i=0; i<arr.size(); ++i) if(max<arr[i]) max=arr[i];
+			return max;
+		}
+		
+		//min/max index
+		
+		template <class T>
+		int minIndex(const std::vector<T>& arr){
+			T min=0;
+			int n=0;
+			for(int i=0; i<arr.size(); ++i) if(min>arr[i]){min=arr[i];n=i;}
+			return n;
+		}
+		
+		template <class T>
+		int maxIndex(const std::vector<T>& arr){
+			T max=0;
+			int n=0;
+			for(int i=0; i<arr.size(); ++i) if(max<arr[i]){max=arr[i];n=i;};
+			return n;
+		}
+		
+		//searching - linear 
+		
+		template <class T>
+		int find_exact_lin(const T& x, std::vector<T>& arr){
+			for(int i=0; i<arr.size(); i++) if(x==arr[i]) return i;
+			return -1;
+		}
+		
+		template <class T>
+		int find_approx_lin(const T& x, std::vector<T>& arr){
+			for(int i=0; i<arr.size(); i++) if(fabs(x-arr[i])<1e-6) return i;
+			return -1;
+		}
+		
+		/*References:
+			[1] Knuth, Donald E. (1997). "Shell's method". The Art of Computer Programming. 
+				Volume 3: Sorting and Searching (2nd ed.). Reading, Massachusetts: Addison-Wesley. 
+				pp. 83–95. ISBN 0-201-89685-0.
+		*/
+	}
+	
+	namespace search_ordered{
+	
+		template <class T> T min(const std::vector<T>& arr){return arr[0];};
+		template <class T> T max(const std::vector<T>& arr){return arr.back();};
+		
+		template <class T>
+		int find_exact(const T& x, const std::vector<T>& arr){
+			int uLim=arr.size();//upper limit for Newton's method
+			int lLim=0;//lower limit for Newton's method
+			int mid;//middle point for Newton's method
+			while(uLim-lLim>1){
+				mid=lLim+(uLim-lLim)/2;
+				if(arr[lLim]<=x && x<=arr[mid]) uLim=mid;
+				else lLim=mid;
+			}
+			if(arr[lLim]==x) return lLim;
+			else if(arr[uLim]==x) return uLim;
+			else return -1;
+		}
+		
+		template <class T>
+		int find_approx(const T& x, const std::vector<T>& arr){
+			int uLim=arr.size();//upper limit for Newton's method
+			int lLim=0;//lower limit for Newton's method
+			int mid;//middle point for Newton's method
+			while(uLim-lLim>1){
+				mid=lLim+(uLim-lLim)/2;
+				if(arr[lLim]<=x && x<=arr[mid]) uLim=mid;
+				else lLim=mid;
+			}
+			return lLim;
+		}
 	}
 	
 	template <class T>
-	int find_approx(const T& x, const std::vector<T>& arr){
-		int uLim=arr.size();//upper limit for Newton's method
-		int lLim=0;//lower limit for Newton's method
-		int mid;//middle point for Newton's method
-		while(uLim-lLim>1){
-			mid=lLim+(uLim-lLim)/2;
-			if(arr[lLim]<=x && x<=arr[mid]) uLim=mid;
-			else lLim=mid;
+	T* shuffle(T* arr, int N, rng::gen::Engine& rng){
+		for(unsigned int i=N-1; i>1; --i){
+			const unsigned int j=rng.rand32()%(i+1);
+			T tmp=arr[i];
+			arr[i]=arr[j];
+			arr[j]=tmp;
 		}
-		return lLim;
+		return arr;
 	}
-}
 }
 
 #endif
