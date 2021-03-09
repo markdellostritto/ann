@@ -1,18 +1,29 @@
+#pragma once
 #ifndef CUTOFF_HPP
 #define CUTOFF_HPP
 
 // c libraries
 #include <cstdio>
-#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-#include <cmath>
-#elif (defined __ICC || defined __INTEL_COMPILER)
-#include <mathimf.h> //intel math library
-#endif
 // c++ libraries
 #include <iosfwd> 
 // ann - math
 #include "math_const_ann.h"
 #include "math_special_ann.h"
+
+//************************************************************
+// NORMALIZATION SCHEMES
+//************************************************************
+
+struct NormN{
+	enum type{
+		UNKNOWN=-1,
+		UNIT=0,
+		VOL=1
+	};
+	static type read(const char* str);
+	static const char* name(const NormN::type& t);
+};
+std::ostream& operator<<(std::ostream& out, const NormN::type& t);
 
 namespace cutoff{
 

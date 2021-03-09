@@ -1,9 +1,41 @@
 // c libraries
 #include <cstring>
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
+#include <cmath>
+#elif (defined __ICC || defined __INTEL_COMPILER)
+#include <mathimf.h> //intel math library
+#endif
 // c++ libraries
 #include <ostream> 
 // ann - cutoff
 #include "cutoff.h"
+
+//************************************************************
+// NORMALIZATION SCHEMES
+//************************************************************
+
+NormN::type NormN::read(const char* str){
+	if(std::strcmp(str,"UNIT")==0) return NormN::UNIT;
+	else if(std::strcmp(str,"VOL")==0) return NormN::VOL;
+	else return NormN::UNKNOWN;
+}
+
+const char* NormN::name(const NormN::type& t){
+	switch(t){
+		case NormN::UNIT: return "UNIT";
+		case NormN::VOL: return "VOL";
+		default: return "UNKNOWN";
+	}
+}
+
+std::ostream& operator<<(std::ostream& out, const NormN::type& t){
+	switch(t){
+		case NormN::UNIT: out<<"UNIT"; break;
+		case NormN::VOL: out<<"VOL"; break;
+		default: out<<"UNKNOWN"; break;
+	}
+	return out;
+}
 
 namespace cutoff{
 	
@@ -54,11 +86,7 @@ std::ostream& operator<<(std::ostream& out, const Cos& obj){
 * @return the value of the cutoff function
 */
 double Cos::val(double r)const{
-	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return (r>rc_)?0:0.5*(math::special::cos(r*prci_)+1.0);
-	#elif (defined __ICC || defined __INTEL_COMPILER)
 	return (r>rc_)?0:0.5*(cos(r*prci_)+1.0);
-	#endif
 }
 
 /**
@@ -67,11 +95,7 @@ double Cos::val(double r)const{
 * @return the gradient of the cutoff function
 */
 double Cos::grad(double r)const{
-	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return (r>rc_)?0:-0.5*prci_*math::special::sin(r*prci_);
-	#elif (defined __ICC || defined __INTEL_COMPILER)
 	return (r>rc_)?0:-0.5*prci_*sin(r*prci_);
-	#endif
 }
 
 /**
@@ -82,13 +106,8 @@ double Cos::grad(double r)const{
 */
 void Cos::compute(double r, double& v, double& g)const{
 	if(r<rc_){
-		#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-		v=0.5*(math::special::cos(r*prci_)+1.0);
-		g=-0.5*prci_*math::special::sin(r*prci_);
-		#elif (defined __ICC || defined __INTEL_COMPILER)
 		v=0.5*(cos(r*prci_)+1.0);
 		g=-0.5*prci_*sin(r*prci_);
-		#endif
 	} else {
 		v=0;
 		g=0;
@@ -111,11 +130,7 @@ std::ostream& operator<<(std::ostream& out, const Tanh& obj){
 * @return the value of the cutoff function
 */
 double Tanh::val(double r)const{
-	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	const double f=(r>rc_)?0:std::tanh(1.0-r*rci_); return f*f*f;
-	#elif (defined __ICC || defined __INTEL_COMPILER)
 	const double f=(r>rc_)?0:tanh(1.0-r*rci_); return f*f*f;
-	#endif
 }
 
 /**
@@ -125,11 +140,7 @@ double Tanh::val(double r)const{
 */
 double Tanh::grad(double r)const{
 	if(r<rc_){
-		#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-		const double f=std::tanh(1.0-r*rci_);
-		#elif (defined __ICC || defined __INTEL_COMPILER)
 		const double f=tanh(1.0-r*rci_);
-		#endif
 		return -3.0*f*f*(1.0-f*f)*rci_;
 	} else return 0;
 }
@@ -142,11 +153,7 @@ double Tanh::grad(double r)const{
 */
 void Tanh::compute(double r, double& v, double& g)const{
 	if(r<rc_){
-		#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-		const double f=std::tanh(1.0-r*rci_);
-		#elif (defined __ICC || defined __INTEL_COMPILER)
 		const double f=tanh(1.0-r*rci_);
-		#endif
 		v=f*f*f;
 		g=-3.0*f*f*(1.0-f*f)*rci_;
 	} else {
