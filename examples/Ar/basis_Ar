@@ -1,10 +1,8 @@
-ann
 cut 10.0
-Ar 39.948000 -574.669700 0.0
 nspecies 1
-Ar 39.948000 -574.669700 0.0
+basis Ar
 basis_radial Ar
-BasisR COS 10.000000 G2 10
+BasisR UNIT COS 10.000000 G2 10
 	G2 0.00 0.016
 	G2 0.16 0.032
 	G2 0.31 0.054
@@ -16,7 +14,7 @@ BasisR COS 10.000000 G2 10
 	G2 1.25 0.760
 	G2 1.41 1.400
 basis_angular Ar Ar
-BasisA COS 10.000000 G4 3
+BasisA UNIT COS 10.000000 G4 3
 	G4 0.120 5.00 -1
 	G4 0.060 5.00 -1
 	G4 0.030 5.00 -1
