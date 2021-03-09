@@ -32,60 +32,60 @@ namespace special{
 	
 	double sinh(double x){
 		if(x>=0){
-			const double expf=std::exp(-x);
+			const double expf=exp(-x);
 			return (1.0-expf*expf)/(2.0*expf);
 		} else {
-			const double expf=std::exp(x);
+			const double expf=exp(x);
 			return (expf*expf-1.0)/(2.0*expf);
 		}
 	}
 	
 	double cosh(double x){
 		if(x>=0){
-			const double expf=std::exp(-x);
+			const double expf=exp(-x);
 			return (1.0+expf*expf)/(2.0*expf);
 		} else {
-			const double expf=std::exp(x);
+			const double expf=exp(x);
 			return (expf*expf+1.0)/(2.0*expf);
 		}
 	}
 	
 	double tanh(double x){
 		if(x>=0){
-			const double expf=std::exp(-2.0*x);
+			const double expf=exp(-2.0*x);
 			return (1.0-expf)/(1.0+expf);
 		} else {
-			const double expf=std::exp(2.0*x);
+			const double expf=exp(2.0*x);
 			return (expf-1.0)/(expf+1.0);
 		}
 	}
 	
 	double csch(double x){
 		if(x>=0){
-			const double expf=std::exp(-x);
+			const double expf=exp(-x);
 			return 2.0*expf/(1.0-expf*expf);
 		} else {
-			const double expf=std::exp(x);
+			const double expf=exp(x);
 			return 2.0*expf/(expf*expf-1.0);
 		}
 	}
 	
 	double sech(double x){
 		if(x>=0){
-			const double expf=std::exp(-x);
+			const double expf=exp(-x);
 			return 2.0*expf/(1.0+expf*expf);
 		} else {
-			const double expf=std::exp(x);
+			const double expf=exp(x);
 			return 2.0*expf/(expf*expf+1.0);
 		}
 	}
 	
 	double coth(double x){
 		if(x>=0){
-			const double expf=std::exp(-2.0*x);
+			const double expf=exp(-2.0*x);
 			return (1.0+expf)/(1.0-expf);
 		} else {
-			const double expf=std::exp(2.0*x);
+			const double expf=exp(2.0*x);
 			return (expf+1.0)/(expf-1.0);
 		}
 	}
@@ -106,9 +106,9 @@ namespace special{
 	
 	double sigmoid(double x){
 		if(x>=0){
-			return 1.0/(1.0+std::exp(-x));
+			return 1.0/(1.0+exp(-x));
 		} else {
-			const double expf=std::exp(x);
+			const double expf=exp(x);
 			return expf/(expf+1.0);
 		}
 	}
@@ -118,8 +118,8 @@ namespace special{
 	//**************************************************************
 	
 	double softplus(double x)noexcept{
-		if(x>=1.0) return x+logp1(std::exp(-x));
-		else return logp1(std::exp(x));
+		if(x>=1.0) return x+logp1(exp(-x));
+		else return logp1(exp(x));
 	}
 	
 	//**************************************************************
@@ -132,9 +132,9 @@ namespace special{
 	const double erfa_const::a4[7]={0.0,0.254829592,-0.284496736,1.421413741,-1.453152027,1.061405429,0.3275911};
 	
 	double erfa1(double x){const double s=func::sign(x); x*=s; x=func::poly<4>(x,erfa_const::a1); x*=x; x*=x; return s*(1.0-1.0/x);}
-	double erfa2(double x){const double s=func::sign(x); x*=s; return s*(1.0-func::poly<3>(1.0/(1.0+erfa_const::a2[4]*x),erfa_const::a2)*std::exp(-x*x));}
+	double erfa2(double x){const double s=func::sign(x); x*=s; return s*(1.0-func::poly<3>(1.0/(1.0+erfa_const::a2[4]*x),erfa_const::a2)*exp(-x*x));}
 	double erfa3(double x){const double s=func::sign(x); x*=s; x=func::poly<6>(x,erfa_const::a3); x*=x; x*=x; x*=x; x*=x; return s*(1.0-1.0/x);}
-	double erfa4(double x){const double s=func::sign(x); x*=s; return s*(1.0-func::poly<5>(1.0/(1.0+erfa_const::a4[6]*x),erfa_const::a4)*std::exp(-x*x));}
+	double erfa4(double x){const double s=func::sign(x); x*=s; return s*(1.0-func::poly<5>(1.0/(1.0+erfa_const::a4[6]*x),erfa_const::a4)*exp(-x*x));}
 	
 	//**************************************************************
 	//Gamma Function
@@ -145,15 +145,15 @@ namespace special{
 		const double g=671.0/128.0;
 		double s=gammac[0];
 		for(int i=1; i<15; ++i) s+=gammac[i]/(x+i);
-		return (x+0.5)*std::log(x+g)-(x+g)+std::log(r2pi*s/x);
+		return (x+0.5)*log(x+g)-(x+g)+log(r2pi*s/x);
 	}
-	double tgamma(double x){return std::exp(lgamma(x));}
+	double tgamma(double x){return exp(lgamma(x));}
 	
 	//**************************************************************
 	//Beta Function
 	//**************************************************************
 	
-	double beta(double z, double w){return std::exp(lgamma(z)+lgamma(w)-lgamma(z+w));}
+	double beta(double z, double w){return exp(lgamma(z)+lgamma(w)-lgamma(z+w));}
 	
 	//**************************************************************
 	//Kummer's (confluent hypergeometric) function 
@@ -166,7 +166,7 @@ namespace special{
 			fac*=a*z/(n*b);
 			result+=fac;
 			++a; ++b;
-			if(std::fabs(fac/result)*100<prec) break;
+			if(fabs(fac/result)*100<prec) break;
 		}
 		return result;
 	}
@@ -265,13 +265,13 @@ namespace poly{
 	
 	std::vector<double>& chebyshev1_r(int n, std::vector<double>& r){
 		r.resize(n);
-		for(int i=0; i<n; i++) r[i]=std::cos((2.0*i+1.0)/(2.0*n)*constant::PI);
+		for(int i=0; i<n; i++) r[i]=cos((2.0*i+1.0)/(2.0*n)*constant::PI);
 		return r;
 	}
 	
 	std::vector<double>& chebyshev2_r(int n, std::vector<double>& r){
 		r.resize(n);
-		for(int i=0; i<n; i++) r[i]=std::cos((i+1.0)/(n+1.0)*constant::PI);
+		for(int i=0; i<n; i++) r[i]=cos((i+1.0)/(n+1.0)*constant::PI);
 		return r;
 	}
 	
@@ -357,25 +357,25 @@ namespace pdist{
 	//******************************************************
 	
 	double Exp::p(double x){
-		return beta_*std::exp(-beta_*x);
+		return beta_*exp(-beta_*x);
 	}
 	double Exp::cdf(double x){
-		return 1.0-std::exp(-beta_*x);
+		return 1.0-exp(-beta_*x);
 	}
 	double Exp::icdf(double x){
-		return -std::log(1.0-x)/beta_;
+		return -log(1.0-x)/beta_;
 	}
 	
 	//******************************************************
 	// Distribution - Normal
 	//******************************************************
 	
-	const double Normal::Rad2PI=std::sqrt(2.0*constant::PI);
+	const double Normal::Rad2PI=sqrt(2.0*constant::PI);
 	double Normal::p(double x){
-		return std::exp(-(x-mu_)*(x-mu_)/(2.0*sigma_*sigma_))/(sigma_*Rad2PI);
+		return exp(-(x-mu_)*(x-mu_)/(2.0*sigma_*sigma_))/(sigma_*Rad2PI);
 	}
 	double Normal::cdf(double x){
-		return 0.5*std::erfc(-1.0/constant::Rad2*(x-mu_)/sigma_);
+		return 0.5*erfc(-1.0/constant::Rad2*(x-mu_)/sigma_);
 	}
 	double Normal::icdf(double x){
 		//return mu_-constant::Rad2*sigma_*1.0/std::erfc(2.0*x);
@@ -388,14 +388,14 @@ namespace pdist{
 	
 	const double Logistic::a_=constant::PI/constant::Rad3;
 	double Logistic::p(double x){
-		const double expf=(x>=0)?std::exp(-x):std::exp(+x);
+		const double expf=(x>=0)?exp(-x):exp(+x);
 		return a_/sigma_*x/((1.0+x)*(1.0+x));
 	}
 	double Logistic::cdf(double x){
-		return 0.5+1.0/constant::RadPI*std::atan((x-mu_)/sigma_);
+		return 0.5+1.0/constant::RadPI*atan((x-mu_)/sigma_);
 	}
 	double Logistic::icdf(double x){
-		return mu_+sigma_*std::tan(constant::PI*(x-0.5));
+		return mu_+sigma_*tan(constant::PI*(x-0.5));
 	}
 	
 	//******************************************************
@@ -406,10 +406,10 @@ namespace pdist{
 		return 1.0/(sigma_*constant::PI*(1.0+(x-mu_)*(x-mu_)/sigma_*sigma_));
 	}
 	double Cauchy::cdf(double x){
-		return 0.5+1.0/constant::RadPI*std::atan((x-mu_)/sigma_);
+		return 0.5+1.0/constant::RadPI*atan((x-mu_)/sigma_);
 	}
 	double Cauchy::icdf(double x){
-		return mu_+sigma_*std::tan(constant::PI*(x-0.5));
+		return mu_+sigma_*tan(constant::PI*(x-0.5));
 	}
 	
 	//******************************************************
@@ -418,11 +418,11 @@ namespace pdist{
 	
 	const double LogNormal::rad2Pi=constant::Rad2*constant::RadPI;
 	double LogNormal::p(double x){
-		const double l=std::log(x);
-		return 1.0/(rad2Pi*sigma_*x)*std::exp(-(l-mu_)*(l-mu_)/(2.0*sigma_*sigma_));
+		const double l=log(x);
+		return 1.0/(rad2Pi*sigma_*x)*exp(-(l-mu_)*(l-mu_)/(2.0*sigma_*sigma_));
 	}
 	double LogNormal::cdf(double x){
-		return 0.5*std::erfc(-(std::log(x)-mu_)/(constant::Rad2*sigma_));
+		return 0.5*erfc(-(log(x)-mu_)/(constant::Rad2*sigma_));
 	}
 	double LogNormal::icdf(double x){
 		//return std::exp(mu_-std::Rad2*sigma_*erfci(2.0*x));
@@ -434,7 +434,7 @@ namespace pdist{
 	//******************************************************
 	
 	double Gamma::p(double x){
-		return std::pow(beta_,alpha_)/std::tgamma(alpha_)*std::pow(x,alpha_-1.0)*std::exp(-beta_*x);
+		return pow(beta_,alpha_)/tgamma(alpha_)*pow(x,alpha_-1.0)*exp(-beta_*x);
 	}
 	double Gamma::cdf(double x){
 		return 0;

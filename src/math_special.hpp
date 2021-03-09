@@ -3,7 +3,12 @@
 #define MATH_SPECIAL_HPP
 
 // c libaries
+#include <cstdio>
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
 #include <cmath>
+#elif (defined __ICC || defined __INTEL_COMPILER)
+#include <mathimf.h> //intel math library
+#endif
 // c++ libraries
 #include <iosfwd>
 #include <vector>
@@ -62,7 +67,7 @@ namespace special{
 	//**************************************************************
 	
 	template <int N> inline double expl(double x)noexcept{
-		x=1.0+x/std::pow(2.0,N);
+		x=1.0+x/pow(2.0,N);
 		for(int i=0; i<N; ++i) x*=x;
 		return x;
 	}
