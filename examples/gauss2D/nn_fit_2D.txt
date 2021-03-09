@@ -1,4 +1,6 @@
 # files 
+dim_in		2
+dim_out		1
 data_train	gauss_train.dat
 data_val	gauss_val.dat
 data_test	gauss_test.dat
@@ -31,6 +33,5 @@ pre_cond	F
 post_cond	F
 
 #batch size
-pbatch		0.20
-#nbatch		10
+nbatch		10
 
