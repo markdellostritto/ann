@@ -1,5 +1,9 @@
 // c libraries
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
 #include <cmath>
+#elif (defined __ICC || defined __INTEL_COMPILER)
+#include <mathimf.h> //intel math library
+#endif
 // c++ libraries
 #include <iostream>
 // ann - structure
@@ -31,11 +35,8 @@ std::ostream& operator<<(std::ostream& out, const NNH& nnh){
 	out<<print::title("NN - HAMILTONIAN",str)<<"\n";
 	//hamiltonian
 	out<<"ATOM     = "<<nnh.atom_<<"\n";
-	out<<"R_CUT    = "<<nnh.rc_<<"\n";
 	//species
 	out<<"NSPECIES = "<<nnh.nspecies_<<"\n";
-	out<<"ATOMS    = \n";
-	for(int i=0; i<nnh.nspecies_; ++i) std::cout<<"\t"<<nnh.species_[i]<<"\n";
 	//potential parameters
 	out<<"N_INPUT  = "; std::cout<<nnh.nInput_<<" "; std::cout<<"\n";
 	out<<"N_INPUTR = "; std::cout<<nnh.nInputR_<<" "; std::cout<<"\n";
@@ -49,19 +50,14 @@ std::ostream& operator<<(std::ostream& out, const NNH& nnh){
 
 //==== member functions ====
 
-//misc
-
 /**
 * set NNH defaults
 */
 void NNH::defaults(){
 	//hamiltonian
-		rc_=0;
+		nspecies_=0;
 		atom_.clear();
 		nn_.clear();
-	//interacting species
-		nspecies_=0;
-		species_.clear();
 	//basis for pair/triple interactions
 		basisR_.clear();
 		basisA_.clear();
@@ -73,28 +69,24 @@ void NNH::defaults(){
 		offsetA_.clear();
 }
 
-//resizing
-
 /**
 * resize the number of species
-* @param species - the set of species in the hamiltonian
+* @param nspecies - the total number of species
 */
-void NNH::resize(const std::vector<Atom>& species){
-	if(species.size()==0) throw std::invalid_argument("NNH::resize(const std::vector<Atom>&): invalid number of species.");
-	nspecies_=species.size();
+void NNH::resize(int nspecies){
+	if(nspecies<=0) throw std::invalid_argument("NNH::resize(int): invalid number of species.");
+	nspecies_=nspecies;
 	basisR_.resize(nspecies_);
 	basisA_.resize(nspecies_);
-	species_.resize(nspecies_);
 	offsetR_.resize(nspecies_);
 	offsetA_.resize(nspecies_);
-	species_=species;
-	for(int i=0; i<nspecies_; ++i){
-		map_.add(string::hash(species_[i].name()),i);
-	}
 }
 
 /**
-* initialize the inputs and offsets associated with the basis functions
+* Initialize the number of inputs and offsets associated with the basis functions.
+* Must be done after the basis has been defined, otherwise the values will make no sense.
+* Different from resizing: resizing sets the number of species, this sets the number of inputs
+* associated with the basis associated with each species.
 */
 void NNH::init_input(){
 	//radial inputs
@@ -123,251 +115,12 @@ void NNH::init_input(){
 	nInput_=nInputR_+nInputA_;
 }
 
-//output
-
 /**
 * compute energy of atom with symmetry function "symm"
 * @param symm - the symmetry function
 */
 double NNH::energy(const Eigen::VectorXd& symm){
 	return nn_.execute(symm)[0]+atom_.energy();
-}
-
-//reading/writing - all
-
-/**
-* write NNH to file with name "filename"
-* @param filename - the file the NNH will be written to
-*/
-void NNH::write(const std::string& filename)const{
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNH::write(const std::string&):\n";
-	FILE* writer=NULL;
-	writer=fopen(filename.c_str(),"w");
-	if(writer!=NULL){
-		write(writer);
-		fclose(writer);
-		writer=NULL;
-	} else throw std::runtime_error(std::string("NNH::write(const std::string&): Could not write to nnh file: \"")+filename+std::string("\""));
-}
-
-/**
-* write NNH to file pointed to by "writer"
-* @param writer - file pointer
-*/
-void NNH::write(FILE* writer)const{
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNH::write(FILE*):\n";
-	//==== write the header ====
-	fprintf(writer,"ann\n");
-	//==== write the global cutoff ====
-	fprintf(writer,"cut %f\n",rc_);
-	//==== write the central species ====
-	fprintf(writer,"%s %f %f %f\n",atom_.name().c_str(),atom_.mass(),atom_.energy(),atom_.charge());
-	//==== write the number of species ====
-	fprintf(writer,"nspecies %i\n",nspecies_);
-	//==== write all species ====
-	for(int i=0; i<nspecies_; ++i){
-		fprintf(writer,"%s %f %f %f\n",species_[i].name().c_str(),species_[i].mass(),species_[i].energy(),species_[i].charge());
-	}
-	//==== write the radial basis ====
-	for(int j=0; j<nspecies_; ++j){
-		fprintf(writer,"basis_radial %s\n",species_[j].name().c_str());
-		BasisR::write(writer,basisR_[j]);
-	}
-	//==== write the angular basis ====
-	for(int j=0; j<nspecies_; ++j){
-		for(int k=j; k<nspecies_; ++k){
-			fprintf(writer,"basis_angular %s %s\n",species_[j].name().c_str(),species_[k].name().c_str());
-			BasisA::write(writer,basisA_(j,k));
-		}
-	}
-	//==== write the neural network ====
-	NN::Network::write(writer,nn_);
-}
-
-/**
-* write NNH to file pointed to by "writer"
-* @param filename - the file the NNH will be read from
-*/
-void NNH::read(const std::string& filename){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNH::read(const std::string&):\n";
-	FILE* reader=NULL;
-	reader=fopen(filename.c_str(),"r");
-	if(reader!=NULL){
-		read(reader);
-		fclose(reader);
-		reader=NULL;
-	} else throw std::runtime_error(std::string("NNH::read(const std::string&): Could not open nnpot file: \"")+filename+std::string("\""));
-}
-
-/**
-* read NNH from file pointed to by "reader"
-* @param reader - file pointer
-*/
-void NNH::read(FILE* reader){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNH::read(FILE*):\n";
-	//==== local function variables ====
-	std::vector<std::string> strlist;
-	char* input=new char[string::M];
-	//==== reader in header ====
-	fgets(input,string::M,reader);
-	//==== read in global cutoff ====
-	std::strtok(fgets(input,string::M,reader),string::WS);
-	const double rc=std::atof(std::strtok(NULL,string::WS));
-	if(rc<=0) throw std::invalid_argument("NNH::read(FILE*): invalid cutoff.");
-	else rc_=rc;
-	//==== read the central atom ====
-	Atom::read(fgets(input,string::M,reader),atom_);
-	//==== read the number of species ====
-	std::strtok(fgets(input,string::M,reader),string::WS);
-	const int nspecies=std::atoi(std::strtok(NULL,string::WS));
-	//==== read all species ====
-	std::vector<Atom> species;
-	for(int i=0; i<nspecies; ++i){
-		Atom::read(fgets(input,string::M,reader),species[i]);
-		if(species[i].id()==atom_.id() && species[i]!=atom_) throw std::invalid_argument("Central atom and neighbor atom do not match.");
-	}
-	//==== resize the hamiltonian ====
-	resize(species);
-	//==== read the radial basis ====
-	for(int i=0; i<nspecies_; ++i){
-		string::split(fgets(input,string::M,reader),string::WS,strlist);
-		const int jj=index(strlist[1]);
-		BasisR::read(reader,basisR_[jj]);
-	}
-	//==== read the angular basis ====
-	for(int i=0; i<nspecies_; ++i){
-		for(int j=i; j<nspecies_; ++j){
-			string::split(fgets(input,string::M,reader),string::WS,strlist);
-			const int jj=index(strlist[1]);
-			const int kk=index(strlist[2]);
-			BasisA::read(reader,basisA_(jj,kk));
-		}
-	}
-	//==== read the neural network ====
-	NN::Network::read(reader,nn_);
-	//==== set the number of inputs and offsets ====
-	init_input();
-	//==== free local variables ====
-	delete[] input;
-}
-
-//reading/writing - basis
-
-/**
-* write the basis associated with the NNH to file with name "filename"
-* @param filename - the file the basis will be written to
-*/
-void NNH::write_basis(const std::string& filename)const{
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNH::write_basis(const std::string&):\n";
-	FILE* writer=NULL;
-	writer=fopen(filename.c_str(),"w");
-	if(writer!=NULL){
-		write_basis(writer);
-		fclose(writer);
-		writer=NULL;
-	} else throw std::runtime_error(std::string("NNH::write_basis(const std::string&): Could not write to nnh file: \"")+filename+std::string("\""));
-}
-
-/**
-* write the basis associated with the NNH to file pointed to by "writer"
-* @param writer - file pointer
-*/
-void NNH::write_basis(FILE* writer)const{
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNH::write_basis(FILE*):\n";
-	//==== write the header ====
-	fprintf(writer,"ann\n");
-	//==== write the global cutoff ====
-	fprintf(writer,"cut %f\n",rc_);
-	//==== write the central species ====
-	fprintf(writer,"%s %f %f %f\n",atom_.name().c_str(),atom_.mass(),atom_.energy(),atom_.charge());
-	//==== write the number of species ====
-	fprintf(writer,"nspecies %i\n",nspecies_);
-	//==== write all species ====
-	for(int i=0; i<nspecies_; ++i){
-		fprintf(writer,"%s %f %f %f\n",species_[i].name().c_str(),species_[i].mass(),species_[i].energy(),species_[i].charge());
-	}
-	//==== write the radial basis ====
-	for(int j=0; j<nspecies_; ++j){
-		fprintf(writer,"basis_radial %s\n",species_[j].name().c_str());
-		BasisR::write(writer,basisR_[j]);
-	}
-	//==== write the angular basis ====
-	for(int j=0; j<nspecies_; ++j){
-		for(int k=j; k<nspecies_; ++k){
-			fprintf(writer,"basis_angular %s %s\n",species_[j].name().c_str(),species_[k].name().c_str());
-			BasisA::write(writer,basisA_(j,k));
-		}
-	}
-}
-
-/**
-* read the basis associated with the NNH from file with name "filename"
-* @param filename - the file which the NNH will be read from
-*/
-void NNH::read_basis(const std::string& filename){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNH::read_basis(const std::string&):\n";
-	FILE* reader=NULL;
-	reader=fopen(filename.c_str(),"r");
-	if(reader!=NULL){
-		read_basis(reader);
-		fclose(reader);
-		reader=NULL;
-	} else throw std::runtime_error(std::string("NNH::read_basis(const std::string&): Could not open nnpot file: \"")+filename+std::string("\""));
-}
-
-/**
-* read the basis associated with the NNH from file pointed to by "reader"
-* @param reader - file pointer
-*/
-void NNH::read_basis(FILE* reader){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNH::read_basis(FILE*):\n";
-	//==== local function variables ====
-	std::vector<std::string> strlist;
-	char* input=new char[string::M];
-	try{
-	//==== reader in header ====
-	fgets(input,string::M,reader);
-	//==== read in global cutoff ====
-	std::strtok(fgets(input,string::M,reader),string::WS);
-	const double rc=std::atof(std::strtok(NULL,string::WS));
-	if(rc<=0) throw std::invalid_argument("NNH::read(FILE*): invalid cutoff.");
-	else rc_=rc;
-	//==== read the central atom ====
-	Atom::read(fgets(input,string::M,reader),atom_);
-	//==== read the number of species ====
-	std::strtok(fgets(input,string::M,reader),string::WS);
-	const int nspecies=std::atoi(std::strtok(NULL,string::WS));
-	//==== read all species ====
-	std::vector<Atom> species(nspecies);
-	for(int i=0; i<nspecies; ++i){
-		Atom::read(fgets(input,string::M,reader),species[i]);
-		if(species[i].id()==atom_.id() && species[i]!=atom_) throw std::invalid_argument("Central atom and neighbor atom do not match.");
-	}
-	//==== resize the hamiltonian ====
-	resize(species);
-	//==== read the radial basis ====
-	for(int i=0; i<nspecies_; ++i){
-		string::split(fgets(input,string::M,reader),string::WS,strlist);
-		const int jj=index(strlist[1]);
-		BasisR::read(reader,basisR_[jj]);
-	}
-	//==== read the angular basis ====
-	for(int i=0; i<nspecies_; ++i){
-		for(int j=i; j<nspecies_; ++j){
-			string::split(fgets(input,string::M,reader),string::WS,strlist);
-			const int jj=index(strlist[1]);
-			const int kk=index(strlist[2]);
-			BasisA::read(reader,basisA_(jj,kk));
-		}
-	}
-	//==== set the number of inputs and offsets ====
-	init_input();
-	} catch(std::exception& e){
-		std::cout<<"ERROR in NNH::read_basis(FILE*):\n";
-		std::cout<<e.what()<<"\n";
-	}
-	//==== free local variables ====
-	delete[] input;
 }
 
 //************************************************************
@@ -409,9 +162,6 @@ void NNPot::defaults(){
 		rc_=0;
 	//resize the lattice vector shifts
 		R_.clear();
-	//input/output
-		head_="ann_";
-		tail_="";
 }
 
 //==== resizing ====
@@ -426,6 +176,7 @@ void NNPot::resize(const std::vector<Atom>& species){
 	nspecies_=species.size();
 	nnh_.resize(nspecies_);
 	for(int i=0; i<nspecies_; ++i){
+		nnh_[i].resize(nspecies_);
 		nnh_[i].atom()=species[i];
 		map_.add(string::hash(species[i].name()),i);
 	}
@@ -450,13 +201,11 @@ void NNPot::init_symm(Structure& struc)const{
 */
 void NNPot::calc_symm(Structure& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::calc_symm(Structure&):\n";
-	Eigen::Vector3d rI_,rJ_,rK_;
-	Eigen::Vector3d rIJ_,rIK_,rJK_;
 	if(struc.R().norm()>math::constant::ZERO){
 		//lattice vector shifts - factor of two: max distance = 1/2 lattice vector
-		const int shellx=std::floor(2.0*rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
-		const int shelly=std::floor(2.0*rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
-		const int shellz=std::floor(2.0*rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
+		const int shellx=floor(2.0*rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
+		const int shelly=floor(2.0*rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
+		const int shellz=floor(2.0*rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
 		const int Rmax=(2*shellx+1)*(2*shelly+1)*(2*shellz+1);
 		if(NN_POT_PRINT_DATA>0) std::cout<<"Rmax = "<<Rmax<<"\n";
 		if(NN_POT_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<") = "<<(2*shellx+1)*(2*shelly+1)*(2*shellz+1)<<"\n";
@@ -477,20 +226,20 @@ void NNPot::calc_symm(Structure& struc){
 			if(NN_POT_PRINT_STATUS>0) std::cout<<"computing symmetry functions\n";
 			for(int i=0; i<struc.nAtoms(); ++i){
 				//find the index of the species of atom i
-				const int II=map_[string::hash(struc.name(i))];
-				rI_=struc.posn(i);
+				const int II=index(struc.name(i));
+				const Eigen::Vector3d rI_=struc.posn(i);
 				//reset the inputs
 				if(NN_POT_PRINT_STATUS>2) std::cout<<"resetting inputs\n";
 				struc.symm(i).setZero();
 				//loop over all pairs
 				for(int j=0; j<struc.nAtoms(); ++j){
 					//find the index of the species of atom j
-					const int JJ=nnh_[II].index(struc.name(j));
+					const int JJ=index(struc.name(j));
 					//loop over lattice vector shifts - atom j
 					for(int iJ=0; iJ<Rsize; ++iJ){
-						rJ_.noalias()=struc.posn(j)+R_[iJ];
+						const Eigen::Vector3d rJ_=struc.posn(j)+R_[iJ];
 						//calc rIJ
-						rIJ_.noalias()=rI_-rJ_;
+						const Eigen::Vector3d rIJ_=rI_-rJ_;
 						const double dIJ=rIJ_.norm();
 						if(math::constant::ZERO<dIJ && dIJ<rc_){
 							if(NN_POT_PRINT_STATUS>2) std::cout<<"computing phir("<<i<<","<<j<<")\n";
@@ -504,16 +253,16 @@ void NNPot::calc_symm(Structure& struc){
 							//loop over all triplets
 							for(int k=0; k<struc.nAtoms(); ++k){
 								//find the index of the species of atom k
-								const int KK=nnh_[II].index(struc.name(k));
+								const int KK=index(struc.name(k));
 								//loop over all cell shifts  - atom k
 								for(int iK=0; iK<Rsize; ++iK){
-									rK_.noalias()=struc.posn(k)+R_[iK];
+									const Eigen::Vector3d rK_=struc.posn(k)+R_[iK];
 									//calc rIK
-									rIK_.noalias()=rI_-rK_;
+									const Eigen::Vector3d rIK_=rI_-rK_;
 									const double dIK=rIK_.norm();
 									if(math::constant::ZERO<dIK && dIK<rc_){
 										//calc rJK
-										rJK_.noalias()=rJ_-rK_;
+										const Eigen::Vector3d rJK_=rJ_-rK_;
 										const double dJK=rJK_.norm();
 										if(math::constant::ZERO<dJK){
 											//compute the IJ,IK,JK contribution to all angular basis functions
@@ -534,6 +283,7 @@ void NNPot::calc_symm(Structure& struc){
 				}
 			}
 		} else {
+			Eigen::Vector3d rIJ_,rIK_,rJK_;
 			//generate cell list
 			CellList cellList(rc_,struc);
 			std::vector<Eigen::Vector3i> nnc(27);
@@ -549,7 +299,7 @@ void NNPot::calc_symm(Structure& struc){
 			if(NN_POT_PRINT_STATUS>0) std::cout<<"computing symmetry functions\n";
 			for(int i=0; i<struc.nAtoms(); ++i){
 				//find the index of the species of atom j
-				const int II=map_[string::hash(struc.name(i).c_str())];
+				const int II=index(struc.name(i));
 				const Eigen::Vector3i& cell=cellList.cell(i);
 				//reset the inputs
 				if(NN_POT_PRINT_STATUS>2) std::cout<<"resetting inputs\n";
@@ -561,7 +311,7 @@ void NNPot::calc_symm(Structure& struc){
 					for(int j=0; j<cellList.atoms(jcell).size(); ++j){
 						const int nj=cellList.atoms(jcell)[j];
 						//find the index of the species of atom j
-						const int JJ=map_[string::hash(struc.name(nj).c_str())];
+						const int JJ=index(struc.name(nj));
 						//calc rIJ
 						if(NN_POT_PRINT_STATUS>2) std::cout<<"symm r("<<i<<","<<nj<<")\n";
 						//calc radial contribution - loop over all radial functions
@@ -584,7 +334,7 @@ void NNPot::calc_symm(Structure& struc){
 								for(int k=0; k<cellList.atoms(kcell).size(); ++k){
 									const int nk=cellList.atoms(kcell)[k];
 									//find the index of the species of atom i
-									const int KK=map_[string::hash(struc.name(nk).c_str())];
+									const int KK=index(struc.name(nk));
 									//calculate rIK
 									if(NN_POT_PRINT_STATUS>2) std::cout<<"computing phia("<<i<<","<<nj<<","<<nk<<")\n";
 									struc.diff(struc.posn(i),struc.posn(nk),rIK_);
@@ -617,16 +367,16 @@ void NNPot::calc_symm(Structure& struc){
 		if(NN_POT_PRINT_STATUS>0) std::cout<<"computing symmetry functions\n";
 		for(int i=0; i<struc.nAtoms(); ++i){
 			//find the index of the species of atom i
-			const int II=map_[string::hash(struc.name(i))];
+			const int II=index(struc.name(i));
 			//reset the inputs
 			if(NN_POT_PRINT_STATUS>2) std::cout<<"resetting inputs\n";
 			struc.symm(i).setZero();
 			//loop over all pairs
 			for(int j=0; j<struc.nAtoms(); ++j){
 				//find the index of the species of atom j
-				const int JJ=nnh_[II].index(struc.name(j));
+				const int JJ=index(struc.name(j));
 				//calc rIJ
-				rIJ_.noalias()=struc.posn(i)-struc.posn(j);
+				const Eigen::Vector3d rIJ_=struc.posn(i)-struc.posn(j);
 				const double dIJ=rIJ_.norm();
 				if(math::constant::ZERO<dIJ && dIJ<rc_){
 					if(NN_POT_PRINT_STATUS>2) std::cout<<"computing phir("<<i<<","<<j<<")\n";
@@ -640,13 +390,13 @@ void NNPot::calc_symm(Structure& struc){
 					//loop over all triplets
 					for(int k=0; k<struc.nAtoms(); ++k){
 						//find the index of the species of atom k
-						const int KK=nnh_[II].index(struc.name(k));
+						const int KK=index(struc.name(k));
 						//calc rIK
-						rIK_.noalias()=struc.posn(i)-struc.posn(k);
+						const Eigen::Vector3d rIK_=struc.posn(i)-struc.posn(k);
 						const double dIK=rIK_.norm();
 						if(math::constant::ZERO<dIK && dIK<rc_){
 							//calc rJK
-							rJK_.noalias()=struc.posn(j)-struc.posn(k);
+							const Eigen::Vector3d rJK_=struc.posn(j)-struc.posn(k);
 							const double dJK=rJK_.norm();
 							if(math::constant::ZERO<dJK){
 								//compute the IJ,IK,JK contribution to all angular basis functions
@@ -679,17 +429,15 @@ void NNPot::forces(Structure& struc, bool calc_symm_){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::forces(Structure&,bool):\n";
 	//local variables
 	Eigen::VectorXd dEdG;
-	Eigen::Vector3d rI_,rJ_,rK_;
-	Eigen::Vector3d rIJ_,rIK_,rJK_;
 	//set the inputs for the atoms
 	if(calc_symm_) calc_symm(struc);
 	//reset the force
 	for(int i=0; i<struc.nAtoms(); ++i) struc.force(i).setZero();
 	if(struc.R().norm()>math::constant::ZERO){
 		//lattice vector shifts
-		const int shellx=std::floor(2.0*rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
-		const int shelly=std::floor(2.0*rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
-		const int shellz=std::floor(2.0*rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
+		const int shellx=floor(2.0*rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
+		const int shelly=floor(2.0*rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
+		const int shellz=floor(2.0*rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
 		const int Rmax=(2*shellx+1)*(2*shelly+1)*(2*shellz+1);
 		if(NN_POT_PRINT_DATA>0) std::cout<<"Rmax = "<<Rmax<<"\n";
 		if(NN_POT_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<") = "<<(2*shellx+1)*(2*shelly+1)*(2*shellz+1)<<"\n";
@@ -707,24 +455,24 @@ void NNPot::forces(Structure& struc, bool calc_symm_){
 		//loop over all atoms
 		for(int i=0; i<struc.nAtoms(); ++i){
 			//find the index of the species of atom i
-			const int II=map_[string::hash(struc.name(i))];
+			const int II=index(struc.name(i));
 			//copy position
-			rI_=struc.posn(i);
+			const Eigen::Vector3d rI_=struc.posn(i);
 			//execute the appropriate network
 			nnh_[II].nn().execute(struc.symm(i));
 			//calculate the network gradient
-			nnh_[II].nn().grad_out();
+			nnh_[II].dOutDVal().grad(nnh_[II].nn());
 			//set the gradient (n.b. dodi - do/di - deriv. of out w.r.t. in)
-			dEdG=nnh_[II].nn().dodi().row(0);
+			dEdG=nnh_[II].dOutDVal().dodi().row(0);
 			//loop over pairs
 			for(int j=0; j<struc.nAtoms(); ++j){
 				//find the index of the species of atom j
-				const int JJ=map_[string::hash(struc.name(j))];
+				const int JJ=index(struc.name(j));
 				//loop over lattice vector shifts - atom j
 				for(int iJ=0; iJ<Rsize; ++iJ){
 					//compute rIJ
-					rJ_=struc.posn(j)+R_[iJ];
-					rIJ_.noalias()=rI_-rJ_;
+					const Eigen::Vector3d rJ_=struc.posn(j)+R_[iJ];
+					const Eigen::Vector3d rIJ_=rI_-rJ_;
 					const double dIJ=rIJ_.norm();
 					//check rIJ
 					if(math::constant::ZERO<dIJ && dIJ<rc_){
@@ -738,17 +486,17 @@ void NNPot::forces(Structure& struc, bool calc_symm_){
 						for(int k=0; k<struc.nAtoms(); ++k){
 							if(NN_POT_PRINT_STATUS>2) std::cout<<"computing theta("<<i<<","<<j<<","<<k<<")\n";
 							//find the index of the species of atom k
-							const int KK=map_[string::hash(struc.name(k))];
+							const int KK=index(struc.name(k));
 							//loop over all cell shifts - atom k
 							for(int iK=0; iK<Rsize; ++iK){
 								//compute rIK
-								rK_=struc.posn(k)+R_[iK];
-								rIK_.noalias()=rI_-rK_;
+								const Eigen::Vector3d rK_=struc.posn(k)+R_[iK];
+								const Eigen::Vector3d rIK_=rI_-rK_;
 								const double dIK=rIK_.norm();
 								if(math::constant::ZERO<dIK && dIK<rc_){
 									const double dIKi=1.0/dIK;
 									//compute rJK
-									rJK_.noalias()=rJ_-rK_;
+									const Eigen::Vector3d rJK_=rJ_-rK_;
 									const double dJK=rJK_.norm();
 									if(math::constant::ZERO<dJK){
 										const double dJKi=1.0/dJK;
@@ -776,19 +524,19 @@ void NNPot::forces(Structure& struc, bool calc_symm_){
 		//loop over all atoms
 		for(int i=0; i<struc.nAtoms(); ++i){
 			//find the index of the species of atom i
-			const int II=map_[string::hash(struc.name(i))];
+			const int II=index(struc.name(i));
 			//execute the appropriate network
 			nnh_[II].nn().execute(struc.symm(i));
 			//calculate the network gradient
-			nnh_[II].nn().grad_out();
+			nnh_[II].dOutDVal().grad(nnh_[II].nn());
 			//set the gradient (n.b. dodi - do/di - deriv. of out w.r.t. in)
-			dEdG=nnh_[II].nn().dodi().row(0);
+			dEdG=nnh_[II].dOutDVal().dodi().row(0);
 			//loop over pairs
 			for(int j=0; j<struc.nAtoms(); ++j){
 				//find the index of the species of atom j
-				const int JJ=map_[string::hash(struc.name(j))];
+				const int JJ=index(struc.name(j));
 				//compute rIJ
-				rIJ_.noalias()=struc.posn(i)-struc.posn(j);
+				const Eigen::Vector3d rIJ_=struc.posn(i)-struc.posn(j);
 				const double dIJ=rIJ_.norm();
 				//check rIJ
 				if(math::constant::ZERO<dIJ && dIJ<rc_){
@@ -802,14 +550,14 @@ void NNPot::forces(Structure& struc, bool calc_symm_){
 					for(int k=0; k<struc.nAtoms(); ++k){
 						if(NN_POT_PRINT_STATUS>2) std::cout<<"computing theta("<<i<<","<<j<<","<<k<<")\n";
 						//find the index of the species of atom k
-						const int KK=map_[string::hash(struc.name(k))];
+						const int KK=index(struc.name(k));
 						//compute rIK
-						rIK_.noalias()=struc.posn(i)-struc.posn(k);
+						const Eigen::Vector3d rIK_=struc.posn(i)-struc.posn(k);
 						const double dIK=rIK_.norm();
 						if(math::constant::ZERO<dIK && dIK<rc_){
 							const double dIKi=1.0/dIK;
 							//compute rJK
-							rJK_.noalias()=struc.posn(j)-struc.posn(k);
+							const Eigen::Vector3d rJK_=struc.posn(j)-struc.posn(k);
 							const double dJK=rJK_.norm();
 							if(math::constant::ZERO<dJK){
 								const double dJKi=1.0/dJK;
@@ -854,33 +602,377 @@ double NNPot::energy(Structure& struc, bool calc_symm_){
 	return energy;
 }
 
+double NNPot::compute(Structure& struc, bool calc_symm_){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::compute(Structure&,bool):\n";
+	//local variables
+	Eigen::VectorXd dEdG;
+	double energyt=0;
+	//set the inputs for the atoms
+	if(calc_symm_) calc_symm(struc);
+	//reset the force
+	for(int i=0; i<struc.nAtoms(); ++i) struc.force(i).setZero();
+	if(struc.R().norm()>math::constant::ZERO){
+		//lattice vector shifts
+		const int shellx=floor(2.0*rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
+		const int shelly=floor(2.0*rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
+		const int shellz=floor(2.0*rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
+		const int Rmax=(2*shellx+1)*(2*shelly+1)*(2*shellz+1);
+		if(NN_POT_PRINT_DATA>0) std::cout<<"Rmax = "<<Rmax<<"\n";
+		if(NN_POT_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<") = "<<(2*shellx+1)*(2*shelly+1)*(2*shellz+1)<<"\n";
+		R_.resize(Rmax);
+		int Rsize=0;
+		for(int ix=-shellx; ix<=shellx; ++ix){
+			for(int iy=-shelly; iy<=shelly; ++iy){
+				for(int iz=-shellz; iz<=shellz; ++iz){
+					//const Eigen::Vector3d R=ix*struc.R().col(0)+iy*struc.R().col(1)+iz*struc.R().col(2);
+					//if(R.norm()<2.0*rc_) R_[Rsize++]=R;
+					R_[Rsize++].noalias()=ix*struc.R().col(0)+iy*struc.R().col(1)+iz*struc.R().col(2);
+				}
+			}
+		}
+		//loop over all atoms
+		for(int i=0; i<struc.nAtoms(); ++i){
+			//find the index of the species of atom i
+			const int II=map_[string::hash(struc.name(i))];
+			//copy position
+			const Eigen::Vector3d rI_=struc.posn(i);
+			//execute the appropriate network
+			nnh_[II].nn().execute(struc.symm(i));
+			energyt+=nnh_[II].nn().out()[0]+nnh_[II].atom().energy();
+			//calculate the network gradient
+			nnh_[II].dOutDVal().grad(nnh_[II].nn());
+			//set the gradient (n.b. dodi - do/di - deriv. of out w.r.t. in)
+			dEdG=nnh_[II].dOutDVal().dodi().row(0);
+			//loop over pairs
+			for(int j=0; j<struc.nAtoms(); ++j){
+				//find the index of the species of atom j
+				const int JJ=map_[string::hash(struc.name(j))];
+				//loop over lattice vector shifts - atom j
+				for(int iJ=0; iJ<Rsize; ++iJ){
+					//compute rIJ
+					const Eigen::Vector3d rJ_=struc.posn(j)+R_[iJ];
+					const Eigen::Vector3d rIJ_=rI_-rJ_;
+					const double dIJ=rIJ_.norm();
+					//check rIJ
+					if(math::constant::ZERO<dIJ && dIJ<rc_){
+						const double dIJi=1.0/dIJ;
+						//compute the IJ contribution to the radial force
+						const int offsetR_=nnh_[II].offsetR(JJ);
+						const double amp=nnh_[II].basisR(JJ).force(dIJ,dEdG.data()+offsetR_)*dIJi;
+						struc.force(i).noalias()+=amp*rIJ_;
+						struc.force(j).noalias()-=amp*rIJ_;
+						//loop over all triplets
+						for(int k=0; k<struc.nAtoms(); ++k){
+							if(NN_POT_PRINT_STATUS>2) std::cout<<"computing theta("<<i<<","<<j<<","<<k<<")\n";
+							//find the index of the species of atom k
+							const int KK=map_[string::hash(struc.name(k))];
+							//loop over all cell shifts - atom k
+							for(int iK=0; iK<Rsize; ++iK){
+								//compute rIK
+								const Eigen::Vector3d rK_=struc.posn(k)+R_[iK];
+								const Eigen::Vector3d rIK_=rI_-rK_;
+								const double dIK=rIK_.norm();
+								if(math::constant::ZERO<dIK && dIK<rc_){
+									const double dIKi=1.0/dIK;
+									//compute rJK
+									const Eigen::Vector3d rJK_=rJ_-rK_;
+									const double dJK=rJK_.norm();
+									if(math::constant::ZERO<dJK){
+										const double dJKi=1.0/dJK;
+										//compute the IJ,IK,JK contribution to the angular force
+										const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
+										const double cosIJK=rIJ_.dot(rIK_)*dIJi*dIKi;
+										const double d[3]={dIJ,dIK,dJK};
+										double phi=0; double eta[3]={0,0,0};
+										nnh_[II].basisA(JJ,KK).force(phi,eta,cosIJK,d,dEdG.data()+offsetA_);
+										struc.force(i).noalias()+=(phi*(dIKi-cosIJK*dIJi)+eta[0])*rIJ_*dIJi;
+										struc.force(i).noalias()+=(phi*(dIJi-cosIJK*dIKi)+eta[1])*rIK_*dIKi;
+										struc.force(j).noalias()-=(-phi*cosIJK*dIJi+eta[0])*rIJ_*dIJi+phi*dIJi*rIK_*dIKi;
+										struc.force(j).noalias()-=eta[2]*rJK_*dJKi;
+										struc.force(k).noalias()-=(-phi*cosIJK*dIKi+eta[1])*rIK_*dIKi+phi*dIKi*rIJ_*dIJi;
+										struc.force(k).noalias()+=eta[2]*rJK_*dJKi;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	} else {
+		//loop over all atoms
+		for(int i=0; i<struc.nAtoms(); ++i){
+			//find the index of the species of atom i
+			const int II=index(struc.name(i));
+			//execute the appropriate network
+			nnh_[II].nn().execute(struc.symm(i));
+			energyt+=nnh_[II].nn().out()[0]+nnh_[II].atom().energy();
+			//calculate the network gradient
+			nnh_[II].dOutDVal().grad(nnh_[II].nn());
+			//set the gradient (n.b. dodi - do/di - deriv. of out w.r.t. in)
+			dEdG=nnh_[II].dOutDVal().dodi().row(0);
+			//loop over pairs
+			for(int j=0; j<struc.nAtoms(); ++j){
+				//find the index of the species of atom j
+				const int JJ=index(struc.name(j));
+				//compute rIJ
+				const Eigen::Vector3d rIJ_=struc.posn(i)-struc.posn(j);
+				const double dIJ=rIJ_.norm();
+				//check rIJ
+				if(math::constant::ZERO<dIJ && dIJ<rc_){
+					const double dIJi=1.0/dIJ;
+					//compute the IJ contribution to the radial force
+					const int offsetR_=nnh_[II].offsetR(JJ);
+					const double amp=nnh_[II].basisR(JJ).force(dIJ,dEdG.data()+offsetR_)*dIJi;
+					struc.force(i).noalias()+=amp*rIJ_;
+					struc.force(j).noalias()-=amp*rIJ_;
+					//loop over all triplets
+					for(int k=0; k<struc.nAtoms(); ++k){
+						if(NN_POT_PRINT_STATUS>2) std::cout<<"computing theta("<<i<<","<<j<<","<<k<<")\n";
+						//find the index of the species of atom k
+						const int KK=index(struc.name(k));
+						//compute rIK
+						const Eigen::Vector3d rIK_=struc.posn(i)-struc.posn(k);
+						const double dIK=rIK_.norm();
+						if(math::constant::ZERO<dIK && dIK<rc_){
+							const double dIKi=1.0/dIK;
+							//compute rJK
+							const Eigen::Vector3d rJK_=struc.posn(j)-struc.posn(k);
+							const double dJK=rJK_.norm();
+							if(math::constant::ZERO<dJK){
+								const double dJKi=1.0/dJK;
+								//compute the IJ,IK,JK contribution to the angular force
+								const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
+								const double cosIJK=rIJ_.dot(rIK_)*dIJi*dIKi;
+								const double d[3]={dIJ,dIK,dJK};
+								double phi=0; double eta[3]={0,0,0};
+								nnh_[II].basisA(JJ,KK).force(phi,eta,cosIJK,d,dEdG.data()+offsetA_);
+								struc.force(i).noalias()+=(phi*(dIKi-cosIJK*dIJi)+eta[0])*rIJ_*dIJi;
+								struc.force(i).noalias()+=(phi*(dIJi-cosIJK*dIKi)+eta[1])*rIK_*dIKi;
+								struc.force(j).noalias()-=(-phi*cosIJK*dIJi+eta[0])*rIJ_*dIJi+phi*dIJi*rIK_*dIKi;
+								struc.force(j).noalias()-=eta[2]*rJK_*dJKi;
+								struc.force(k).noalias()-=(-phi*cosIJK*dIKi+eta[1])*rIK_*dIKi+phi*dIKi*rIJ_*dIJi;
+								struc.force(k).noalias()+=eta[2]*rJK_*dJKi;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return energyt;
+}
+
+//==== static functions ====
+
+//read/write basis
+
+void NNPot::read_basis(const char* file, NNPot& nnpot, const char* atomName){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::read(const char*,NNPot&,const char*):\n";
+	FILE* reader=NULL;
+	reader=fopen(file,"r");
+	if(reader!=NULL){
+		NNPot::read_basis(reader,nnpot,atomName);
+		fclose(reader);
+		reader=NULL;
+	} else throw std::runtime_error(std::string("NNPot::read(const char*,NNPot&): Could not open nnpot file: \"")+std::string(file)+std::string("\""));
+}
+
+void NNPot::read_basis(FILE* reader, NNPot& nnpot, const char* atomName){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::read_basis(FILE*,NNPot&,const char*):\n";
+	//==== local function variables ====
+	std::vector<std::string> strlist;
+	char* input=new char[string::M];
+	//==== get atom species ====
+	const int atomIndex=nnpot.index(atomName);
+	//==== global cutoff ====
+	string::split(fgets(input,string::M,reader),string::WS,strlist);
+	const double rc=std::atof(strlist.at(1).c_str());
+	if(rc!=nnpot.rc()) throw std::invalid_argument("NNPot::read_basis(FILE*,NNPot&,const char*): invalid cutoff.");
+	//==== number of species ====
+	string::split(fgets(input,string::M,reader),string::WS,strlist);
+	const int nspecies=std::atoi(strlist.at(1).c_str());
+	if(nspecies!=nnpot.nspecies()) throw std::invalid_argument("NNPot::read_basis(FILE*,NNPot&,const char*): invalid number of species.");
+	//==== central species ====
+	string::split(fgets(input,string::M,reader),string::WS,strlist);
+	const int II=nnpot.index(strlist.at(1));
+	//==== check indices ====
+	if(atomIndex!=II) throw std::invalid_argument("NNPot::read_basis(FILE*,NNPot&,const char*): invalid central species.\n");
+	//==== basis - radial ====
+	for(int j=0; j<nspecies; ++j){
+		//read species
+		string::split(fgets(input,string::M,reader),string::WS,strlist);
+		const int JJ=nnpot.index(strlist.at(1));
+		//read basis
+		BasisR::read(reader,nnpot.nnh(II).basisR(JJ));
+	}
+	//==== basis - angular ====
+	for(int j=0; j<nspecies; ++j){
+		for(int k=j; k<nspecies; ++k){
+			//read species
+			string::split(fgets(input,string::M,reader),string::WS,strlist);
+			const int JJ=nnpot.index(strlist.at(1));
+			const int KK=nnpot.index(strlist.at(2));
+			//read basis
+			BasisA::read(reader,nnpot.nnh(II).basisA(JJ,KK));
+		}
+	}
+	//==== initialize the inputs ====
+	nnpot.nnh(II).init_input();
+	//==== clear local variables ====
+	delete[] input;
+}
+
+//read/write nnpot
+
 /**
-* write all neural network potentials to file
+* Write the neural network to file
+* @param file - the name of the file to which the object will be written
+* @param nnpot - the neural network potential to be written
 */
-void NNPot::write()const{
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::write():\n";
-	//==== write all networks ====
-	for(int n=0; n<nspecies_; ++n){
-		//create the file name
-		const std::string filename=head_+nnh_[n].atom().name()+tail_;
+void NNPot::write(const char* file, const NNPot& nnpot){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::write(const char*,const NNPot&):\n";
+	FILE* writer=NULL;
+	writer=fopen(file,"w");
+	if(writer!=NULL){
+		NNPot::write(writer,nnpot);
+		fclose(writer);
+		writer=NULL;
+	} else throw std::runtime_error(std::string("NNPot::write(const char*,const NNPot&): Could not write to nnh file: \"")+std::string(file)+std::string("\""));
+}
+
+/**
+* Read the neural network from file
+* @param file - the name of the file fro
+* @param nnpot - stores the neural network potential to be read
+*/
+void NNPot::read(const char* file, NNPot& nnpot){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::read(const char*,NNPot&):\n";
+	FILE* reader=NULL;
+	reader=fopen(file,"r");
+	if(reader!=NULL){
+		NNPot::read(reader,nnpot);
+		fclose(reader);
+		reader=NULL;
+	} else throw std::runtime_error(std::string("NNPot::read(const char*,NNPot&): Could not open nnpot file: \"")+std::string(file)+std::string("\""));
+}
+
+/**
+* Write the neural network to file
+* @param writer - the file pointer used to write the object to file
+* @param nnpot - the neural network potential to be written
+*/
+void NNPot::write(FILE* writer, const NNPot& nnpot){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::write(FILE*,const NNPot&):\n";
+	//==== header ====
+	fprintf(writer,"ann\n");
+	//==== species ====
+	fprintf(writer, "nspecies %i\n",nnpot.nspecies());
+	for(int n=0; n<nnpot.nspecies(); ++n){
+		const Atom& atom=nnpot.nnh(n).atom();
+		fprintf(writer,"%s %f %f %f\n",atom.name().c_str(),atom.mass(),atom.energy(),atom.charge());
+	}
+	//==== cutoff ====
+	fprintf(writer,"rc %f\n",nnpot.rc());
+	//==== basis ====
+	for(int i=0; i<nnpot.nspecies(); ++i){
+		//write central species
+		fprintf(writer,"basis %s\n",nnpot.nnh(i).atom().name().c_str());
+		//write basis - radial
+		for(int j=0; j<nnpot.nspecies(); ++j){
+			//write species
+			fprintf(writer,"basis_radial %s\n",nnpot.nnh(j).atom().name().c_str());
+			//write basis
+			BasisR::write(writer,nnpot.nnh(i).basisR(j));
+		}
+		//write basis - angular
+		for(int j=0; j<nnpot.nspecies(); ++j){
+			for(int k=j; k<nnpot.nspecies(); ++k){
+				//write species
+				fprintf(writer,"basis_angular %s %s\n",nnpot.nnh(j).atom().name().c_str(),nnpot.nnh(k).atom().name().c_str());
+				//write basis
+				BasisA::write(writer,nnpot.nnh(i).basisA(j,k));
+			}
+		}
+	}
+	//==== neural network ====
+	for(int n=0; n<nnpot.nspecies(); ++n){
+		//write central species
+		fprintf(writer,"nn %s\n",nnpot.nnh(n).atom().name().c_str());
 		//write the network
-		nnh_[n].write(filename);
+		NeuralNet::ANN::write(writer,nnpot.nnh(n).nn());
 	}
 }
 
 /**
-* read all neural network potentials from file
+* Read the neural network from file
+* @param reader - the file pointer used to read the object from file
+* @param nnpot - stores the neural network potential to be read
 */
-void NNPot::read(){
-	if(NN_POT_PRINT_FUNC) std::cout<<"NNPot::read():\n";
-	//==== read all networks ====
-	for(int n=0; n<nspecies_; ++n){
-		//create the file name
-		const std::string filename=head_+nnh_[n].atom().name()+tail_;
-		if(NN_POT_PRINT_DATA>0) std::cout<<"filename = "<<filename<<"\n";
-		//read the network
-		nnh_[n].read(filename);
+void NNPot::read(FILE* reader, NNPot& nnpot){
+	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::read(FILE*,NNPot&):\n";
+	//==== local function variables ====
+	std::vector<std::string> strlist;
+	char* input=new char[string::M];
+	//==== header ====
+	fgets(input,string::M,reader);
+	//==== number of species ====
+	string::split(fgets(input,string::M,reader),string::WS,strlist);
+	const int nspecies=std::atoi(strlist.at(1).c_str());
+	if(nspecies<=0) throw std::invalid_argument("NNPot::read(FILE*,NNPot&): invalid number of species.");
+	//==== species ====
+	std::vector<Atom> species(nspecies);
+	for(int n=0; n<nspecies; ++n){
+		Atom::read(fgets(input,string::M,reader),species[n]);
 	}
+	//==== resize ====
+	nnpot.resize(species);
+	//==== global cutoff ====
+	string::split(fgets(input,string::M,reader),string::WS,strlist);
+	const double rc=std::atof(strlist.at(1).c_str());
+	if(rc<=0) throw std::invalid_argument("NNPot::read(FILE*,NNPot&): invalid cutoff.");
+	else nnpot.rc()=rc;
+	//==== basis ====
+	for(int i=0; i<nspecies; ++i){
+		//read central species
+		string::split(fgets(input,string::M,reader),string::WS,strlist);
+		const int II=nnpot.index(strlist.at(1));
+		//read basis - radial
+		for(int j=0; j<nspecies; ++j){
+			//read species
+			string::split(fgets(input,string::M,reader),string::WS,strlist);
+			const int JJ=nnpot.index(strlist.at(1));
+			//read basis
+			BasisR::read(reader,nnpot.nnh(II).basisR(JJ));
+		}
+		//read basis - angular
+		for(int j=0; j<nspecies; ++j){
+			for(int k=j; k<nspecies; ++k){
+				//read species
+				string::split(fgets(input,string::M,reader),string::WS,strlist);
+				const int JJ=nnpot.index(strlist.at(1));
+				const int KK=nnpot.index(strlist.at(2));
+				//read basis
+				BasisA::read(reader,nnpot.nnh(II).basisA(JJ,KK));
+			}
+		}
+	}
+	//==== initialize inputs ====
+	for(int i=0; i<nspecies; ++i){
+		nnpot.nnh(i).init_input();
+	}
+	//==== neural network ====
+	for(int n=0; n<nspecies; ++n){
+		//read species
+		string::split(fgets(input,string::M,reader),string::WS,strlist);
+		const int II=nnpot.index(strlist.at(1));
+		//read network
+		NeuralNet::ANN::read(reader,nnpot.nnh(II).nn());
+		//resize gradient object
+		nnpot.nnh(II).dOutDVal().resize(nnpot.nnh(II).nn());
+	}
+	//==== clear local variables ====
+	delete[] input;
 }
 
 //************************************************************
@@ -899,13 +991,8 @@ template <> int nbytes(const NNH& obj){
 	//hamiltonian
 	size+=nbytes(obj.atom());
 	size+=nbytes(obj.nn());
-	size+=nbytes(obj.rc());
 	//species
 	size+=nbytes(obj.nspecies());//nspecies_
-	for(int i=0; i<obj.nspecies(); ++i){
-		size+=nbytes(obj.species(i));//species_
-	}
-	size+=nbytes(obj.map());
 	//basis for pair/triple interactions
 	for(int j=0; j<obj.nspecies(); ++j){
 		size+=nbytes(obj.basisR(j));
@@ -918,6 +1005,7 @@ template <> int nbytes(const NNH& obj){
 	//return the size
 	return size;
 }
+
 template <> int nbytes(const NNPot& obj){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"nbytes(const NNPot&):\n";
 	int size=0;
@@ -943,13 +1031,8 @@ template <> int pack(const NNH& obj, char* arr){
 	//hamiltonian
 	pos+=pack(obj.atom(),arr+pos);
 	pos+=pack(obj.nn(),arr+pos);
-	pos+=pack(obj.rc(),arr+pos);
 	//species
 	pos+=pack(obj.nspecies(),arr+pos);
-	for(int i=0; i<obj.nspecies(); ++i){
-		pos+=pack(obj.species(i),arr+pos);
-	}
-	pos+=pack(obj.map(),arr+pos);
 	//basis for pair/triple interactions
 	for(int j=0; j<obj.nspecies(); ++j){
 		pos+=pack(obj.basisR(j),arr+pos);
@@ -987,16 +1070,11 @@ template <> int unpack(NNH& obj, const char* arr){
 	//hamiltonian
 	pos+=unpack(obj.atom(),arr+pos);
 	pos+=unpack(obj.nn(),arr+pos);
-	pos+=unpack(obj.rc(),arr+pos);
+	obj.dOutDVal().resize(obj.nn());
 	//species
 	int nspecies=0;
 	pos+=unpack(nspecies,arr+pos);
-	std::vector<Atom> species(nspecies);
-	for(int i=0; i<nspecies; ++i){
-		pos+=unpack(species[i],arr+pos);
-	}
-	obj.resize(species);
-	pos+=unpack(obj.map(),arr+pos);
+	obj.resize(nspecies);
 	//basis for pair/triple interactions
 	for(int j=0; j<obj.nspecies(); ++j){
 		pos+=unpack(obj.basisR(j),arr+pos);
