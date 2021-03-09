@@ -2,11 +2,11 @@ Example: training a neural network to fit a Guassian function.
 
 Requirements:
 -executable: python
--executable: nn_fit_1D.exe
+-executable: nn_fit.exe
 
 A python executable is required to generate the gaussian data
 using the 'write_gauss.py' script.
-The executable 'nn_fit_1D.exe' is required to fit the gaussian function.
+The executable 'nn_fit.exe' is required to fit the gaussian function.
 Default values are assumed for these two exucutables in the 'run.sh' script.
 One should change them to appropriate values based on the
 current system configuration.
