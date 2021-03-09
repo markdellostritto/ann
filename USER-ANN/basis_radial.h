@@ -23,12 +23,13 @@ private:
 	double norm_;//normalization factor
 	cutoff::Func* cutoff_;//cutoff function
 	PhiRN::type phiRN_;//type of radial functions
+	NormN::type normT_;//normalization scheme
 	int nfR_;//number of radial functions
 	PhiR** fR_;//radial functions
 	Eigen::VectorXd symm_;//symmetry function
 public:
 	//==== constructors/destructors ====
-	BasisR():phiRN_(PhiRN::UNKNOWN),nfR_(0),fR_(NULL),cutoff_(NULL){}
+	BasisR():normT_(NormN::UNKNOWN),phiRN_(PhiRN::UNKNOWN),nfR_(0),fR_(NULL),cutoff_(NULL){}
 	BasisR(const BasisR& basisR);
 	~BasisR();
 	
@@ -37,9 +38,9 @@ public:
 	friend std::ostream& operator<<(std::ostream& out, const BasisR& basisR);
 	
 	//==== initialization ====
-	void init_G1(int nR, cutoff::Name::type tcut, double rcut);
-	void init_G2(int nR, cutoff::Name::type tcut, double rcut);
-	void init_T1(int nR, cutoff::Name::type tcut, double rcut);
+	void init_G1(int nR, NormN::type normT, cutoff::Name::type tcut, double rcut);
+	void init_G2(int nR, NormN::type normT, cutoff::Name::type tcut, double rcut);
+	void init_T1(int nR, NormN::type normT, cutoff::Name::type tcut, double rcut);
 	
 	//==== reading/writing ====
 	static void write(const char* filename, const BasisR& basis);
@@ -55,6 +56,8 @@ public:
 	const int& nfR()const{return nfR_;}
 	PhiRN::type& phiRN(){return phiRN_;}
 	const PhiRN::type& phiRN()const{return phiRN_;}
+	NormN::type& normT(){return normT_;}
+	const NormN::type& normT()const{return normT_;}
 	PhiR& fR(int i){return *fR_[i];}
 	const PhiR& fR(int i)const{return *fR_[i];}
 	Eigen::VectorXd& symm(){return symm_;}
@@ -64,8 +67,9 @@ public:
 	void clear();
 	void symm(double dr);
 	double force(double dr, const double* dEdG)const;
+	
 	//==== static functions ====
-	static double norm(double rc);
+	static double norm(NormN::type normT, double rc);
 };
 std::ostream& operator<<(std::ostream& out, const BasisR& basisR);
 
