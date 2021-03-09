@@ -34,8 +34,9 @@ struct ALGO{
 		RMSPROP=6,
 		ADAM=7,
 		NADAM=8,
-		BFGS=9,
-		RPROP=10
+		AMSGRAD=9,
+		BFGS=10,
+		RPROP=11,
 	};
 	static type read(const char* str);
 	static const char* name(const ALGO::type& t);
@@ -70,7 +71,8 @@ struct DECAY{
 		EXP=2,
 		SQRT=3,
 		INV=4,
-		POW=5
+		POW=5,
+		STEP=6
 	};
 	static type read(const char* str);
 };
@@ -163,13 +165,14 @@ public:
 class Model{
 protected:
 	int dim_;//dimension of the problem
+	int period_;
 	ALGO::type algo_;//optimization algorithm
 	DECAY::type decay_;//decay schedule
 	double alpha_;//step decay constant
 	double lambda_;//regularization parameter
 	double gamma_;//gradient step size
 	double gamma0_;//gradient step size - initial
-	double pow_;//step decay power
+	double power_;//step decay power
 public:
 	//==== constructors/destructors ====
 	Model(){defaults();}
@@ -181,6 +184,8 @@ public:
 	//==== access ====
 	int& dim(){return dim_;}
 	const int& dim()const{return dim_;}
+	int& period(){return period_;}
+	const int& period()const{return period_;}
 	ALGO::type& algo(){return algo_;}
 	const ALGO::type& algo()const{return algo_;}
 	DECAY::type& decay(){return decay_;}
@@ -193,8 +198,8 @@ public:
 	const double& gamma0()const{return gamma0_;}
 	double& lambda(){return lambda_;}
 	const double& lambda()const{return lambda_;}
-	double& pow(){return pow_;}
-	const double& pow()const{return pow_;}
+	double& power(){return power_;}
+	const double& power()const{return power_;}
 	
 	//==== member functions ====
 	void defaults();
@@ -403,6 +408,41 @@ public:
 	friend std::ostream& operator<<(std::ostream& out, const NADAM& nadam);
 };
 
+//amsgrad
+class AMSGRAD: public Model{
+private:
+	static const double eps_;//small term to prevent divergence
+	static const double beta1_;
+	static const double beta2_;
+	double beta1i_;//power w.r.t i
+	double beta2i_;//power w.r.t i
+	Eigen::VectorXd mgrad_;//avg of gradient
+	Eigen::VectorXd mgrad2_;//avg of square of gradient
+	Eigen::VectorXd mgrad2m_;
+public:
+	//constructors/destructors
+	AMSGRAD(){defaults();}
+	AMSGRAD(int dim){init(dim);}
+	~AMSGRAD(){}
+	//access
+	double& beta1i(){return beta1i_;}
+	const double& beta1i()const{return beta1i_;}
+	double& beta2i(){return beta2i_;}
+	const double& beta2i()const{return beta2i_;}
+	Eigen::VectorXd& mgrad(){return mgrad_;}
+	const Eigen::VectorXd& mgrad()const{return mgrad_;}
+	Eigen::VectorXd& mgrad2(){return mgrad2_;}
+	const Eigen::VectorXd& mgrad2()const{return mgrad2_;}
+	Eigen::VectorXd& mgrad2m(){return mgrad2m_;}
+	const Eigen::VectorXd& mgrad2m()const{return mgrad2m_;}
+	//member functions
+	void step(Data& d);
+	void defaults();
+	void init(int dim);
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const AMSGRAD& amsgrad);
+};
+
 //bfgs
 class BFGS: public Model{
 private:
@@ -518,6 +558,7 @@ namespace serialize{
 	template <> int nbytes(const Opt::RMSPROP& obj);
 	template <> int nbytes(const Opt::ADAM& obj);
 	template <> int nbytes(const Opt::NADAM& obj);
+	template <> int nbytes(const Opt::AMSGRAD& obj);
 	template <> int nbytes(const Opt::BFGS& obj);
 	template <> int nbytes(const Opt::RPROP& obj);
 	
@@ -535,6 +576,7 @@ namespace serialize{
 	template <> int pack(const Opt::RMSPROP& obj, char* arr);
 	template <> int pack(const Opt::ADAM& obj, char* arr);
 	template <> int pack(const Opt::NADAM& obj, char* arr);
+	template <> int pack(const Opt::AMSGRAD& obj, char* arr);
 	template <> int pack(const Opt::BFGS& obj, char* arr);
 	template <> int pack(const Opt::RPROP& obj, char* arr);
 	
@@ -552,6 +594,7 @@ namespace serialize{
 	template <> int unpack(Opt::RMSPROP& obj, const char* arr);
 	template <> int unpack(Opt::ADAM& obj, const char* arr);
 	template <> int unpack(Opt::NADAM& obj, const char* arr);
+	template <> int unpack(Opt::AMSGRAD& obj, const char* arr);
 	template <> int unpack(Opt::BFGS& obj, const char* arr);
 	template <> int unpack(Opt::RPROP& obj, const char* arr);
 	

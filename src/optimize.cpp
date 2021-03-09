@@ -1,5 +1,9 @@
 // c libraries
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
 #include <cmath>
+#elif (defined __ICC || defined __INTEL_COMPILER)
+#include <mathimf.h> //intel math library
+#endif
 // c++ libraries
 #include <iostream>
 #include <string>
@@ -33,6 +37,7 @@ std::ostream& operator<<(std::ostream& out, const ALGO::type& type){
 		case ALGO::RMSPROP: out<<"RMSPROP"; break;
 		case ALGO::ADAM: out<<"ADAM"; break;
 		case ALGO::NADAM: out<<"NADAM"; break;
+		case ALGO::AMSGRAD: out<<"AMSGRAD"; break;
 		case ALGO::BFGS: out<<"BFGS"; break;
 		case ALGO::RPROP: out<<"RPROP"; break;
 		default: out<<"UNKNOWN"; break;
@@ -50,6 +55,7 @@ const char* ALGO::name(const ALGO::type& t){
 		case ALGO::RMSPROP: return "RMSPROP";
 		case ALGO::ADAM: return "ADAM";
 		case ALGO::NADAM: return "NADAM";
+		case ALGO::AMSGRAD: return "AMSGRAD";
 		case ALGO::BFGS: return "BFGS";
 		case ALGO::RPROP: return "RPROP";
 		default: return "UNKNOWN";
@@ -65,6 +71,7 @@ ALGO::type ALGO::read(const char* str){
 	else if(std::strcmp(str,"RMSPROP")==0) return ALGO::RMSPROP;
 	else if(std::strcmp(str,"ADAM")==0) return ALGO::ADAM;
 	else if(std::strcmp(str,"NADAM")==0) return ALGO::NADAM;
+	else if(std::strcmp(str,"AMSGRAD")==0) return ALGO::AMSGRAD;
 	else if(std::strcmp(str,"BFGS")==0) return ALGO::BFGS;
 	else if(std::strcmp(str,"RPROP")==0) return ALGO::RPROP;
 	else return ALGO::UNKNOWN;
@@ -114,6 +121,7 @@ std::ostream& operator<<(std::ostream& out, const DECAY::type& type){
 		case DECAY::SQRT: out<<"SQRT"; break;
 		case DECAY::INV: out<<"INV"; break;
 		case DECAY::POW: out<<"POW"; break;
+		case DECAY::STEP: out<<"STEP"; break;
 		default: out<<"UNKNOWN"; break;
 	}
 	return out;
@@ -125,6 +133,7 @@ DECAY::type DECAY::read(const char* str){
 	else if(std::strcmp(str,"SQRT")==0) return DECAY::SQRT;
 	else if(std::strcmp(str,"INV")==0) return DECAY::INV;
 	else if(std::strcmp(str,"POW")==0) return DECAY::POW;
+	else if(std::strcmp(str,"STEP")==0) return DECAY::STEP;
 	else return DECAY::UNKNOWN;
 }
 
@@ -194,7 +203,7 @@ std::ostream& operator<<(std::ostream& out, const Model& model){
 	out<<"GAMMA0 = "<<model.gamma0_<<"\n";
 	out<<"ALPHA  = "<<model.alpha_<<"\n";
 	out<<"LAMBDA = "<<model.lambda_<<"\n";
-	out<<"POW    = "<<model.pow_;
+	out<<"POW    = "<<model.power_;
 	return out;
 }
 
@@ -208,7 +217,8 @@ void Model::defaults(){
 	gamma_=0;
 	gamma0_=0;
 	alpha_=1;
-	pow_=0;
+	power_=0;
+	period_=0;
 }
 
 void Model::init(int n){
@@ -220,10 +230,12 @@ void Model::init(int n){
 void Model::update_step(int step){
 	switch(decay_){
 		case DECAY::CONST: break;
-		case DECAY::EXP:  gamma_*=std::exp(-alpha_); break;
-		case DECAY::SQRT: gamma_*=std::sqrt((1.0+alpha_*step)/(1.0+alpha_*(step+1))); break;
+		case DECAY::EXP:  gamma_*=exp(-alpha_); break;
+		case DECAY::SQRT: gamma_*=sqrt((1.0+alpha_*step)/(1.0+alpha_*(step+1))); break;
 		case DECAY::INV:  gamma_*=(1.0+alpha_*step)/(1.0+alpha_*(step+1)); break;
-		case DECAY::POW:  gamma_*=std::pow((1.0+alpha_*step)/(1.0+alpha_*(step+1)),pow_); break;
+		case DECAY::POW:  gamma_*=pow((1.0+alpha_*step)/(1.0+alpha_*(step+1)),power_); break;
+		case DECAY::STEP: if(step>0 && step%period_==0) gamma_*=alpha_;
+		break;
 		default: break;
 	}
 }
@@ -366,7 +378,7 @@ void ADAGRAD::step(Data& d){
 	mgrad2_.noalias()+=g.cwiseProduct(g);
 	//calculate the new position
 	for(int n=0; n<dim_; ++n){
-		d.p()[n]-=gamma_*g[n]/std::sqrt(mgrad2_[n]+eps_);
+		d.p()[n]-=gamma_*g[n]/sqrt(mgrad2_[n]+eps_);
 	}
 }
 
@@ -408,7 +420,7 @@ void ADADELTA::step(Data& d){
 	mgrad2_.noalias()+=(1.0-eta_)*g.cwiseProduct(g);
 	//calculate the new position
 	for(int n=0; n<dim_; ++n){
-		dx_[n]=g[n]*std::sqrt(mdx2_[n]+eps_)/std::sqrt(mgrad2_[n]+eps_);
+		dx_[n]=g[n]*sqrt(mdx2_[n]+eps_)/sqrt(mgrad2_[n]+eps_);
 		d.p()[n]-=dx_[n];
 	}
 	//add to the running average of the square of the deltas
@@ -455,7 +467,7 @@ void RMSPROP::step(Data& d){
 	mgrad2_.noalias()+=0.1*g.cwiseProduct(g);
 	//calculate the new position
 	for(int n=0; n<dim_; ++n){
-		d.p()[n]-=gamma_*g[n]/std::sqrt(mgrad2_[n]+eps_);
+		d.p()[n]-=gamma_*g[n]/sqrt(mgrad2_[n]+eps_);
 	}
 }
 
@@ -508,15 +520,15 @@ void ADAM::step(Data& d){
 		d.p()[n]-=fac*mgrad_[n]/(std::sqrt(mgrad2_[n])+eps_);
 	}
 	*/
-	const double fac=gamma_*std::sqrt(1.0-beta2i_)/(1.0-beta1i_);
+	const double fac=gamma_*sqrt(1.0-beta2i_)/(1.0-beta1i_);
 	for(int n=0; n<dim_; ++n){
 		//add to the running average of the gradients
 		mgrad_[n]*=beta1_; mgrad_[n]+=(1.0-beta1_)*g[n];
 		//add to the running average of the square of the gradients
 		mgrad2_[n]*=beta2_; mgrad2_[n]+=(1.0-beta2_)*g[n]*g[n];
 		//calculate the new position
-		//d.p()[n]-=gamma_*mgrad_[n]/((1.0-beta1i_)*(std::sqrt(mgrad2_[n]/(1.0-beta2i_))+eps_));
-		d.p()[n]-=fac*mgrad_[n]/(std::sqrt(mgrad2_[n])+eps_);
+		//d.p()[n]-=gamma_*mgrad_[n]/((1.0-beta1i_)*(sqrt(mgrad2_[n]/(1.0-beta2i_))+eps_));
+		d.p()[n]-=fac*mgrad_[n]/(sqrt(mgrad2_[n])+eps_);
 	}
 	//update the powers of betas
 	beta1i_*=beta1_;
@@ -575,15 +587,15 @@ void NADAM::step(Data& d){
 		d.p()[n]-=fac*(beta1_*mgrad_[n]+(1.0-beta1_)*g[n])/(std::sqrt(mgrad2_[n])+eps_);
 	}
 	*/
-	const double fac=gamma_*std::sqrt(1.0-beta2i_)/(1.0-beta1i_);
+	const double fac=gamma_*sqrt(1.0-beta2i_)/(1.0-beta1i_);
 	for(int n=0; n<dim_; ++n){
 		//add to the running average of the gradients
 		mgrad_[n]*=beta1_; mgrad_[n]+=(1.0-beta1_)*g[n];
 		//add to the running average of the square of the gradients
 		mgrad2_[n]*=beta2_; mgrad2_[n]+=(1.0-beta2_)*g[n]*g[n];
 		//calculate the new position
-		//d.p()[n]-=gamma_*(beta1_*mgrad_[n]+(1.0-beta1_)*g[n])/((1.0-beta1i_)*(std::sqrt(mgrad2_[n]/(1.0-beta2i_))+eps_));
-		d.p()[n]-=fac*(beta1_*mgrad_[n]+(1.0-beta1_)*g[n])/(std::sqrt(mgrad2_[n])+eps_);
+		//d.p()[n]-=gamma_*(beta1_*mgrad_[n]+(1.0-beta1_)*g[n])/((1.0-beta1i_)*(sqrt(mgrad2_[n]/(1.0-beta2i_))+eps_));
+		d.p()[n]-=fac*(beta1_*mgrad_[n]+(1.0-beta1_)*g[n])/(sqrt(mgrad2_[n])+eps_);
 	}
 	//update the powers of betas
 	beta1i_*=beta1_;
@@ -595,6 +607,76 @@ void NADAM::init(int dim){
 	Model::init(dim);
 	mgrad_=Eigen::VectorXd::Zero(dim);
 	mgrad2_=Eigen::VectorXd::Zero(dim);
+	beta1i_=beta1_;//power w.r.t i
+	beta2i_=beta2_;//power w.r.t i
+}
+
+//AMSGRAD
+
+const double AMSGRAD::eps_=1e-8;
+const double AMSGRAD::beta1_=0.9;
+const double AMSGRAD::beta2_=0.999;
+	
+void AMSGRAD::defaults(){
+	algo_=ALGO::AMSGRAD;
+	beta1i_=beta1_;
+	beta2i_=beta2_;
+}
+
+std::ostream& operator<<(std::ostream& out, const AMSGRAD& amsgrad){
+	char* str=new char[print::len_buf];
+	out<<print::buf(str)<<"\n";
+	out<<print::title("AMSGRAD",str)<<"\n";
+	out<<static_cast<const Model&>(amsgrad)<<"\n";
+	out<<print::title("AMSGRAD",str)<<"\n";
+	out<<print::buf(str);
+	delete[] str;
+	return out;
+}
+
+void AMSGRAD::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"AMSGRAD::step(Data&):\n";
+	//local variables
+	const Eigen::VectorXd& g=d.g();
+	//update gradient step
+	update_step(d.step());
+	/*
+	//add to the running average of the gradients
+	mgrad_*=beta1_;
+	mgrad_.noalias()+=(1.0-beta1_)*g;
+	//add to the running average of the square of the gradients
+	mgrad2_*=beta2_;
+	mgrad2_.noalias()+=(1.0-beta2_)*g.cwiseProduct(g);
+	//calculate the new position
+	const double fac=gamma_*std::sqrt(1.0-beta2i_)/(1.0-beta1i_);
+	for(int n=0; n<dim_; ++n){
+		//d.p()[n]-=gamma_*mgrad_[n]/((1.0-beta1i_)*(std::sqrt(mgrad2_[n]/(1.0-beta2i_))+eps_));
+		d.p()[n]-=fac*mgrad_[n]/(std::sqrt(mgrad2_[n])+eps_);
+	}
+	*/
+	const double fac=gamma_*sqrt(1.0-beta2i_)/(1.0-beta1i_);
+	for(int n=0; n<dim_; ++n){
+		//add to the running average of the gradients
+		mgrad_[n]*=beta1_; mgrad_[n]+=(1.0-beta1_)*g[n];
+		//add to the running average of the square of the gradients
+		mgrad2_[n]*=beta2_; mgrad2_[n]+=(1.0-beta2_)*g[n]*g[n];
+		//compute the max
+		if(mgrad2_[n]>mgrad2m_[n]) mgrad2m_[n]=mgrad2_[n];
+		//calculate the new position
+		//d.p()[n]-=gamma_*mgrad_[n]/((1.0-beta1i_)*(sqrt(mgrad2_[n]/(1.0-beta2i_))+eps_));
+		d.p()[n]-=fac*mgrad_[n]/(sqrt(mgrad2m_[n])+eps_);
+	}
+	//update the powers of betas
+	beta1i_*=beta1_;
+	beta2i_*=beta2_;
+}
+
+void AMSGRAD::init(int dim){
+	if(OPT_PRINT_FUNC>0) std::cout<<"AMSGRAD::init(int):\n";
+	Model::init(dim);
+	mgrad_=Eigen::VectorXd::Zero(dim);
+	mgrad2_=Eigen::VectorXd::Zero(dim);
+	mgrad2m_=Eigen::VectorXd::Zero(dim);
 	beta1i_=beta1_;//power w.r.t i
 	beta2i_=beta2_;//power w.r.t i
 }
@@ -808,6 +890,16 @@ NADAM& read(NADAM& nadam, const char* file){
 	return nadam;
 }
 
+AMSGRAD& read(AMSGRAD& amsgrad, const char* file){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(AMSGRAD&,const char*):\n";
+	FILE* reader=fopen(file,"r");
+	if(reader==NULL) throw std::runtime_error("read(AMSGRAD&,const char*): Could not open file.");
+	read(static_cast<Model&>(amsgrad),reader);
+	read(amsgrad,reader);
+	fclose(reader); reader=NULL;
+	return amsgrad;
+}
+
 BFGS& read(BFGS& bfgs, const char* file){
 	if(OPT_PRINT_FUNC>0) std::cout<<"read(BFGS&,const char*):\n";
 	FILE* reader=fopen(file,"r");
@@ -881,7 +973,9 @@ Model& read(Model& model, FILE* reader){
 		} else if(strlist.at(0)=="DECAY"){
 			model.decay()=DECAY::read(string::to_upper(strlist.at(1)).c_str());
 		} else if(strlist.at(0)=="POW"){
-			model.pow()=std::atof(strlist.at(1).c_str());
+			model.power()=std::atof(strlist.at(1).c_str());
+		} else if(strlist.at(0)=="PERIOD"){
+			model.period()=std::atoi(strlist.at(1).c_str());
 		}
 	}
 	delete[] input;
@@ -970,6 +1064,12 @@ NADAM& read(NADAM& nadam, FILE* reader){
 	if(OPT_PRINT_FUNC>0) std::cout<<"read(NADAM&,FILE*):\n";
 	read(static_cast<Model&>(nadam),reader);
 	return nadam;
+}
+
+AMSGRAD& read(AMSGRAD& amsgrad, FILE* reader){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(AMSGRAD&,FILE*):\n";
+	read(static_cast<Model&>(amsgrad),reader);
+	return amsgrad;
 }
 
 BFGS& read(BFGS& bfgs, FILE* reader){
@@ -1076,13 +1176,14 @@ template <> int nbytes(const Opt::Data& obj){
 template <> int nbytes(const Opt::Model& obj){
 	int size=0;
 	size+=sizeof(int);//dim_
+	size+=sizeof(int);//period_
 	size+=sizeof(Opt::ALGO::type);//algo_
 	size+=sizeof(Opt::DECAY::type);//decay_
 	size+=sizeof(double);//gamma_
 	size+=sizeof(double);//gamma0_
 	size+=sizeof(double);//alpha_
 	size+=sizeof(double);//lambda_
-	size+=sizeof(double);//pow_
+	size+=sizeof(double);//power_
 	return size;
 }
 template <> int nbytes(const Opt::SGD& obj){
@@ -1094,6 +1195,7 @@ template <> int nbytes(const Opt::SDM& obj){
 	int size=0;
 	size+=nbytes(static_cast<const Opt::Model&>(obj));
 	size+=sizeof(double);//eta_
+	size+=nbytes(obj.dx());//dx_
 	return size;
 }
 template <> int nbytes(const Opt::NAG& obj){
@@ -1140,6 +1242,16 @@ template <> int nbytes(const Opt::NADAM& obj){
 	size+=sizeof(double);//beta2i_
 	size+=nbytes(obj.mgrad());//mgrad_
 	size+=nbytes(obj.mgrad2());//mgrad2_
+	return size;
+}
+template <> int nbytes(const Opt::AMSGRAD& obj){
+	int size=0;
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
+	size+=sizeof(double);//beta1i
+	size+=sizeof(double);//beta2i
+	size+=nbytes(obj.mgrad());//mgrad_
+	size+=nbytes(obj.mgrad2());//mgrad2_
+	size+=nbytes(obj.mgrad2m());//mgrad2m_
 	return size;
 }
 template <> int nbytes(const Opt::BFGS& obj){
@@ -1189,13 +1301,14 @@ template <> int pack(const Opt::Data& obj, char* arr){
 template <> int pack(const Opt::Model& obj, char* arr){
 	int pos=0;
 	std::memcpy(arr+pos,&obj.dim(),sizeof(int)); pos+=sizeof(int);//dim_
+	std::memcpy(arr+pos,&obj.period(),sizeof(int)); pos+=sizeof(int);//period_
 	std::memcpy(arr+pos,&obj.algo(),sizeof(Opt::ALGO::type)); pos+=sizeof(Opt::ALGO::type);//algo_
 	std::memcpy(arr+pos,&obj.decay(),sizeof(Opt::DECAY::type)); pos+=sizeof(Opt::DECAY::type);//decay_
 	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);//gamma_
 	std::memcpy(arr+pos,&obj.gamma0(),sizeof(double)); pos+=sizeof(double);//gamma0_
 	std::memcpy(arr+pos,&obj.alpha(),sizeof(double)); pos+=sizeof(double);//alpha_
 	std::memcpy(arr+pos,&obj.lambda(),sizeof(double)); pos+=sizeof(double);//lambda_
-	std::memcpy(arr+pos,&obj.pow(),sizeof(double)); pos+=sizeof(double);//pow_
+	std::memcpy(arr+pos,&obj.power(),sizeof(double)); pos+=sizeof(double);//power_
 	return pos;
 }
 template <> int pack(const Opt::SGD& obj, char* arr){
@@ -1207,6 +1320,7 @@ template <> int pack(const Opt::SDM& obj, char* arr){
 	int pos=0;
 	pos+=pack(static_cast<const Opt::Model&>(obj),arr+pos);
 	std::memcpy(arr+pos,&obj.eta(),sizeof(double)); pos+=sizeof(double);//eta
+	pos+=pack(obj.dx(),arr+pos);//dx_
 	return pos;
 }
 template <> int pack(const Opt::NAG& obj, char* arr){
@@ -1253,6 +1367,16 @@ template <> int pack(const Opt::NADAM& obj, char* arr){
 	std::memcpy(arr+pos,&obj.beta2i(),sizeof(double)); pos+=sizeof(double);//beta2i_
 	pos+=pack(obj.mgrad(),arr+pos);//mgrad_
 	pos+=pack(obj.mgrad2(),arr+pos);//mgrad2_
+	return pos;
+}
+template <> int pack(const Opt::AMSGRAD& obj, char* arr){
+	int pos=0;
+	pos+=pack(static_cast<const Opt::Model&>(obj),arr+pos);
+	std::memcpy(arr+pos,&obj.beta1i(),sizeof(double)); pos+=sizeof(double);
+	std::memcpy(arr+pos,&obj.beta2i(),sizeof(double)); pos+=sizeof(double);
+	pos+=pack(obj.mgrad(),arr+pos);//mgrad_
+	pos+=pack(obj.mgrad2(),arr+pos);//mgrad2_
+	pos+=pack(obj.mgrad2m(),arr+pos);//mgrad2m_
 	return pos;
 }
 template <> int pack(const Opt::BFGS& obj, char* arr){
@@ -1302,13 +1426,14 @@ template <> int unpack(Opt::Data& obj, const char* arr){
 template <> int unpack(Opt::Model& obj, const char* arr){
 	int pos=0;
 	std::memcpy(&obj.dim(),arr+pos,sizeof(int)); pos+=sizeof(int);//dim_
+	std::memcpy(&obj.period(),arr+pos,sizeof(int)); pos+=sizeof(int);//period_
 	std::memcpy(&obj.algo(),arr+pos,sizeof(Opt::ALGO::type)); pos+=sizeof(Opt::ALGO::type);//algo_
 	std::memcpy(&obj.decay(),arr+pos,sizeof(Opt::DECAY::type)); pos+=sizeof(Opt::DECAY::type);//decay_
 	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);//gamma_
 	std::memcpy(&obj.gamma0(),arr+pos,sizeof(double)); pos+=sizeof(double);//gamma0_
 	std::memcpy(&obj.alpha(),arr+pos,sizeof(double)); pos+=sizeof(double);//alpha_
 	std::memcpy(&obj.lambda(),arr+pos,sizeof(double)); pos+=sizeof(double);//lambda_
-	std::memcpy(&obj.pow(),arr+pos,sizeof(double)); pos+=sizeof(double);//pow_
+	std::memcpy(&obj.power(),arr+pos,sizeof(double)); pos+=sizeof(double);//power_
 	return pos;
 }
 template <> int unpack(Opt::SGD& obj, const char* arr){
@@ -1320,6 +1445,7 @@ template <> int unpack(Opt::SDM& obj, const char* arr){
 	int pos=0;
 	pos+=unpack(static_cast<Opt::Model&>(obj),arr+pos);
 	std::memcpy(&obj.eta(),arr+pos,sizeof(double)); pos+=sizeof(double);//eta
+	pos+=unpack(obj.dx(),arr+pos);//dx_
 	return pos;
 }
 template <> int unpack(Opt::NAG& obj, const char* arr){
@@ -1366,6 +1492,16 @@ template <> int unpack(Opt::NADAM& obj, const char* arr){
 	std::memcpy(&obj.beta2i(),arr+pos,sizeof(double)); pos+=sizeof(double);//beta2i_
 	pos+=unpack(obj.mgrad(),arr+pos);//mgrad_
 	pos+=unpack(obj.mgrad2(),arr+pos);//mgrad2_
+	return pos;
+}
+template <> int unpack(Opt::AMSGRAD& obj, const char* arr){
+	int pos=0;
+	pos+=unpack(static_cast<Opt::Model&>(obj),arr+pos);
+	std::memcpy(&obj.beta1i(),arr+pos,sizeof(double)); pos+=sizeof(double);
+	std::memcpy(&obj.beta2i(),arr+pos,sizeof(double)); pos+=sizeof(double);
+	pos+=unpack(obj.mgrad(),arr+pos);//mgrad_
+	pos+=unpack(obj.mgrad2(),arr+pos);//mgrad2_
+	pos+=unpack(obj.mgrad2m(),arr+pos);//mgrad2m_
 	return pos;
 }
 template <> int unpack(Opt::BFGS& obj, const char* arr){
