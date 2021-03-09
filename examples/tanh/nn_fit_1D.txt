@@ -1,4 +1,6 @@
 # files 
+dim_in		1
+dim_out		1
 data_train	tanh_train.dat
 data_val	tanh_val.dat
 data_test	tanh_test.dat
@@ -7,15 +9,17 @@ file_error	nn_train_error.dat
 # nn
 n_hidden	12 12
 transfer	tanh
+init		he
+sigma		1.0
 
 # optimization - model
-algo		adam
-gamma		1e-3
-lambda		0
-#decay		const
-decay		exp
-alpha		0.999999
-pow		0
+algo            adam
+gamma           1e-3
+lambda          0
+#decay          const
+decay           exp
+alpha           1e-6
+pow             0
 
 # optimization - data
 opt_val		ftol_abs
@@ -29,6 +33,5 @@ pre_cond	F
 post_cond	F
 
 #batch size
-pbatch		0.20
-#nbatch		10
+nbatch		10
 
