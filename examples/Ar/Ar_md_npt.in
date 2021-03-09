@@ -21,8 +21,8 @@ create_atoms	1 region particles # generate particles
 
 # atom interactions
 mass		1 39.948 # atom mass
-pair_style	nn 10.0 Ar 1 # lj 6-12 potential
-pair_coeff	1 ann_Ar_md # potential file
+pair_style	nn 10.0 # ann
+pair_coeff	* * ann_Ar_md Ar # potential file
 
 # init
 velocity	all create $T 1 mom yes rot yes dist gaussian
