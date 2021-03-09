@@ -56,19 +56,22 @@ class PairNN: public Pair{
 protected:
 	//==== global cutoff ====
 	double rc_;
-	//==== element nn's ====
+	//==== neural network hamiltonians ====
+	std::vector<int> map_type_nnp_;//map atom types to nnpot index
 	std::vector<NNH> nnh_;//neural network Hamiltonians for each specie (nspecies)
+	std::vector<NeuralNet::DOutDVal> dOutDVal_;//gradient of NNH for each specie (nspecies)
 	//==== symmetry functions ====
 	std::vector<Eigen::VectorXd> symm_;//(nspecies)
 	std::vector<Eigen::VectorXd> dEdG_;//(nspecies)
-	//==== allocate data ====
-	virtual void allocate();
 	//==== input statistics ===
 	std::vector<Eigen::VectorXd> avg_;
 	std::vector<Eigen::VectorXd> var_;
 	std::vector<Eigen::VectorXd> m2_;
+	//==== allocate data ====
+	virtual void allocate();
 	//==== utilties ====
-	Eigen::Vector3d rIJ,rIK,rJK,ffj,ffk;
+	Eigen::Vector3d rIJ,rIK,rJK;
+	Eigen::Vector3d ffk,ffj,ffi;
 	Eigen::VectorXd dEdG;
 public:
 	//constructors/destructors
@@ -90,8 +93,7 @@ public:
 	void write_data(FILE *);
 	void write_data_all(FILE *);
 	//reading/writing - local
-	void read_pot(int type, const char* file);
-	int name_index(const char* name);
+	void read_pot(const char* file);
 	//force evaluation 
 	double single(int, int, int, int, double, double, double, double &);
 	//parameter access
