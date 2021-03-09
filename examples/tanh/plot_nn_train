@@ -1,0 +1,13 @@
+# plot settings
+set xlabel 'Abscissa' font ',14'
+set ylabel 'Ordinate' font ',14'
+w=1.2
+set key left font ',14'
+# output
+set term pngcairo
+set output 'nn_train.png'
+# plot
+plot\
+	'tanh_train.dat' using 1:2 with points lw w lc 'black' title 'exact',\
+	'nn_fit_train.dat' using 1:2 with points lw w lc 'red' title 'nn'
+
