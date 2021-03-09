@@ -18,6 +18,8 @@
 		#format			BINARY # file format - binary format
 	# units
 		units			metal # same as LAMMPS units
+	# random
+		seed			-1 # random seed (-1 -> random)
 
 # ATOMS
 	atom			Ar mass 39.948
@@ -26,19 +28,22 @@
 	atom			Ar nh 7 4 2
 
 # READING
-	#read_restart		nn_pot_train
+	file_ann		ann_Ar			# potential file
+	file_restart		nn_pot_train.restart	# restart file
+	restart			false			# restart
+	norm			true			# normalize energies w.r.t. number of atoms
 
 # WRITING
 	write_basis		false		# write basis (radial and angular sf's)
 	write_energy		true		# write energies
 	write_ewald		false		# write ewald energies
 	write_force		false		# write forces
-	write_input		false		# write inputs
+	write_input		true		# write inputs
 	write_corr		false		# write input correlations
-	write_symm		false		# write symmetry functionns to binary files
+	write_symm		true		# write symmetry functionns to binary files
 	
 # OPTIMIZATION
-	#algo			sdg		# steepest-descent
+	#algo			sgd		# steepest-descent
 	#algo			sdm		# steepest-descent - momentum
 	#algo			nag		# Nesterov accelerated gradient
 	#algo			adagrad		# Adagrad
@@ -59,31 +64,21 @@
 	n_print			10000		# print - status - every n optimization steps
 	n_write			100000		# write - restart - every n optimization steps
 	gamma			1e-3		# step size for gradient descent
-	eta			0.9		# memory term (nag,adagrad,adam)
+	eta			0.9		# memory term (sdm,nag,adagrad)
 	alpha			1e-6		# decay term
-	seed			-1		# random seed (-1 -> random)
 	lambda			0		# regularization parameter
+	loss			mse		# loss function
 
 # NN POTENTIAL
 	r_cut			10		# max cutoff distance
 	init			he		# initialization - He
-	idev			1.0		# initialization - deviation
-	transfer		tanh		# transfer function - tanh
-	#transfer		sigmoid		# transfer function - sigmoid
-	#transfer		arctan		# transfer function - arctan
-	#transfer		isru		# transfer function - inverse square root unit
-	#transfer		relu		# transfer function - rectified linear unit
-	#transfer		elu		# transfer function - exponential linear unit
-	#transfer		gelu		# transfer function - gaussian error linear unit
-	#transfer		softplus	# transfer function - softplus
-	#transfer		softplus2	# transfer function - softplus - ln(2)
-	#transfer		softsign	# transfer function - softsign
-	#transfer		linear		# transfer function - linear
+	sigma			0.5		# initialization - deviation
+	dist			normal		# initialization - distribution
+	#transfer		tanh		# transfer function - tanh
 	n_batch			4		# number of systems in batch (superceded by p_batch)
-	p_batch			0		# percentage of system in batch
 	pre_cond		0		# whether to pre-condition the network inputs
 	calc_force		false		# whether to compute the forces
-	
+
 # algorithm performance (gamma=0.001,eta=0.9,t=10000)
 # more * implies better performance
 	# sdg		**	# simple, slow, reliable (gamma=1e-3)
