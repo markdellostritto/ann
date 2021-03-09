@@ -1,6 +1,6 @@
 #!/bin/bash
 py=python
-nn_fit=../../bin/nn_fit_1D.exe
+nn_fit=../../bin/nn_fit.exe
 $py write_tanh.py
-$nn_fit -in nn_fit_1D.txt -out nn_fit_1D.out
+$nn_fit nn_fit_1D.txt > nn_fit_1D.out
 
