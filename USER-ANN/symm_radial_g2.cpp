@@ -30,19 +30,11 @@ bool operator==(const PhiR_G2& phi1, const PhiR_G2& phi2){
 //==== member functions - evaluation ====
 
 double PhiR_G2::val(double r, double cut)const{
-	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return std::exp(-eta*(r-rs)*(r-rs))*cut;
-	#elif defined __ICC || defined __INTEL_COMPILER
 	return exp(-eta*(r-rs)*(r-rs))*cut;
-	#endif
 }
 
 double PhiR_G2::grad(double r, double cut, double gcut)const{
-	#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
-	return std::exp(-eta*(r-rs)*(r-rs))*(-2.0*eta*(r-rs)*cut+gcut);
-	#elif defined __ICC || defined __INTEL_COMPILER
 	return exp(-eta*(r-rs)*(r-rs))*(-2.0*eta*(r-rs)*cut+gcut);
-	#endif
 }
 
 //*****************************************
