@@ -301,6 +301,38 @@ count and error to the end of the file.
 There are several flags for writing the the basis set, energies, and forces to file at the end of optimization.
 The energies and forces are guaranteed to be written in the same order as they are provided in the data files.
 
+## PARALLELISM
+
+The code used for training NNPs can be run on multiple processors using the MPI protocol.  
+The use of multiple threads when training a NNP is difficult though, as although the NNP is trained on the
+energies of structures, the computation involves individual atoms.  This then requires two levels of parellelism
+in order to take full advantage of the available hardware.
+
+The issue with parallelism is greatest when one is training on structure with many atoms or with structures which 
+all have different numbers of atoms.  As a pathological example, imagine that the training data is composed of
+100 structures, 99 of which have 1 atom per unit cell and one of which has 1000 atoms per unit cell.  In order to 
+train on a given structure, one must compute the total energy of the structure, which in turn requires computing 
+the energy of all atoms in the structure.  In this example, one could easily distribute the calculation to 100 
+processors such that each processor computed the energy of a single structure.  However, the single structure with 
+1000 atoms would dominate the computing time, leaving most processors idle most of the time.  On the other hand, 
+even if all structures have the same number of atoms but a large number, this can significantly slow down optimization.
+Generally, batches much larger than 32 are not beneficial, and so a naive parallel implementation where each processor 
+computes the energy of a single structure would limit one to only a little more than 32 processors.
+
+To overcome these issues, we have implemented a two-tiered multithreading strategy whereby a group of processors 
+computes the energy of a single structure.  During initialization, the processors are split into NBATCH groups where 
+NBATCH is the size of the batch, typically on the order of 32.  The training and validation data is then split as equally 
+as possible between the NBATCH groups.  During optimization, each group of processors draws one random structure from 
+its own set, and the atoms of that structure are then divided as equally as possible between all processors within the 
+group.  The total energy of the structure is then summed over the local group and thus the contribution of the structure 
+to the error and gradient is computed.  Finally, the error and gradients are summed over each of the NBATCH groups and 
+the chosen algorithm is used to update the parameters of the NNPs.  Thus, for a batch size of NBATCH and a typical number 
+of atoms NATOM for each structure, one can use a maximum of NBATCH x NATOM processors without losses in efficiency.
+Note that using more processors in a local group than there are atoms in a structure does not impact the accuracy of 
+the calculation, only the computational efficiency.  We illustrate the parallelization strategy in the figure below.
+
+![Code Layout](/parallel.png)
+
 ## MOLECULAR DYNAMICS
 
 An add-on package for LAMMPS is included so that the neural network potential may be used
