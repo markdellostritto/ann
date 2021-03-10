@@ -250,6 +250,37 @@ values provided in the parameter file. There are times when this is not desirabl
 the optimization when using a decay schedule for the optimization step (gamma). In this case, if one removes
 or comments out a given parameter, then the optimization parameters are taken from the restart file.
 
+## BASIS
+
+A "basis" is defined as the collection of symmetry functions used as inputs for a given species.  A basis
+is comprised of both radial and angular symmetry functions for all species in a given potential.
+For example, if one is constructing a NNP for Ar, Kr, and Xe, each of these species will have its own basis.
+The basis for Ar will include radial functions for neighboring Ar, Kr, and Xe atoms, as well as angular
+functions for all unique combinations of pairs of Ar, Kr, and Xe atoms.
+
+The basis is defined in a file which lists the central species at the top followed by a list of lists
+of symmetry functions corresponding to each species or pair of species.
+
+The choice of the word "basis" is intentional, as the basis in quantum chemistry serves much the same
+purpose as a basis in NNPs.  In quantum mechanics, the Hamiltonian is an operator which thus has a 
+concrete functional form only when paired with a given wavefunction.  The choice of basis thus defines
+the possible energies of a given system and thus must be carefully choice to represent the possible states
+a given molecule might occupy.  If one includes only s-orbitals for H, it will impossible to correctly
+predict the polarizability.  In a similar way a NN is an operator which is well defined only
+when paired with a given set of inputs.  The symmetry functions define the inputs and thus define the
+possible energies a NN could produce.  If one includes only radial symmetry functions the impossibility
+of uniquely assigning all possible atomic configurations to lists of interatomic distances will
+make it impossible to generate an accurate NNP.
+
+When specifying each set of symmetry functions, one must include the cutoff distance, the cutoff function,
+the type of symmetry function, and the normalization scheme.  The normalization scheme can be either 
+UNIT or VOL, corresponding to "unit" normalization or "volume" normalization, respectively.  For unit 
+normalization, the inputs to the neural network are not normalized at all, making them suitable only for
+activation functions whose gradients remain constant as the input goes to infinity.  For volume normalization,
+the inputs are scaled by a constant related to the cutoff volume, guaranteeing they will lie within a 
+small range, thereby making it possible to use activation functions whose gradients go to zero quickly
+as the the inputs move away from zero.
+
 ## WRITING
 
 Every "n_write" iterations the neural network potential is written to file, and a restart
