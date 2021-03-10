@@ -3,10 +3,10 @@ EIGEN = /usr/local/include/eigen-eigen-67e894c6cd8f/ # eigen library
 INC   = $(EIGEN)
 
 # mpi
-mpi: CXXFLAGS = -std=gnu++11 -w -O3 -mavx $(foreach d, $(INC), -I$d)
+mpi: CXXFLAGS = -std=gnu++11 -w -O3 -march=native $(foreach d, $(INC), -I$d)
 mpi: CXX = mpic++
 # intel mpi
-impi: CXXFLAGS = -std=c++11 -w -O3 -mavx $(foreach d, $(INC), -I$d)
+impi: CXXFLAGS = -std=c++11 -w -O3 -march=native $(foreach d, $(INC), -I$d)
 impi: CXX = mpiicpc
 # test
 test: CXXFLAGS = -std=c++11 -w -O3 $(foreach d, $(INC), -I$d)
