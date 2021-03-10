@@ -4,33 +4,37 @@ INC   = $(EIGEN)
 
 # mpi
 mpi: CXXFLAGS = -std=gnu++11 -w -O3 -mavx $(foreach d, $(INC), -I$d)
-mpi: CXX = mpic++ -pg
+mpi: CXX = mpic++
 # intel mpi
 impi: CXXFLAGS = -std=c++11 -w -O3 -mavx $(foreach d, $(INC), -I$d)
 impi: CXX = mpiicpc
 # test
 test: CXXFLAGS = -std=c++11 -w -O3 $(foreach d, $(INC), -I$d)
 test: CXX = mpic++
-# fit1D
-fit1D: CXXFLAGS = -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
-fit1D: CXX = mpic++
-# fit2D
-fit2D: CXXFLAGS = -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
-fit2D: CXX = mpic++
+# fit
+fit: CXXFLAGS = -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
+fit: CXX = mpic++
 # convert
 convert: CXXFLAGS = -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
 convert: CXX = g++
+# intgrad
+intgrad: CXXFLAGS = -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
+intgrad: CXX = g++
+# compute
+compute: CXXFLAGS = -std=gnu++11 -w -O3 $(foreach d, $(INC), -I$d)
+compute: CXX = g++
 
 # objects for final executable
-neural = nn.o nn_pot.o cutoff.o
-train = nn_train.o
+neural = nn.o nn_pot.o cutoff.o batch.o
+train = nn_train.o 
 basisr = basis_radial.o symm_radial.o symm_radial_g1.o symm_radial_g2.o symm_radial_t1.o
 basisa = basis_angular.o symm_angular.o symm_angular_g3.o symm_angular_g4.o
-struct = structure.o cell.o cell_list.o atom.o format.o qe.o vasp.o ame.o xyz.o ann.o
+struct = structure.o cell.o cell_list.o atom.o format.o qe.o vasp.o xyz.o ann.o cp2k.o
 math = math_func.o math_special.o accumulator.o optimize.o eigen.o random.o
 chem = units.o ptable.o ewald3D.o
-utility = string.o compiler.o print.o serialize.o map.o parallel.o
-objects = $(neural) $(basisr) $(basisa) $(struct) $(math) $(chem) $(utility)
+utility = string.o compiler.o print.o serialize.o map.o time.o
+thread = parallel.o
+objects = $(neural) $(basisr) $(basisa) $(struct) $(math) $(chem) $(utility) $(thread)
 
 # neural 
 nn.o: nn.cpp math_const.hpp math_special.hpp string.hpp
@@ -42,6 +46,8 @@ cutoff.o: cutoff.cpp math_const.hpp
 # train
 nn_train.o: nn_train.cpp
 	$(CXX) $(CXXFLAGS) -c nn_train.cpp
+batch.o: batch.cpp
+	$(CXX) $(CXXFLAGS) -c batch.cpp
 # basis - radial
 basis_radial.o: basis_radial.cpp cutoff.hpp symm_radial_g1.hpp symm_radial_g2.hpp symm_radial_t1.hpp
 	$(CXX) $(CXXFLAGS) -c basis_radial.cpp
@@ -79,10 +85,10 @@ lammps.o: lammps.cpp structure.hpp cell.hpp string.hpp
 	$(CXX) $(CXXFLAGS) -c lammps.cpp
 qe.o: qe.cpp structure.hpp cell.hpp string.hpp
 	$(CXX) $(CXXFLAGS) -c qe.cpp
-ame.o: ame.cpp structure.hpp cell.hpp string.hpp
-	$(CXX) $(CXXFLAGS) -c ame.cpp
 xyz.o: xyz.cpp structure.hpp cell.hpp string.hpp
 	$(CXX) $(CXXFLAGS) -c xyz.cpp
+cp2k.o: cp2k.cpp structure.hpp cell.hpp string.hpp
+	$(CXX) $(CXXFLAGS) -c cp2k.cpp
 ann.o: ann.cpp structure.hpp cell.hpp string.hpp
 	$(CXX) $(CXXFLAGS) -c ann.cpp
 # math
@@ -120,6 +126,8 @@ print.o: print.cpp
 	$(CXX) $(CXXFLAGS) -c print.cpp
 input.o: input.cpp
 	$(CXX) $(CXXFLAGS) -c input.cpp
+time.o: time.cpp
+	$(CXX) $(CXXFLAGS) -c time.cpp
 
 # targets
 
@@ -129,13 +137,15 @@ mpi: $(objects)
 	$(CXX) $(CXXFLAGS) -o nn_pot_train_mpi.exe nn_pot_train_mpi.cpp $(objects)
 impi: $(objects)
 	$(CXX) $(CXXFLAGS) -o nn_pot_train_mpi.exe nn_pot_train_mpi.cpp $(objects)
+compute: nn_pot_compute.cpp $(neural) $(basisr) $(basisa) $(struct) $(math) $(chem) $(utility)
+	$(CXX) $(CXXFLAGS) -o nn_pot_compute.exe nn_pot_compute.cpp $(neural) $(basisr) $(basisa) $(struct) $(math) $(chem) $(utility)
 test: $(objects)
 	$(CXX) $(CXXFLAGS) -o test_unit.exe test_unit.cpp $(objects)
 	$(CXX) $(CXXFLAGS) -o test_mem.exe test_mem.cpp $(objects)
 	$(CXX) $(CXXFLAGS) -o test_format.exe test_format.cpp $(objects)
-fit1D: nn_fit_1D.cpp nn_train.o nn.o optimize.o string.o print.o eigen.o math_special.o input.o compiler.o serialize.o random.o parallel.o
-	$(CXX) $(CXXFLAGS) -o nn_fit_1D.exe nn_fit_1D.cpp nn_train.o nn.o optimize.o string.o print.o eigen.o math_special.o input.o compiler.o serialize.o random.o parallel.o
-fit2D: nn_fit_2D.cpp nn_train.o nn.o optimize.o string.o print.o eigen.o math_special.o input.o compiler.o serialize.o random.o parallel.o
-	$(CXX) $(CXXFLAGS) -o nn_fit_2D.exe nn_fit_2D.cpp nn_train.o nn.o optimize.o string.o print.o eigen.o math_special.o input.o compiler.o serialize.o random.o parallel.o
+fit: nn_fit.cpp nn_train.o nn.o optimize.o string.o print.o eigen.o math_special.o input.o compiler.o serialize.o random.o parallel.o batch.o time.o
+	$(CXX) $(CXXFLAGS) -o nn_fit.exe nn_fit.cpp nn_train.o nn.o optimize.o string.o print.o eigen.o math_special.o input.o compiler.o serialize.o random.o parallel.o batch.o time.o
 convert: convert.cpp $(struct) $(chem) $(utility) eigen.o
 	$(CXX) $(CXXFLAGS) -o convert.exe convert.cpp $(struct) $(chem) $(utility) eigen.o
+intgrad: intgrad.cpp $(struct) $(chem) $(utility) $(neural) $(basisr) $(basisa) $(math) 
+	$(CXX) $(CXXFLAGS) -o intgrad.exe intgrad.cpp $(struct) $(chem) $(utility) $(neural) $(basisr) $(basisa) $(math) 
