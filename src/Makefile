@@ -143,8 +143,8 @@ clean:
 	rm *.o
 test: $(objects) sim.o
 	$(CXX_SERIAL) $(CXX_FLAGS) $(INC) -o test_unit.exe test_unit.cpp $(objects) sim.o
-	$(CXX_SERIAL) $(CXX_FLAGS) $(INC) -o test_mem.exe test_mem.cpp $(objects)
-	$(CXX_SERIAL) $(CXX_FLAGS) $(INC) -o test_format.exe test_format.cpp $(objects)
+	$(CXX_SERIAL) $(CXX_FLAGS) $(INC) -o test_mem.exe test_mem.cpp $(objects) sim.o
+	$(CXX_SERIAL) $(CXX_FLAGS) $(INC) -o test_format.exe test_format.cpp $(objects) sim.o
 train: $(objects) sim.o
 	$(CXX_THREAD) $(CXX_FLAGS) $(INC) -o nn_pot_train_mpi.exe nn_pot_train_mpi.cpp $(objects) sim.o
 train_ekf: $(objects) ekf.o sim.o
