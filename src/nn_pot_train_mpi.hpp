@@ -63,6 +63,7 @@ public:
 		int nBatch_;//number of structures in batch
 		std::vector<int> batch_;//small batch of inputs (simulations)
 		std::vector<int> indices_;//indices of all the inputs (simulations)
+		std::mt19937 rngen_;
 	//nn
 		int nParams_;//total number of parameters
 		bool preCond_;//whether to pre-condition the inputs
@@ -73,6 +74,7 @@ public:
 		NeuralNet::ANNInit init_;//neural network initialization parameters
 		NeuralNet::TransferN::type tfType_;//transfer function
 		std::vector<std::vector<int> > nh_;//hidden layer configuration
+		double huberw_;
 	//input/output
 		std::string file_error_;//file storing the error
 		std::string file_ann_;//ann file
