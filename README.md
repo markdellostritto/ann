@@ -33,8 +33,9 @@ for molecular dynamics simulations.
 
 **STRUCTURE**
 * cell.hpp      - unit cell
-* structure.hpp - atomic trajectories/properties
 * cell_list.hpp - divides unit cell into grid
+* structure.hpp - atomic trajectories/properties
+* sim.hpp - time series of structures
 
 **FORMAT**
 * format.hpp - stores possible formats
@@ -408,7 +409,7 @@ Each __atom__ entry can be followed by a species name, a flag designating a prop
 
 ### OPTIMIZATION
 
-* __algo__ - (string) The optimization algorithm. Possible values:
+* __algo__ - (string) The optimization algorithm.
 	* __sgd__ - steepest gradient descent
 	* __sdm__ - steepest descent with momentum
 	* __nag__ - Nesterov accelerated gradient
@@ -419,15 +420,15 @@ Each __atom__ entry can be followed by a species name, a flag designating a prop
 	* __amsgrad__ - AMSGRAD
 	* __bfgs__ - BFGS
 	* __rprop__ - RPROP
-* __opt_val__ - (string) Optimization value, determining how to stop optimization. Possible values:
+* __opt_val__ - (string) Optimization value, determining how to stop optimization.
 	* __ftol_abs__ - Stop when the absolute value of the objective function is below the tolerance.
 	* __ftol_rel__ - Stop when the change in the value of the objective function is below the tolerance.
 	* __xtol_rel__ - Stop when the change in the parameters is below the tolerance.
-* __loss__ - (string) Defines the type of loss function.  Possible Values:
+* __loss__ - (string) Defines the type of loss function.
 	* __mse__ - mean squared error
 	* __mae__ - mean absolute error
 	* __huber__ - Huber loss function
-* __decay__ - (string) Decay function: Possible values:
+* __decay__ - (string) Decay function.
 	* __const__ - Constant decay; no change in the step.
 	* __exp__ - Exponential decay.
 	* __inv__ - Inverse function decay.
@@ -444,6 +445,7 @@ Each __atom__ entry can be followed by a species name, a flag designating a prop
 * __pow__ - (float) Sets the power for power law decay of the optimization step (overrides restart).
 * __step__ - (int) Sets the step of the decay function, the optimization count is not affected (overrides restart).
 * __labmda__ - (float) Parameter setting the influence of weight decay (overrides restart) (default: 0.0).
+* __mix__ - (float) mixing parameter for Polyak-Ruppert averaging (0 - no mixing) (default: 0.0)
 
 ### NN POTENTIAL
 
