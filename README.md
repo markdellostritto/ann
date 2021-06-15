@@ -88,14 +88,15 @@ This code requires the Eigen Matrix Library (http://eigen.tuxfamily.org)
 
 The Eigen library is a header library, and thus does not need to be compiled. 
 The location of the Eigen library must be specified in the Makefile.
+The compiler can be specified with COMP and supports COMP=gnu and COMP=intel
 
 **Makefile options:**
-* make mpi     - make training binary - parallelized - MPI - gnu
-* make impi    - make training binary - parallelized - MPI - intel
+* make train   - make training binary for NNPs
 * make test    - make testing binaries
 * make convert - make conversion binary
 * make fit     - make training binary for fitting functions
-* make compute - make utility for computing energies/forces with an existing potential
+* make compute - make utility for computing energies/forces of separate structures with an existing potential
+* make compute_sim - make utility for computing energies/forces of a simulation with an existing potential
 * make intgrad - make utility for computing interated gradients
 * make clean   - removes all object files
 
