@@ -213,6 +213,9 @@ private:
 		typedef void (*FFDVP)(VecXd&,VecXd&);
 	//layers
 		int nlayer_;//number of layers (weights,biases)
+	//transfer functions
+		TransferN::type tfType_;//transfer function type
+		std::vector<FFDVP> tffdv_;//transfer function - input for indexed layer (nlayer_)
 	//input/output
 		VecXd in_;//input layer
 		VecXd out_;//output layer
@@ -224,9 +227,6 @@ private:
 		std::vector<VecXd> node_;//nodes (nlayer_+1)
 		std::vector<VecXd> bias_;//bias (nlayer_)
 		std::vector<MatXd> edge_;//edges (nlayer_)
-	//transfer functions
-		TransferN::type tfType_;//transfer function type
-		std::vector<FFDVP> tffdv_;//transfer function - input for indexed layer (nlayer_)
 public:
 	//==== constructors/destructors ====
 	ANN(){defaults();}
@@ -395,6 +395,7 @@ public:
 class DOutDP{
 private:
 	std::vector<MatXd> dodz_;//derivative of output w.r.t. node inputs (nlayer_)
+	std::vector<std::vector<VecXd> > dodb_;//derivative of output w.r.t. biases
 	std::vector<std::vector<MatXd> > dodw_;//derivative of output w.r.t. weights
 public:
 	//==== constructors/destructors ====
@@ -409,8 +410,8 @@ public:
 	const std::vector<MatXd>& dodz()const{return dodz_;}
 	MatXd& dodb(int n){return dodz_[n];}
 	const MatXd& dodb(int n)const{return dodz_[n];}
-	std::vector<MatXd>& dodb(){return dodz_;}
-	const std::vector<MatXd>& dodb()const{return dodz_;}
+	std::vector<std::vector<VecXd> >& dodb(){return dodb_;}
+	const std::vector<std::vector<VecXd> >& dodb()const{return dodb_;}
 	std::vector<std::vector<MatXd> >& dodw(){return dodw_;}
 	const std::vector<std::vector<MatXd> >& dodw()const{return dodw_;}
 	

@@ -8,6 +8,8 @@
 #include <ctime>
 // c++ libraries
 #include <iostream>
+#include <random>
+#include <chrono>
 // ann - math 
 #include "math_special.hpp"
 #include "math_func.hpp"
@@ -297,10 +299,14 @@ VecXd& operator>>(const ANN& nn, VecXd& v){
 	int count=0;
 	v=VecXd::Zero(nn.size());
 	for(int l=0; l<nn.nlayer(); ++l){
-		for(int n=0; n<nn.bias(l).size(); ++n) v[count++]=nn.bias(l)(n);
+		//for(int n=0; n<nn.bias(l).size(); ++n) v[count++]=nn.bias(l)(n);
+		std::memcpy(v.data()+count,nn.bias(l).data(),nn.bias(l).size()*sizeof(double));
+		count+=nn.bias(l).size();
 	}
 	for(int l=0; l<nn.nlayer(); ++l){
-		for(int n=0; n<nn.edge(l).size(); ++n) v[count++]=nn.edge(l)(n);
+		//for(int n=0; n<nn.edge(l).size(); ++n) v[count++]=nn.edge(l)(n);
+		std::memcpy(v.data()+count,nn.edge(l).data(),nn.edge(l).size()*sizeof(double));
+		count+=nn.edge(l).size();
 	}
 	return v;
 }
@@ -316,10 +322,14 @@ ANN& operator<<(ANN& nn, const VecXd& v){
 	if(nn.size()!=v.size()) throw std::invalid_argument("Invalid size: vector and network mismatch.");
 	int count=0;
 	for(int l=0; l<nn.nlayer(); ++l){
-		for(int n=0; n<nn.bias(l).size(); ++n) nn.bias(l)(n)=v[count++];
+		//for(int n=0; n<nn.bias(l).size(); ++n) nn.bias(l)(n)=v[count++];
+		std::memcpy(nn.bias(l).data(),v.data()+count,nn.bias(l).size()*sizeof(double));
+		count+=nn.bias(l).size();
 	}
 	for(int l=0; l<nn.nlayer(); ++l){
-		for(int n=0; n<nn.edge(l).size(); ++n) nn.edge(l)(n)=v[count++];
+		//for(int n=0; n<nn.edge(l).size(); ++n) nn.edge(l)(n)=v[count++];
+		std::memcpy(nn.edge(l).data(),v.data()+count,nn.edge(l).size()*sizeof(double));
+		count+=nn.edge(l).size();
 	}
 	return nn;
 }
@@ -331,6 +341,8 @@ ANN& operator<<(ANN& nn, const VecXd& v){
 */
 void ANN::defaults(){
 	if(NN_PRINT_FUNC>0) std::cout<<"ANN::defaults():\n";
+	//layers
+		nlayer_=-1;
 	//input/output
 		in_.resize(0);
 		out_.resize(0);
@@ -339,7 +351,6 @@ void ANN::defaults(){
 		outw_.resize(0);
 		outb_.resize(0);
 	//node weights and biases
-		nlayer_=0;
 		node_.clear();
 		bias_.clear();
 		edge_.clear();
@@ -355,6 +366,8 @@ void ANN::defaults(){
 */
 void ANN::clear(){
 	if(NN_PRINT_FUNC>0) std::cout<<"ANN::clear():\n";
+	//layers
+		nlayer_=-1;
 	//input/output
 		in_.resize(0);
 		out_.resize(0);
@@ -363,7 +376,6 @@ void ANN::clear(){
 		outw_.resize(0);
 		outb_.resize(0);
 	//node weights and biases
-		nlayer_=0;
 		node_.clear();
 		bias_.clear();
 		edge_.clear();
@@ -445,7 +457,8 @@ void ANN::resize(const ANNInit& init, const std::vector<int>& nNodes){
 	if(NN_PRINT_FUNC>0) std::cout<<"ANN::resize(const ANNInit&,const std::vector<int>&):\n";
 	//initialize the random number generator
 		if(init.sigma()<=0) throw std::invalid_argument("ANN::resize(const std::vector<int>&): Invalid initialization deviation");
-		rng::gen::CG2 cg2; cg2.init(init.seed()<=0?std::time(NULL):init.seed());
+		std::mt19937 rngen(init.seed()<0?std::chrono::system_clock::now().time_since_epoch().count():init.seed());
+		std::uniform_real_distribution<double> uniform(-1.0,1.0);
 	//clear the network
 		clear();
 	//check parameters
@@ -480,7 +493,7 @@ void ANN::resize(const ANNInit& init, const std::vector<int>& nNodes){
 		}
 		for(int n=0; n<nlayer_; ++n){
 			for(int m=0; m<bias_[n].size(); ++m){
-				bias_[n][m]=2.0*(cg2.randf()-0.5)*init.bInit();
+				bias_[n][m]=uniform(rngen)*init.bInit();
 			}
 		}
 	//edges
@@ -490,17 +503,17 @@ void ANN::resize(const ANNInit& init, const std::vector<int>& nNodes){
 			edge_[n]=MatXd::Zero(nNodes[n+1],nNodes[n]);
 		}
 		if(init.distT()==rng::dist::Name::NORMAL){
-			rng::dist::Normal dist(0.0,init.sigma());
+			std::normal_distribution<double> dist(0.0,init.sigma());
 			for(int n=0; n<nlayer_; ++n){
 				for(int m=0; m<edge_[n].size(); ++m){
-					edge_[n].data()[m]=dist(cg2);
+					edge_[n].data()[m]=dist(rngen);
 				}
 			}
 		} else if(init.distT()==rng::dist::Name::EXP){
-			rng::dist::Exp dist(init.sigma());
+			std::exponential_distribution<double> dist(init.sigma());
 			for(int n=0; n<nlayer_; ++n){
 				for(int m=0; m<edge_[n].size(); ++m){
-					edge_[n].data()[m]=dist(cg2);
+					edge_[n].data()[m]=dist(rngen);
 				}
 			}
 		} else throw std::invalid_argument("ANN::resize(const std::vector<int>&): Invalid probability distribution.");
@@ -935,8 +948,9 @@ double Cost::error(const ANN& nn, const VecXd& out){
 	if(NN_PRINT_STATUS>1) std::cout<<"computing gradient w.r.t. edges\n";
 	for(int l=0; l<nn.nlayer(); ++l){
 		for(int m=0; m<nn.edge(l).cols(); ++m){
+			const double node=nn.node(l)(m);
 			for(int n=0; n<nn.edge(l).rows(); ++n){
-				grad_[count++]=dcdz_[l][n]*nn.node(l)(m);//edge(l,n,m)
+				grad_[count++]=dcdz_[l][n]*node;//edge(l,n,m)
 			}
 		}
 	}
@@ -973,8 +987,9 @@ const VecXd& Cost::grad(const ANN& nn, const VecXd& dcdo){
 	if(NN_PRINT_STATUS>1) std::cout<<"computing gradient w.r.t. edges\n";
 	for(int l=0; l<nn.nlayer(); ++l){
 		for(int m=0; m<nn.edge(l).cols(); ++m){
+			const double node=nn.node(l)(m);
 			for(int n=0; n<nn.edge(l).rows(); ++n){
-				grad_[count++]=dcdz_[l][n]*nn.node(l)(m);//edge(l,n,m)
+				grad_[count++]=dcdz_[l][n]*node;//edge(l,n,m)
 			}
 		}
 	}
@@ -1014,7 +1029,7 @@ void DOutDVal::grad(const ANN& nn){
 	//back-propogate the gradient (n.b. do/dz_{o}=outw_ "gradient of out_ w.r.t. the input of out_ is outw_")
 	doda_.back()=nn.outw().asDiagonal();
 	for(int l=nn.nlayer()-1; l>=0; --l){
-		doda_[l].noalias()=doda_[l+1]*(nn.dadz(l).asDiagonal()*nn.edge(l));
+		doda_[l].noalias()=doda_[l+1]*nn.dadz(l).asDiagonal()*nn.edge(l);
 	}
 	//compute gradient of out_ w.r.t. in_ (effect of input scaling)
 	dodi_.noalias()=doda_[0]*nn.inw().asDiagonal();
@@ -1030,6 +1045,8 @@ void DOutDVal::grad(const ANN& nn){
 void DOutDP::clear(){
 	if(NN_PRINT_FUNC>0) std::cout<<"DOutDP::clear():\n";
 	dodz_.clear();
+	dodb_.clear();
+	dodw_.clear();
 }
 
 /**
@@ -1041,11 +1058,18 @@ void DOutDP::resize(const ANN& nn){
 	for(int n=0; n<nn.nlayer(); ++n){
 		dodz_[n]=MatXd::Zero(nn.out().size(),nn.bias(n).size());
 	}
-	dodw_.resize(nn.nlayer());
-	for(int i=0; i<nn.nlayer(); ++i){
-		dodw_[i].resize(nn.nOut());
-		for(int j=0; j<nn.nOut(); ++j){
-			dodw_[i][j]=MatXd::Zero(nn.edge(i).rows(),nn.edge(i).cols());
+	dodb_.resize(nn.nOut());
+	for(int n=0; n<nn.nOut(); ++n){
+		dodb_[n].resize(nn.nlayer());
+		for(int l=0; l<nn.nlayer(); ++l){
+			dodb_[n][l]=VecXd::Zero(nn.bias(l).size());
+		}
+	}
+	dodw_.resize(nn.nOut());
+	for(int n=0; n<nn.nOut(); ++n){
+		dodw_[n].resize(nn.nlayer());
+		for(int l=0; l<nn.nlayer(); ++l){
+			dodw_[n][l]=MatXd::Zero(nn.edge(l).rows(),nn.edge(l).cols());
 		}
 	}
 }
@@ -1059,12 +1083,21 @@ void DOutDP::grad(const ANN& nn){
 	for(int l=nn.nlayer()-1; l>0; --l){
 		dodz_[l-1].noalias()=dodz_[l]*nn.edge(l)*nn.dadz(l-1).asDiagonal();
 	}
+	//compute the gradient of the output w.r.t. the biases
+	for(int n=0; n<nn.nOut(); ++n){
+		for(int l=0; l<nn.nlayer(); ++l){
+			for(int i=0; i<nn.bias(l).size(); ++i){
+				dodb_[n][l](i)=dodz_[l](n,i);
+			}
+		}
+	}
 	//compute the gradient of the output w.r.t. the weights
-	for(int l=0; l<nn.nlayer(); ++l){
-		for(int n=0; n<nn.nOut(); ++n){
+	for(int n=0; n<nn.nOut(); ++n){
+		for(int l=0; l<nn.nlayer(); ++l){
 			for(int j=0; j<nn.edge(l).cols(); ++j){
+				const double node=nn.node(l)[j];
 				for(int i=0; i<nn.edge(l).rows(); ++i){
-					dodw_[l][n](i,j)=dodz_[l](n,i)*nn.node(l)[j];
+					dodw_[n][l](i,j)=dodz_[l](n,i)*node;
 				}
 			}
 		}
@@ -1209,32 +1242,20 @@ namespace serialize{
 		std::memcpy(arr+pos,&(obj.tfType()),sizeof(NeuralNet::TransferN::type)); pos+=sizeof(NeuralNet::TransferN::type);
 		//bias
 		for(int l=0; l<obj.nlayer(); ++l){
-			for(int n=0; n<obj.bias(l).size(); ++n){
-				std::memcpy(arr+pos,&(obj.bias(l)(n)),sizeof(double)); pos+=sizeof(double);
-			}
+			std::memcpy(arr+pos,obj.bias(l).data(),obj.bias(l).size()*sizeof(double)); pos+=obj.bias(l).size()*sizeof(double);
 		}
 		//edge
 		for(int l=0; l<obj.nlayer(); ++l){
-			for(int n=0; n<obj.edge(l).size(); ++n){
-				std::memcpy(arr+pos,&(obj.edge(l)(n)),sizeof(double)); pos+=sizeof(double);
-			}
+			std::memcpy(arr+pos,obj.edge(l).data(),obj.edge(l).size()*sizeof(double)); pos+=obj.edge(l).size()*sizeof(double);
 		}
 		//pre-scale
-		for(int i=0; i<obj.nIn(); ++i){
-			std::memcpy(arr+pos,&(obj.inw()[i]),sizeof(double)); pos+=sizeof(double);
-		}
+		std::memcpy(arr+pos,obj.inw().data(),obj.inw().size()*sizeof(double)); pos+=obj.inw().size()*sizeof(double);
 		//pre-bias
-		for(int i=0; i<obj.nIn(); ++i){
-			std::memcpy(arr+pos,&(obj.inb()[i]),sizeof(double)); pos+=sizeof(double);
-		}
+		std::memcpy(arr+pos,obj.inb().data(),obj.inb().size()*sizeof(double)); pos+=obj.inb().size()*sizeof(double);
 		//post-scale
-		for(int i=0; i<obj.nOut(); ++i){
-			std::memcpy(arr+pos,&(obj.outw()[i]),sizeof(double)); pos+=sizeof(double);
-		}
+		std::memcpy(arr+pos,obj.outw().data(),obj.outw().size()*sizeof(double)); pos+=obj.outw().size()*sizeof(double);
 		//post-bias
-		for(int i=0; i<obj.nOut(); ++i){
-			std::memcpy(arr+pos,&(obj.outb()[i]),sizeof(double)); pos+=sizeof(double);
-		}
+		std::memcpy(arr+pos,obj.outb().data(),obj.outb().size()*sizeof(double)); pos+=obj.outb().size()*sizeof(double);
 		//return bytes written
 		return pos;
 	}
@@ -1276,32 +1297,20 @@ namespace serialize{
 		obj.resize(init,nNodes);
 		//bias
 		for(int l=0; l<obj.nlayer(); ++l){
-			for(int n=0; n<obj.bias(l).size(); ++n){
-				std::memcpy(&(obj.bias(l)(n)),arr+pos,sizeof(double)); pos+=sizeof(double);
-			}
+			std::memcpy(obj.bias(l).data(),arr+pos,obj.bias(l).size()*sizeof(double)); pos+=obj.bias(l).size()*sizeof(double);
 		}
 		//edge
 		for(int l=0; l<obj.nlayer(); ++l){
-			for(int n=0; n<obj.edge(l).size(); ++n){
-				std::memcpy(&(obj.edge(l)(n)),arr+pos,sizeof(double)); pos+=sizeof(double);
-			}
+			std::memcpy(obj.edge(l).data(),arr+pos,obj.edge(l).size()*sizeof(double)); pos+=obj.edge(l).size()*sizeof(double);
 		}
 		//pre-scale
-		for(int i=0; i<obj.nIn(); ++i){
-			std::memcpy(&(obj.inw()[i]),arr+pos,sizeof(double)); pos+=sizeof(double);
-		}
+		std::memcpy(obj.inw().data(),arr+pos,obj.inw().size()*sizeof(double)); pos+=obj.inw().size()*sizeof(double);
 		//pre-bias
-		for(int i=0; i<obj.nIn(); ++i){
-			std::memcpy(&(obj.inb()[i]),arr+pos,sizeof(double)); pos+=sizeof(double);
-		}
+		std::memcpy(obj.inb().data(),arr+pos,obj.inb().size()*sizeof(double)); pos+=obj.inb().size()*sizeof(double);
 		//post-scale
-		for(int i=0; i<obj.nOut(); ++i){
-			std::memcpy(&(obj.outw()[i]),arr+pos,sizeof(double)); pos+=sizeof(double);
-		}
+		std::memcpy(obj.outw().data(),arr+pos,obj.outw().size()*sizeof(double)); pos+=obj.outw().size()*sizeof(double);
 		//post-bias
-		for(int i=0; i<obj.nOut(); ++i){
-			std::memcpy(&(obj.outb()[i]),arr+pos,sizeof(double)); pos+=sizeof(double);
-		}
+		std::memcpy(obj.outb().data(),arr+pos,obj.outb().size()*sizeof(double)); pos+=obj.outb().size()*sizeof(double);
 		//return bytes read
 		return pos;
 	};
