@@ -10,7 +10,7 @@ namespace parallel{
 //==== operators ====
 
 std::ostream& operator<<(std::ostream& out, const Dist& dist){
-	return out<<"dist "<<dist.size_<<" "<<dist.offset_;
+	return out<<"nrank "<<dist.nrank_<<" nobj "<<dist.nobj_<<" size "<<dist.size_<<" offset "<<dist.offset_;
 }
 
 //==== member functions ====
@@ -26,32 +26,55 @@ std::ostream& operator<<(std::ostream& out, const Dist& dist){
 * The objects are split between the processor with a remainder at first.
 * One remainder is then added to each distribution until there are none left.
 */
-void Dist::init(int nprocs, int rank, int nobj){
-	size_=nobj/nprocs;
-	offset_=nobj/nprocs*(rank);
-	if(rank<nobj%nprocs){
+void Dist::init(int nrank, int rank, int nobj){
+	if(nrank<=0) throw std::runtime_error("parallel::Dist::init(int,int,int): Number of ranks must be greater than zero.");
+	if(rank<0) throw std::runtime_error("parallel::Dist::init(int,int,int): Rank can't be negative.");
+	if(nobj<0) throw std::runtime_error("parallel::Dist::init(int,int,int): Number of objects can't be negative.");
+	nrank_=nrank;
+	nobj_=nobj;
+	size_=nobj/nrank;
+	offset_=nobj/nrank*(rank);
+	if(rank<nobj%nrank){
 		size_++;
 		offset_+=rank;
-	} else offset_+=nobj%nprocs;
+	} else offset_+=nobj%nrank;
 }
 
 //==== static functions ====
 
-int* Dist::size(int nrank, int nobj, int* size_){
+/**
+* generate distribution of objects over processors
+* @param nrank - the total number of processors available for calculation
+* @param nobj - the number of objects which are split between the processors
+* @param size - array storing the number of objects owned by each rank
+* This function splits a number of objects between a number of processors.
+* Rather than generate a local instance of a Dist object, this generates
+* the distribution of objects over nrank in an array for e.g. printing.
+*/
+int* Dist::size(int nrank, int nobj, int* size){
 	for(int i=0; i<nrank; ++i){
-		size_[i]=nobj/nrank;
-		if(i<nobj%nrank) ++size_[i];
+		size[i]=nobj/nrank;
+		if(i<nobj%nrank) ++size[i];
 	}
-	return size_;
+	return size;
 }
 
-int* Dist::offset(int nrank, int nobj, int* offset_){
+/**
+* generate distribution of objects over processors
+* @param nrank - the total number of processors available for calculation
+* @param nobj - the number of objects which are split between the processors
+* @param offset - offset in array storing the number of objects owned by each rank
+* This function splits a number of objects between a number of processors.
+* Rather than generate a local instance of a Dist object, this generates
+* the offsets for the distribution of objects over nrank in an array for e.g. printing.
+*/
+int* Dist::offset(int nrank, int nobj, int* offset){
 		for(int i=0; i<nrank; ++i){
-			offset_[i]=nobj/nrank*(i);
-			if(i<nobj%nrank) offset_[i]+=i;
-			else offset_[i]+=nobj%nrank;
+			offset[i]=nobj/nrank*(i);
+			if(i<nobj%nrank) offset[i]+=i;
+			else offset[i]+=nobj%nrank;
 		}
-		return offset_;
+		return offset;
 }
 
 

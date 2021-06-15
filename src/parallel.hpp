@@ -50,24 +50,28 @@ void bcast(MPI_Comm comm, int root, T& obj){
 */
 class Dist{
 private:
-	int size_;
-	int offset_;
+	int nrank_;//total number of ranks
+	int nobj_;//total number of objects
+	int size_;//number of objects owned by the current rank
+	int offset_;//the offset for the objects owned by the current rank in a global array of all objects
 public:
 	//==== constructors/destructors ====
-	Dist():size_(-1),offset_(-1){}
-	Dist(int nprocs, int nrank, int nobj){init(nprocs,nrank,nobj);}
+	Dist():nrank_(-1),nobj_(-1),size_(-1),offset_(-1){}
+	Dist(int nrank, int rank, int nobj){init(nrank,rank,nobj);}
 	~Dist(){}
 	
 	//==== operators ====
 	friend std::ostream& operator<<(std::ostream& out, const Dist& dist);
 	
 	//==== access ====
-	const int& size(){return size_;}
-	const int& offset(){return offset_;}
+	const int& nrank()const{return nrank_;}
+	const int& nobj()const{return nobj_;}
+	const int& size()const{return size_;}
+	const int& offset()const{return offset_;}
 	
 	//==== member functions ====
-	void init(int nprocs, int rank, int nobj);
-	int index(int i){return offset_+i;}
+	void init(int nranks, int rank, int nobj);
+	int index(int i)const{return offset_+i;}
 	
 	//==== static functions ====
 	static int* size(int nrank, int nobj, int* size);
