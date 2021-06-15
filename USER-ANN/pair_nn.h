@@ -57,9 +57,10 @@ protected:
 	//==== global cutoff ====
 	double rc_;
 	//==== neural network hamiltonians ====
+	int nspecies_;//number of species in the nn
 	std::vector<int> map_type_nnp_;//map atom types to nnpot index
 	std::vector<NNH> nnh_;//neural network Hamiltonians for each specie (nspecies)
-	std::vector<NeuralNet::DOutDVal> dOutDVal_;//gradient of NNH for each specie (nspecies)
+	std::vector<NeuralNet::DOutDVal> dOutDVal_;//gradient of the output w.r.t. the inputs
 	//==== symmetry functions ====
 	std::vector<Eigen::VectorXd> symm_;//(nspecies)
 	std::vector<Eigen::VectorXd> dEdG_;//(nspecies)
@@ -70,9 +71,7 @@ protected:
 	//==== allocate data ====
 	virtual void allocate();
 	//==== utilties ====
-	Eigen::Vector3d rIJ,rIK,rJK;
-	Eigen::Vector3d ffk,ffj,ffi;
-	Eigen::VectorXd dEdG;
+	Eigen::Vector3d rIJ,rIK,rJK,ffj,ffk;
 public:
 	//constructors/destructors
 	PairNN(class LAMMPS *);

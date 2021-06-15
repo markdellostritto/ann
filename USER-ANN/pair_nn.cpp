@@ -12,11 +12,7 @@
 ------------------------------------------------------------------------- */
 
 //c libraries
-#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
 #include <math.h>
-#elif (defined __ICC || defined __INTEL_COMPILER)
-#include <mathimf.h> //intel math library
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,7 +41,6 @@
 // ann - symmetry functions
 #include "symm_radial_g1.h"
 #include "symm_radial_g2.h"
-#include "symm_radial_t1.h"
 #include "symm_angular_g3.h"
 #include "symm_angular_g4.h"
 // ann - serialization
@@ -59,42 +54,49 @@ using namespace MathConst;
 //==========================================================================
 
 PairNN::PairNN(LAMMPS *lmp):Pair(lmp){
-	if(comm->me==0 && PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::PairNN(LAMMPS):\n";
+	if(PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::PairNN(LAMMPS):\n";
 	writedata=1;//write coefficients to data file
 	//set defaults
 	rc_=0;
+	nspecies_=0;
 }
 
 //==========================================================================
 
 PairNN::~PairNN(){
-	if(comm->me==0 && PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::~PairNN():\n";
+	if(PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::~PairNN():\n";
 	if(allocated){
 		//global pair data
 		memory->destroy(setflag);
 		memory->destroy(cutsq);
-		//neural network hamiltonians
+		//==== neural network hamiltonians ====
+		nspecies_=0;
 		map_type_nnp_.clear();
 		nnh_.clear();
+		dOutDVal_.clear();
+		//==== symmetry functions ====
+		symm_.clear();
+		dEdG_.clear();
 	}
 }
 
 //==========================================================================
 
 void PairNN::compute(int eflag, int vflag){
-	if(comm->me==0 && PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::compute(int,int):\n";
+	if(PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::compute(int,int):\n";
 	//======== local variables ========
 	//atom properties - global
-	const double*const* x = atom->x;//positions
+	double** x = atom->x;//positions
 	double** f = atom->f;//forces
 	const int* type = atom->type;//types
 	const int nlocal = atom->nlocal;//number of local atoms
 	const bool newton_pair=force->newton_pair;//must be true (see init_style)
+	double etotal_=0;
 	//neighbors - ith atom
 	const int inum = list->inum;// # of ith atom's neighbors
 	const int* index_list = list->ilist;// local indices of I atoms
 	const int* numneigh = list->numneigh;// # of J neighbors for each I atom
-	const int*const* firstneigh = list->firstneigh;// ptr to 1st J int value of each I atom
+	int** firstneigh = list->firstneigh;// ptr to 1st J int value of each I atom
 	
 	if (eflag || vflag) ev_setup(eflag,vflag);
 	else evflag = vflag_fdotr = 0;
@@ -104,21 +106,21 @@ void PairNN::compute(int eflag, int vflag){
 	for(int ii=0; ii<inum; ++ii){
 		//==== get the index of type of i ====
 		const int i=index_list[ii];//get the index
-		const int itype=type[i];//get the type
-		const int II=map_type_nnp_[itype-1];//get the index in the NNP
+		const int II=map_type_nnp_[type[i]-1];//get the index in the NNP
+		if(II<0) continue; //skip if current type is not included in the NNP
 		//==== get the nearest neighbors of i (full list) ====
 		const int* nn_list=firstneigh[i];//get the list of nearest neighbors
 		const int num_nn=numneigh[i];//get the number of neighbors
-		if(PAIR_NN_PRINT_DATA>2) std::cout<<"atomi "<<itype<<" "<<i<<"\n";
+		if(PAIR_NN_PRINT_DATA>2) std::cout<<"atomi "<<type[i]<<" "<<i<<"\n";
 		//==== compute the symmetry function ====
 		//reset the symmetry function
-		symm_[itype-1].setZero();
+		symm_[II].setZero();
 		//loop over all pairs
 		for(int jj=0; jj<num_nn; ++jj){
 			const int j=nn_list[jj]&NEIGHMASK;//get the index, clear two highest bits
-			const int jtype=type[j];//get the type
-			const int JJ=map_type_nnp_[jtype-1];//get the index in the NNP
-			if(PAIR_NN_PRINT_DATA>3) std::cout<<"\tatomj "<<jtype<<" "<<j<<"\n";
+			const int JJ=map_type_nnp_[type[j]-1];//get the index in the NNP
+			if(JJ<0) continue; //skip if current type is not included in the NNP
+			if(PAIR_NN_PRINT_DATA>3) std::cout<<"\tatomj "<<type[j]<<" "<<j<<"\n";
 			//compute rIJ
 			rIJ<<x[i][0]-x[j][0],x[i][1]-x[j][1],x[i][2]-x[j][2];
 			const double dIJ=rIJ.norm();//compute norm
@@ -128,16 +130,16 @@ void PairNN::compute(int eflag, int vflag){
 				BasisR& basisRij_=nnh_[II].basisR(JJ);//radial basis alias
 				basisRij_.symm(dIJ);//compute the symmetry functions
 				for(int nr=0; nr<basisRij_.nfR(); ++nr){
-					symm_[itype-1][offsetR_+nr]+=basisRij_.symm()[nr];//add to total input (in proper location on array)
+					symm_[II][offsetR_+nr]+=basisRij_.symm()[nr];//add to total input (in proper location on array)
 				}
 				//loop over all triples
-				for(int kk=0; kk<num_nn; ++kk){
+				for(int kk=jj+1; kk<num_nn; ++kk){
 					const int k=nn_list[kk]&NEIGHMASK;//get the index, clear two highest bits
-					const int ktype=type[k];//get the type
-					const int KK=map_type_nnp_[ktype-1];//get the index in the NNP
+					const int KK=map_type_nnp_[type[k]-1];//get the index in the NNP
+					if(KK<0) continue; //skip if current type is not included in the NNP
 					//skip if the same
 					if(k!=j){
-						if(PAIR_NN_PRINT_DATA>4) std::cout<<"\t\tatomk "<<ktype<<" "<<k<<"\n";
+						if(PAIR_NN_PRINT_DATA>4) std::cout<<"\t\tatomk "<<type[k]<<" "<<k<<"\n";
 						//compute dIK
 						rIK<<x[i][0]-x[k][0],x[i][1]-x[k][1],x[i][2]-x[k][2];
 						const double dIK=rIK.norm();//compute norm
@@ -153,29 +155,31 @@ void PairNN::compute(int eflag, int vflag){
 							const double d[3]={dIJ,dIK,dJK};//utility vector (reduces number of function arguments)
 							basisAijk_.symm(cosIJK,d);//compute the symmetry functions
 							for(int na=0; na<basisAijk_.nfA(); ++na){
-								symm_[itype-1][offsetA_+na]+=basisAijk_.symm()[na];//add to total input (in proper location on array)
+								symm_[II][offsetA_+na]+=basisAijk_.symm()[na];//add to total input (in proper location on array)
 							}
 						}
 					}
 				}
 			}
 		}
-		if(PAIR_NN_PRINT_DATA>0) std::cout<<"symm["<<i<<"] = "<<symm_[itype-1].transpose()<<"\n";
+		if(PAIR_NN_PRINT_DATA>0) std::cout<<"symm["<<i<<"] = "<<symm_[II].transpose()<<"\n";
 		
 		//==== collect input statistics ====
 		#ifdef PAIR_NN_PRINT_INPUT
-		const Eigen::VectorXd dx=(symm_[itype-1]-avg_[itype-1]);
-		avg_[itype-1].noalias()+=dx/(update->ntimestep+1);
-		m2_[itype-1].noalias()+=dx.cwiseProduct(symm_[itype-1]-avg_[itype-1]);
-		var_[itype-1].noalias()=m2_[itype-1]/(update->ntimestep+1);
+		const Eigen::VectorXd dx=(symm_[II]-avg_[II]);
+		avg_[II].noalias()+=dx/(update->ntimestep+1);
+		m2_[II].noalias()+=dx.cwiseProduct(symm_[II]-avg_[II]);
+		var_[II].noalias()=m2_[II]/(update->ntimestep+1);
 		#endif
 		
 		//======== compute the force ========
 		//==== execute the network ====
-		nnh_[II].nn().execute(symm_[itype-1]);
+		nnh_[II].nn().execute(symm_[II]);
 		//==== accumulate the energy ====
 		const double eatom_=nnh_[II].nn().out()[0]+nnh_[II].atom().energy();//local energy + intrinsic energy
-		if(eflag_global) eng_vdwl+=eatom_;
+		//if(eflag_global) eng_vdwl+=eatom_;
+		//ev_tally(0,0,atom->nlocal,1,interface.getEnergy(),0.0,0.0,0.0,0.0,0.0);
+		etotal_+=eatom_;
 		if(eflag_atom) eatom[i]+=eatom_;
 		if(PAIR_NN_PRINT_DATA>0) std::cout<<"energy-atom["<<i<<"] "<<eatom_<<"\n";
 		//==== compute the network gradients ====
@@ -183,14 +187,14 @@ void PairNN::compute(int eflag, int vflag){
 		//==== set the gradient ====
 		//dodi() - do/di - derivative of output w.r.t. input
 		//row(0) - derivative of zeroth output node (note: only one output node by definition)
-		dEdG_[itype-1]=dOutDVal_[II].dodi().row(0);//dEdG_ - dE/dG - gradient of energy w.r.t. nn inputs (G)
+		dEdG_[II]=dOutDVal_[II].dodi().row(0);//dEdG_ - dE/dG - gradient of energy w.r.t. nn inputs (G)
 		//==== compute the forces ====
 		for(int jj=0; jj<num_nn; ++jj){
 			//==== get the index of type of j ====
 			const int j=nn_list[jj]&NEIGHMASK;//get the index, clear two highest bits
-			const int jtype=type[j];//get the type
-			const int JJ=map_type_nnp_[jtype-1];//get the index in the NNP
-			if(PAIR_NN_PRINT_DATA>2) std::cout<<"\tatom "<<jtype<<" "<<j<<"\n";
+			const int JJ=map_type_nnp_[type[j]-1];//get the index in the NNP
+			if(JJ<0) continue; //skip if current type is not included in the NNP
+			if(PAIR_NN_PRINT_DATA>2) std::cout<<"\tatom "<<type[j]<<" "<<j<<"\n";
 			//==== compute rIJ ====
 			rIJ<<x[i][0]-x[j][0],x[i][1]-x[j][1],x[i][2]-x[j][2];
 			const double dIJ=rIJ.norm();//compute norm
@@ -198,17 +202,17 @@ void PairNN::compute(int eflag, int vflag){
 				const double dIJi=1.0/dIJ;//compute inverse
 				//==== compute the IJ contribution to the pair force ====
 				const double fpair=nnh_[II].basisR(JJ).force(
-					dIJ,dEdG_[itype-1].data()+nnh_[II].offsetR(JJ)
+					dIJ,dEdG_[II].data()+nnh_[II].offsetR(JJ)
 				)*dIJi;
 				f[i][0]+=fpair*rIJ[0]; f[i][1]+=fpair*rIJ[1]; f[i][2]+=fpair*rIJ[2];
 				f[j][0]-=fpair*rIJ[0]; f[j][1]-=fpair*rIJ[1]; f[j][2]-=fpair*rIJ[2];
 				//==== loop over all triplets ====
-				for(int kk=0; kk<num_nn; ++kk){
+				for(int kk=jj+1; kk<num_nn; ++kk){
 					//==== get the index and type of k ====
 					const int k=nn_list[kk]&NEIGHMASK;//get the index, clear two highest bits
-					const int ktype=type[k];//get the type
-					const int KK=map_type_nnp_[ktype-1];//get the index in the NNP
-					if(PAIR_NN_PRINT_DATA>3) std::cout<<"\t\tatom "<<ktype<<" "<<k<<"\n";
+					const int KK=map_type_nnp_[type[k]-1];//get the index in the NNP
+					if(KK<0) continue; //skip if current type is not included in the NNP
+					if(PAIR_NN_PRINT_DATA>3) std::cout<<"\t\tatom "<<type[k]<<" "<<k<<"\n";
 					//==== skip if the same ====
 					if(k!=j){
 						//==== compute dIK ====
@@ -225,12 +229,13 @@ void PairNN::compute(int eflag, int vflag){
 							const double d[3]={dIJ,dIK,dJK};//utility array to reduce number of function arguments
 							double phi=0; double eta[3]={0,0,0};//force constants
 							nnh_[II].basisA(JJ,KK).force(
-								phi,eta,cosIJK,d,dEdG_[itype-1].data()+nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK)
+								phi,eta,cosIJK,d,dEdG_[II].data()+nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK)
 							);
-							ffi.noalias()=(phi*(dIKi-cosIJK*dIJi)+eta[0])*rIJ*dIJi;//compute force on i due to j
+							Eigen::Vector3d ffk,ffj,ffi=Eigen::Vector3d::Zero();
+							ffi.noalias()+=(phi*(dIKi-cosIJK*dIJi)+eta[0])*rIJ*dIJi;//compute force on i due to j
 							ffi.noalias()+=(phi*(dIJi-cosIJK*dIKi)+eta[1])*rIK*dIKi;//compute force on i due to k
-							ffj.noalias()=-(-phi*cosIJK*dIJi+eta[0])*rIJ*dIJi-phi*dIJi*rIK*dIKi-eta[2]*rJK*dJKi;//compute force on j
-							ffk.noalias()=-(-phi*cosIJK*dIKi+eta[1])*rIK*dIKi-phi*dIKi*rIJ*dIJi+eta[2]*rJK*dJKi;//compute force on k
+							ffj.noalias()=-(-phi*cosIJK*dIJi+eta[0])*rIJ*dIJi-phi*dIJi*rIK*dIKi;//compute force on j
+							ffk.noalias()=-(-phi*cosIJK*dIKi+eta[1])*rIK*dIKi-phi*dIKi*rIJ*dIJi;//compute force on k
 							f[i][0]+=ffi[0]; f[i][1]+=ffi[1]; f[i][2]+=ffi[2];//store force on i
 							f[j][0]+=ffj[0]; f[j][1]+=ffj[1]; f[j][2]+=ffj[2];//store force on j
 							f[k][0]+=ffk[0]; f[k][1]+=ffk[1]; f[k][2]+=ffk[2];//store force on k
@@ -242,6 +247,9 @@ void PairNN::compute(int eflag, int vflag){
 		if(PAIR_NN_PRINT_DATA>1) std::cout<<"force["<<i<<"] "<<f[i][0]<<" "<<f[i][1]<<" "<<f[i][2]<<"\n";
 	}
 	
+	//Pair::ev_tally(int i,int j,int nlocal,int newton_pair,double evdwl,double ecoul,double fpair,double delx,double dely,double delz)
+	if(eflag_global) ev_tally(nlocal,nlocal,nlocal,newton_pair,etotal_,0.0,0.0,0.0,0.0,0.0);
+	
 	//======== compute virial ========
 	if(vflag_fdotr) virial_fdotr_compute();
 	
@@ -249,9 +257,9 @@ void PairNN::compute(int eflag, int vflag){
 	#ifdef PAIR_NN_PRINT_INPUT
 	if(PAIR_NN_PRINT_STATUS>0) std::cout<<"printing input statistics\n";
 	if(update->ntimestep%(output->thermo_every)==0){
-		std::vector<Eigen::VectorXd> avgT(atom->ntypes);
-		std::vector<Eigen::VectorXd> varT(atom->ntypes);
-		for(int i=0; i<atom->ntypes; ++i){
+		std::vector<Eigen::VectorXd> avgT(nspecies_);
+		std::vector<Eigen::VectorXd> varT(nspecies_);
+		for(int i=0; i<nspecies_; ++i){
 			avgT[i]=Eigen::VectorXd::Zero(nnh_[i].nn().nIn());
 			varT[i]=Eigen::VectorXd::Zero(nnh_[i].nn().nIn());
 			for(int j=0; j<nnh_[i].nn().nIn(); ++j){
@@ -272,7 +280,7 @@ void PairNN::compute(int eflag, int vflag){
 //----------------------------------------------------------------------
 
 void PairNN::allocate(){
-	if(comm->me==0 && PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::allocate():\n";
+	if(PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::allocate():\n";
 	//==== set variables ====
 	allocated=1;//flag as allocated
 	const int ntypes=atom->ntypes;//the number of types in the simulation
@@ -282,11 +290,12 @@ void PairNN::allocate(){
 	memory->create(setflag,ntypes+1,ntypes+1,"pair:setflag");
 	//==== neural network hamiltonians ====
 	map_type_nnp_.resize(ntypes);
-	nnh_.resize(ntypes);
-	//==== symmetry functions ====
-	symm_.resize(ntypes);
-	dEdG_.resize(ntypes);
-	dOutDVal_.resize(ntypes);
+	
+	for(int i=1; i<=ntypes; ++i){
+		for(int j=1; j<ntypes; ++j){
+			setflag[i][j]=0;
+		}
+	}
 }
 
 //----------------------------------------------------------------------
@@ -294,8 +303,7 @@ void PairNN::allocate(){
 //----------------------------------------------------------------------
 
 void PairNN::settings(int narg, char **arg){
-	if(comm->me==0 && PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::settings(int,char**):\n";
-	/* pair nn cutoff */
+	if(PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::settings(int,char**):\n";
 	//==== local variables ====
 	const int me=comm->me;
 	//==== check arguments ====
@@ -309,7 +317,7 @@ void PairNN::settings(int narg, char **arg){
 //----------------------------------------------------------------------
 
 void PairNN::coeff(int narg, char **arg){
-	if(comm->me==0 && PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::coeff(int,char**):\n";
+	if(PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::coeff(int,char**):\n";
 	//pair_coeff * * nn_pot X Y Z
 	//==== local variables ====
 	const int me = comm->me;
@@ -317,37 +325,41 @@ void PairNN::coeff(int narg, char **arg){
 	//==== read pair coeffs ====
 	//check nargs
 	if(narg!=3+atom->ntypes) error->all(FLERR,"Incorrect args for pair coefficients");
+	if(!allocated) allocate();
 	//ensure I,J args are both *
 	if(strcmp(arg[0],"*")!=0 || strcmp(arg[1],"*")!=0) error->all(FLERR,"Incorrect args for pair coefficients");
-	//allocate
-	if(!allocated) allocate();
 	if(me==0){
 		//==== read the potential ====
 		read_pot(arg[2]);
 		//==== read atom names/ids ====
 		std::vector<std::string> names(ntypes);//names provided in the input file
 		std::vector<int> ids(ntypes);//unique hash id's of the atom names
-		Map<int,int> map_id_nnp_;
 		for(int i=0; i<ntypes; ++i){
 			names[i]=std::string(arg[i+3]);
 			ids[i]=string::hash(names[i]);
-			map_id_nnp_.add(ids[i],i);
 		}
+		const int idNULL=string::hash("NULL");
 		//==== check atom names and build the map ====
 		map_type_nnp_.resize(ntypes);
 		for(int i=0; i<ntypes; ++i){
 			map_type_nnp_[i]=-1;
-			for(int j=0; j<ntypes; ++j){
+			for(int j=0; j<nspecies_; ++j){
 				if(ids[i]==nnh_[j].atom().id()){
 					map_type_nnp_[i]=j; break;
 				}
 			}
-			if(map_type_nnp_[i]<0) error->all(FLERR,"Could not find atom name in NNP");
+			if(ids[i]!=idNULL && map_type_nnp_[i]<0) error->all(FLERR,"Could not find atom name in NNP");
 		}
-		if(PAIR_NN_PRINT_DATA>0){
+		if(PAIR_NN_PRINT_DATA>-1){
 			std::cout<<"*************** SPECIES MAP ***************\n";
 			std::cout<<"type nnp name\n";
-			for(int i=0; i<map_type_nnp_.size(); ++i) std::cout<<i<<" "<<map_type_nnp_[i]<<" "<<nnh_[map_type_nnp_[i]].atom().name()<<"\n";
+			for(int i=0; i<map_type_nnp_.size(); ++i){
+				if(map_type_nnp_[i]>=0){
+					std::cout<<i+1<<" "<<map_type_nnp_[i]<<" "<<nnh_[map_type_nnp_[i]].atom().name()<<"\n";
+				} else {
+					std::cout<<i+1<<" "<<map_type_nnp_[i]<<" NULL\n";
+				}
+			}
 			std::cout<<"*************** SPECIES MAP ***************\n";
 		}
 	}
@@ -364,7 +376,7 @@ void PairNN::coeff(int narg, char **arg){
 //----------------------------------------------------------------------
 
 void PairNN::init_style(){
-	if(comm->me==0 && PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::init_style():\n";
+	if(PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::init_style():\n";
 	//==== local variables ====
 	const int ntypes=atom->ntypes;
 	const int me=comm->me;
@@ -382,9 +394,16 @@ void PairNN::init_style(){
 	neighbor->requests[irequest]->full=1;//enable full-neighbor list
 	//==== broadcast data ====
 	if(me==0 && PAIR_NN_PRINT_STATUS>0) std::cout<<"b_casting data\n";
+	//==== broadcast species/types ====
+	if(me==0) std::cout<<"bcasting species/types\n";
+	MPI_Bcast(&nspecies_,1,MPI_INT,0,world);
 	MPI_Bcast(map_type_nnp_.data(),ntypes,MPI_INT,0,world);
 	MPI_Barrier(world);
-	for(int n=0; n<ntypes; ++n){
+	//==== resize/broadcast nnh ====
+	if(me==0) std::cout<<"bcasting nnh\n";
+	MPI_Barrier(world);
+	nnh_.resize(nspecies_);
+	for(int n=0; n<nspecies_; ++n){
 		int nBytes=0;
 		if(me==0) nBytes=serialize::nbytes(nnh_[n]);
 		MPI_Bcast(&nBytes,1,MPI_INT,0,world);
@@ -396,31 +415,31 @@ void PairNN::init_style(){
 		MPI_Barrier(world);
 	}
 	//==== resize utility arrays ====
-	symm_.resize(ntypes);
-	for(int n=0; n<ntypes; ++n){
+	if(me==0) std::cout<<"resizing utilities\n";
+	symm_.resize(nspecies_);
+	for(int n=0; n<nspecies_; ++n){
 		symm_[n]=Eigen::VectorXd::Zero(nnh_[n].nn().nIn());
 	}
-	dEdG_.resize(ntypes);
-	for(int n=0; n<ntypes; ++n){
+	dEdG_.resize(nspecies_);
+	for(int n=0; n<nspecies_; ++n){
 		dEdG_[n]=Eigen::VectorXd::Zero(nnh_[n].nn().nIn());
 	}
-	dOutDVal_.resize(ntypes);
-	for(int n=0; n<ntypes; ++n){
+	dOutDVal_.resize(nspecies_);
+	for(int n=0; n<nspecies_; ++n){
 		dOutDVal_[n].resize(nnh_[n].nn());
 	}
 	//==== input statistics ====
 	#ifdef PAIR_NN_PRINT_INPUT
-	avg_=std::vector<Eigen::VectorXd>(ntypes);
-	var_=std::vector<Eigen::VectorXd>(ntypes);
-	m2_=std::vector<Eigen::VectorXd>(ntypes);
-	for(int i=0; i<ntypes; ++i){
+	avg_=std::vector<Eigen::VectorXd>(nspecies_);
+	var_=std::vector<Eigen::VectorXd>(nspecies_);
+	m2_=std::vector<Eigen::VectorXd>(nspecies_);
+	for(int i=0; i<nspecies_; ++i){
 		avg_[i]=Eigen::VectorXd::Zero(nnh_[i].nn().nIn());
 		var_[i]=Eigen::VectorXd::Zero(nnh_[i].nn().nIn());
 		m2_[i]=Eigen::VectorXd::Zero(nnh_[i].nn().nIn());
 	}
 	#endif
 	//==== mpi barrier ====
-	if(me==0 && PAIR_NN_PRINT_DATA>1) std::cout<<"barrier\n";
 	MPI_Barrier(world);
 }
 
@@ -429,7 +448,7 @@ void PairNN::init_style(){
 //----------------------------------------------------------------------
 
 double PairNN::init_one(int i, int j){
-	if(comm->me==0 && PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::init_one(int,int):\n";
+	if(PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::init_one(int,int):\n";
 	return rc_;
 }
 
@@ -438,13 +457,20 @@ double PairNN::init_one(int i, int j){
 //----------------------------------------------------------------------
 
 void PairNN::write_restart(FILE *fp){
-	if(comm->me==0 && PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::write_restart(FILE*):\n";
+	if(PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::write_restart(FILE*):\n";
 	write_restart_settings(fp);
 	const int ntypes=atom->ntypes;
-	//==== write map ====
+	//==== write flags ====
+	for(int i=1; i<=ntypes;++i){
+		for(int j=1; j<=ntypes; ++j){
+			fwrite(&setflag[i][j],sizeof(int),1,fp);
+		}
+	}
+	//==== write species ====
+	fwrite(&nspecies_,sizeof(int),1,fp);
 	fwrite(map_type_nnp_.data(),sizeof(int),ntypes,fp);
 	//==== loop over all types ====
-	for(int n=0; n<ntypes; ++n){
+	for(int n=0; n<nspecies_; ++n){
 		const int size=serialize::nbytes(nnh_[n]);
 		char* arr=new char[size];
 		serialize::pack(nnh_[n],arr);
@@ -462,7 +488,7 @@ void PairNN::write_restart(FILE *fp){
 //----------------------------------------------------------------------
 
 void PairNN::read_restart(FILE *fp){
-	if(comm->me==0 && PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::read_restart(FILE*):\n";
+	if(PAIR_NN_PRINT_FUNC>0) std::cout<<"PairNN::read_restart(FILE*):\n";
 	read_restart_settings(fp);
 	allocate();
 	const int ntypes=atom->ntypes;
@@ -470,11 +496,18 @@ void PairNN::read_restart(FILE *fp){
 	map_type_nnp_.resize(ntypes);
 	//======== proc 0 reads from restart file ========
 	if(me==0){
+		for(int i=1; i<=ntypes;++i){
+			for(int j=1; j<=ntypes; ++j){
+				fread(&setflag[i][j],sizeof(int),1,fp);
+			}
+		}
 		if(PAIR_NN_PRINT_DATA>0) std::cout<<"ntypes = "<<ntypes<<"\n";
-		//==== map ====
+		//==== species ====
+		fread(&nspecies_,sizeof(int),1,fp);
 		fread(map_type_nnp_.data(),sizeof(int),ntypes,fp);
-		//==== loop over all types ====
-		for(int n=0; n<ntypes; ++n){
+		//==== loop over all species ====
+		nnh_.resize(nspecies_);
+		for(int n=0; n<nspecies_; ++n){
 			//read size
 			int size=0;
 			fread(&size,sizeof(int),1,fp);
@@ -487,24 +520,11 @@ void PairNN::read_restart(FILE *fp){
 			delete[] arr;
 		}
 	}
-	//======== broadcast data ========
-	if(me==0 && PAIR_NN_PRINT_STATUS>0) std::cout<<"b-casting data\n";
-	//==== map ====
-	MPI_Bcast(map_type_nnp_.data(),ntypes,MPI_INT,0,world);
-	//==== atom data ====
-	for(int n=0; n<ntypes; ++n){
-		int nBytes=0;
-		if(me==0) nBytes=serialize::nbytes(nnh_[n]);
-		MPI_Bcast(&nBytes,1,MPI_INT,0,world);
-		char* arr=new char[nBytes];
-		if(me==0) serialize::pack(nnh_[n],arr);
-		MPI_Bcast(arr,nBytes,MPI_CHAR,0,world);
-		if(me!=0) serialize::unpack(nnh_[n],arr);
-		delete[] arr;
-		MPI_Barrier(world);
+	for(int i=1; i<=ntypes; ++i){
+		for(int j=1; j<=ntypes; ++j){
+			MPI_Bcast(&setflag[i][j],1,MPI_INT,0,world);
+		}
 	}
-	//==== mpi barrier ====
-	MPI_Barrier(world);
 }
 
 //----------------------------------------------------------------------
@@ -566,43 +586,44 @@ void PairNN::read_pot(const char* file){
 	fgets(input,string::M,reader);
 	//==== number of species ====
 	string::split(fgets(input,string::M,reader),string::WS,strlist);
-	const int nspecies=std::atoi(strlist.at(1).c_str());
-	if(nspecies!=atom->ntypes) error->all(FLERR,"PairNN::read_pot(const char*): invalid number of species.");
+	nspecies_=std::atoi(strlist.at(1).c_str());
+	if(nspecies_<=0) error->all(FLERR,"PairNN::read_pot(const char*): invalid number of species.");
 	//==== species ====
-	std::vector<AtomANN> species(nspecies);
-	Map<int,int> map_id_nnp_;
-	for(int n=0; n<nspecies; ++n){
+	std::vector<AtomANN> species(nspecies_);
+	Map<int,int> map_;
+	nnh_.resize(nspecies_);
+	for(int n=0; n<nspecies_; ++n){
 		AtomANN::read(fgets(input,string::M,reader),species[n]);
 		if(PAIR_NN_PRINT_DATA>0) std::cout<<"species["<<n<<"] = "<<species[n]<<"\n";
-		nnh_[n].resize(nspecies);
+		nnh_[n].resize(nspecies_);
 		nnh_[n].atom()=species[n];
-		map_id_nnp_.add(string::hash(nnh_[n].atom().name()),n);
+		map_.add(string::hash(nnh_[n].atom().name()),n);
 	}
 	//==== global cutoff ====
 	string::split(fgets(input,string::M,reader),string::WS,strlist);
 	const double rc=std::atof(strlist.at(1).c_str());
 	if(rc!=rc_) error->all(FLERR,"PairNN::read_pot(const char*): invalid cutoff.");
 	//==== basis ====
-	for(int i=0; i<nspecies; ++i){
+	for(int i=0; i<nspecies_; ++i){
 		//read central species
 		string::split(fgets(input,string::M,reader),string::WS,strlist);
-		const int II=map_id_nnp_[string::hash(strlist.at(1))];
+		const int II=map_[string::hash(strlist.at(1))];
 		//read basis - radial
-		for(int j=0; j<nspecies; ++j){
+		for(int j=0; j<nspecies_; ++j){
 			//read species
 			string::split(fgets(input,string::M,reader),string::WS,strlist);
-			const int JJ=map_id_nnp_[string::hash(strlist.at(1))];
+			const int JJ=map_[string::hash(strlist.at(1))];
 			//read basis
 			BasisR::read(reader,nnh_[II].basisR(JJ));
 			if(PAIR_NN_PRINT_DATA>1) std::cout<<"BasisR("<<nnh_[II].atom().name()<<","<<nnh_[JJ].atom().name()<<") = "<<nnh_[II].basisR(JJ)<<"\n";
 		}
 		//read basis - angular
-		for(int j=0; j<nspecies; ++j){
-			for(int k=j; k<nspecies; ++k){
+		for(int j=0; j<nspecies_; ++j){
+			for(int k=j; k<nspecies_; ++k){
 				//read species
 				string::split(fgets(input,string::M,reader),string::WS,strlist);
-				const int JJ=map_id_nnp_[string::hash(strlist.at(1))];
-				const int KK=map_id_nnp_[string::hash(strlist.at(2))];
+				const int JJ=map_[string::hash(strlist.at(1))];
+				const int KK=map_[string::hash(strlist.at(2))];
 				//read basis
 				BasisA::read(reader,nnh_[II].basisA(JJ,KK));
 				if(PAIR_NN_PRINT_DATA>1) std::cout<<"BasisA("<<nnh_[II].atom().name()<<","<<nnh_[JJ].atom().name()<<","<<nnh_[KK].atom().name()<<") = "<<nnh_[II].basisA(JJ,KK)<<"\n";
@@ -612,10 +633,10 @@ void PairNN::read_pot(const char* file){
 		nnh_[II].init_input();
 	}
 	//==== neural network ====
-	for(int n=0; n<nspecies; ++n){
+	for(int n=0; n<nspecies_; ++n){
 		//read species
 		string::split(fgets(input,string::M,reader),string::WS,strlist);
-		const int II=map_id_nnp_[string::hash(strlist.at(1))];
+		const int II=map_[string::hash(strlist.at(1))];
 		//read network
 		NeuralNet::ANN::read(reader,nnh_[II].nn());
 	}
