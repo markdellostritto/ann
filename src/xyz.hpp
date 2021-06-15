@@ -43,7 +43,7 @@ void unwrap(Structure& struc);
 //*****************************************************
 
 void read(const char* file, const AtomType& atomT, Structure& struc);
-//void read(const char* file, const Interval& interval, const AtomType& atomT, Simulation& sim);
+void read(const char* file, const Interval& interval, const AtomType& atomT, Simulation& sim);
 
 //*****************************************************
 //writing

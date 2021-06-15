@@ -5,6 +5,9 @@
 #include <string>
 #include <stdexcept>
 #include <iostream>
+// ann - structure
+#include "structure.hpp"
+#include "sim.hpp"
 // ann - math
 #include "math_func.hpp"
 // ann - strings
@@ -53,9 +56,9 @@ void unwrap(Structure& struc){
 				Cell::diff(struc.posn(i),struc.posn(j),drp,struc.R(),struc.RInv());
 				dr=struc.posn(i)-struc.posn(j);
 				if(drp.norm()<R0 && dr.norm()>R0){
-					if(std::fabs(drp[0])<R0 && std::fabs(dr[0])>R0) struc.posn(j)[0]+=math::func::sign(struc.posn(i)[0]-struc.posn(j)[0])*struc.R()(0,0);
-					if(std::fabs(drp[1])<R0 && std::fabs(dr[1])>R0) struc.posn(j)[1]+=math::func::sign(struc.posn(i)[1]-struc.posn(j)[1])*struc.R()(1,1);
-					if(std::fabs(drp[2])<R0 && std::fabs(dr[2])>R0) struc.posn(j)[2]+=math::func::sign(struc.posn(i)[2]-struc.posn(j)[2])*struc.R()(2,2);
+					if(std::fabs(drp[0])<R0 && std::fabs(dr[0])>R0) struc.posn(j)[0]+=math::func::sgn(struc.posn(i)[0]-struc.posn(j)[0])*struc.R()(0,0);
+					if(std::fabs(drp[1])<R0 && std::fabs(dr[1])>R0) struc.posn(j)[1]+=math::func::sgn(struc.posn(i)[1]-struc.posn(j)[1])*struc.R()(1,1);
+					if(std::fabs(drp[2])<R0 && std::fabs(dr[2])>R0) struc.posn(j)[2]+=math::func::sgn(struc.posn(i)[2]-struc.posn(j)[2])*struc.R()(2,2);
 				}
 			}
 		}
@@ -88,6 +91,9 @@ void read(const char* xyzfile, const AtomType& atomT, Structure& struc){
 		} else if(units::consts::system()==units::System::METAL){
 			s_len=1.0;
 			s_energy=1.0;
+		} else if(units::consts::system()==units::System::LJ){
+			s_len=1.0;
+			s_energy=1.0;
 		}
 		else throw std::runtime_error("Invalid units.");
 		
@@ -113,6 +119,7 @@ void read(const char* xyzfile, const AtomType& atomT, Structure& struc){
 		lv(1,1)=std::atof(strlist.at(3).c_str());
 		lv(2,2)=std::atof(strlist.at(4).c_str());
 	}
+	lv*=s_len;
 	
 	//resize the structure
 	if(XYZ_PRINT_STATUS>0) std::cout<<"resizing structure\n";
@@ -136,6 +143,134 @@ void read(const char* xyzfile, const AtomType& atomT, Structure& struc){
 	struc.energy()=s_energy*energy;
 	
 	//close the file
+	if(XYZ_PRINT_STATUS>0) std::cout<<"closing file\n";
+	fclose(reader);
+	reader=NULL;
+	
+	//free memory
+	delete[] input;
+	delete[] name;
+}
+
+void read(const char* file, const Interval& interval, const AtomType& atomT, Simulation& sim){
+	if(XYZ_PRINT_FUNC>0) std::cout<<"read(const char*,Interval&,const AtomType&,Simulation&):\n";
+	//==== local function variables ====
+	//file i/o
+		FILE* reader=NULL;
+		char* input=new char[string::M];
+		char* name=new char[string::M];
+		std::vector<std::string> strlist;
+	//atom info	
+		int nAtoms=0;
+		std::vector<std::string> names;
+		int nSpecies=0;
+		std::vector<std::string> speciesNames;
+		std::vector<int> speciesNumbers;
+	//positions
+		Eigen::Vector3d r;
+	//units
+		double s_len=0.0,s_energy=0.0;
+		if(units::consts::system()==units::System::AU){
+			s_len=units::BOHRpANG;
+			s_energy=units::HARTREEpEV;
+		} else if(units::consts::system()==units::System::METAL){
+			s_len=1.0;
+			s_energy=1.0;
+		} else if(units::consts::system()==units::System::LJ){
+			s_len=1.0;
+			s_energy=1.0;
+		}
+		else throw std::runtime_error("Invalid units.");
+	
+	//open file
+	if(XYZ_PRINT_STATUS>0) std::cout<<"opening file\n";
+	reader=fopen(file,"r");
+	if(reader==NULL) throw std::runtime_error("Runtime Error: Could not open file.");
+	
+	//read natoms
+	if(XYZ_PRINT_STATUS>0) std::cout<<"reading natoms\n";
+	fgets(input,string::M,reader);
+	nAtoms=std::atoi(input);
+	if(nAtoms<=0) throw std::runtime_error("Runtime Error: found zero atoms.");
+	if(XYZ_PRINT_DATA>0) std::cout<<"natoms = "<<nAtoms<<"\n";
+	
+	//find the total number of timesteps
+	if(XYZ_PRINT_STATUS>0) std::cout<<"reading timesteps\n";
+	std::rewind(reader);
+	int nlines=0;
+	while(fgets(input,string::M,reader)) ++nlines;
+	int ts=nlines/(nAtoms+2);//natoms + natoms-line + comment-line
+	if(XYZ_PRINT_DATA>0) std::cout<<"ts = "<<ts<<"\n";
+	
+	//set the interval
+	if(XYZ_PRINT_STATUS>0) std::cout<<"setting interval\n";
+	if(interval.beg<0) throw std::invalid_argument("Invalid beginning timestep.");
+	sim.beg()=interval.beg-1;
+	if(interval.end<0){
+		sim.end()=ts+interval.end;
+	} else sim.end()=interval.end-1;
+	const int tsint=sim.end()-sim.beg()+1;
+	if(XYZ_PRINT_DATA>0) std::cout<<"interval = "<<sim.beg()<<":"<<sim.end()<<":"<<tsint<<"\n";
+	
+	//resize the simulation
+	if(XYZ_PRINT_STATUS>0) std::cout<<"resizing simulation\n";
+	sim.resize(tsint/interval.stride,nAtoms,atomT);
+	
+	//read the simulation
+	if(XYZ_PRINT_STATUS>0) std::cout<<"reading simulation\n";
+	std::rewind(reader);
+	for(int t=0; t<sim.beg(); ++t){
+		fgets(input,string::M,reader);//natoms
+		const int N=std::atoi(input);
+		fgets(input,string::M,reader);//comment line
+		for(int n=0; n<N; ++n){
+			fgets(input,string::M,reader);
+		}
+	}
+	for(int t=0; t<sim.timesteps(); ++t){
+		//read natoms
+		fgets(input,string::M,reader);//natoms
+		const int N=std::atoi(input);
+		if(sim.frame(t).nAtoms()!=N) throw std::invalid_argument("Invalid number of atoms.");
+		//read in cell length and energy
+		double energy=0;
+		Eigen::Matrix3d lv=Eigen::Matrix3d::Zero();
+		fgets(input,string::M,reader);
+		string::split(input,string::WS,strlist);
+		if(strlist.size()==1+1){
+			energy=std::atof(strlist.at(1).c_str());
+		} else if(strlist.size()==1+3){
+			lv(0,0)=std::atof(strlist.at(1).c_str());
+			lv(1,1)=std::atof(strlist.at(2).c_str());
+			lv(2,2)=std::atof(strlist.at(3).c_str());
+		}else if(strlist.size()==1+1+3){
+			energy=std::atof(strlist.at(1).c_str());
+			lv(0,0)=std::atof(strlist.at(2).c_str());
+			lv(1,1)=std::atof(strlist.at(3).c_str());
+			lv(2,2)=std::atof(strlist.at(4).c_str());
+		}
+		lv*=s_len;
+		sim.frame(t).energy()=energy*s_energy;
+		//read positions
+		for(int n=0; n<N; ++n){
+			fgets(input,string::M,reader);
+			std::sscanf(input,"%s %lf %lf %lf",name,&r[0],&r[1],&r[2]);
+			sim.frame(t).posn(n).noalias()=s_len*r;
+			if(atomT.name) sim.frame(t).name(n)=name;
+		}
+		//set the cell
+		if(XYZ_PRINT_STATUS>0) std::cout<<"setting cell\n";
+		if(lv.norm()>0) static_cast<Cell&>(sim.frame(t)).init(lv);
+		//skip "stride-1" steps
+		for(int tt=0; tt<interval.stride-1; ++tt){
+			fgets(input,string::M,reader);//natoms
+			const int NN=std::atoi(input);
+			fgets(input,string::M,reader);//comment line
+			for(int n=0; n<NN; ++n) fgets(input,string::M,reader);
+		}
+	}
+	
+	//close file
 	if(XYZ_PRINT_STATUS>0) std::cout<<"closing file\n";
 	fclose(reader);
 	reader=NULL;
