@@ -1,7 +1,11 @@
 // c libraries
 #include <cstdlib>
 #include <cstring>
+#if (defined(__GNUC__) || defined(__GNUG__)) && !(defined(__clang__) || defined(__INTEL_COMPILER))
 #include <cmath>
+#elif (defined __ICC || defined __INTEL_COMPILER)
+#include <mathimf.h> //intel math library
+#endif
 // c++ libraries
 #include <iostream>
 // ann - string
@@ -20,11 +24,19 @@ void Atom::clear(){
 
 Atom& Atom::read(const char* str, Atom& atom){
 	if(ATOM_PRINT_FUNC>0) std::cout<<"Atom::read(const char*,Atom&):\n";
-	char* name=new char[10];
+	/*char* name=new char[10];
 	std::sscanf(str,"%s %lf %lf %lf",name,&atom.mass(),&atom.energy(),&atom.charge());
 	atom.name()=name;
 	atom.id()=string::hash(atom.name());
-	delete[] name;
+	delete[] name;*/
+	std::vector<std::string> strlist;
+	const int nstr=string::split(str,string::WS,strlist);
+	if(nstr!=4) throw std::invalid_argument("ERROR in Atom::read(const char*,Atom&): invalid atom format.");
+	atom.name()=strlist[0];
+	atom.mass()=std::atof(strlist[1].c_str());
+	atom.energy()=std::atof(strlist[2].c_str());
+	atom.charge()=std::atof(strlist[3].c_str());
+	atom.id()=string::hash(atom.name());
 	return atom;
 }
 
@@ -39,9 +51,9 @@ void Atom::print(FILE* out, const Atom& atom){
 bool operator==(const Atom& atom1, const Atom& atom2){
 	return (
 		atom1.id()==atom2.id() &&
-		std::fabs(atom1.mass()-atom2.mass())<1e-6 &&
-		std::fabs(atom1.energy()-atom2.energy())<1e-6 &&
-		std::fabs(atom1.charge()-atom2.charge())<1e-6
+		fabs(atom1.mass()-atom2.mass())<1e-6 &&
+		fabs(atom1.energy()-atom2.energy())<1e-6 &&
+		fabs(atom1.charge()-atom2.charge())<1e-6
 	);
 }
 
