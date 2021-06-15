@@ -9,6 +9,7 @@
 #include <Eigen/Dense>
 // ann - structure
 #include "structure.hpp"
+#include "sim.hpp"
 // ann - strings
 #include "string.hpp"
 // ann - units
@@ -294,6 +295,270 @@ void write(const char* file, const AtomType& atomT, const Structure& struc){
 }
 
 //*****************************************************
+//XDATCAR
+//*****************************************************
+
+namespace XDATCAR{
+
+void read(const char* file, const Interval& interval, const AtomType& atomT, Simulation& sim){
+	static const char* funcName="read(const char*,const Interval&,Simulation&)";
+	if(DEBUG_VASP>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<funcName<<":\n";
+	//==== local function variables ====
+	//file i/o
+		FILE* reader=NULL;
+		char* input=new char[string::M];
+		char* str_name=new char[string::M];
+		char* str_number=new char[string::M];
+		std::string str;
+	//simulation flags
+		bool direct;//whether the coordinates are in direct or Cartesian coordinates
+	//time info
+		int ts=0;//number of timesteps
+		int tsint=0;//requested interval
+	//cell info
+		double scale=1;
+		Eigen::Matrix3d lv;
+	//atom info
+		int nAtomsT=0;
+		std::vector<int> nAtoms;//the number of atoms in each species
+		std::vector<std::string> names;//the names of each species
+	//units
+		double s_len=0.0;
+		if(units::consts::system()==units::System::AU) s_len=units::BOHRpANG;
+		else if(units::consts::system()==units::System::METAL) s_len=1.0;
+		else throw std::runtime_error("Invalid units.");
+	//misc
+		bool error=false;
+		
+	try{
+		//start the timer
+		const clock_t start=std::clock();
+		
+		//open the file
+		if(DEBUG_VASP>0) std::cout<<"Opening file\n";
+		reader=fopen(file,"r");
+		if(reader==NULL) throw std::runtime_error("I/O Error: Unable to open file.");
+		
+		//==== clear the simulation ====
+		if(DEBUG_VASP>0) std::cout<<"clearing simulation\n";
+		sim.clear();
+		
+		//==== read in the system name ====
+		if(DEBUG_VASP>0) std::cout<<"reading system name\n";
+		sim.name()=string::trim(fgets(input,string::M,reader));
+		
+		//==== read the simulation cell ====
+		if(DEBUG_VASP>0) std::cout<<"reading cell\n";
+		std::sscanf(fgets(input,string::M,reader),"%lf",&scale);
+		std::sscanf(fgets(input,string::M,reader),"%lf %lf %lf",&lv(0,0),&lv(1,0),&lv(2,0));
+		std::sscanf(fgets(input,string::M,reader),"%lf %lf %lf",&lv(0,1),&lv(1,1),&lv(2,1));
+		std::sscanf(fgets(input,string::M,reader),"%lf %lf %lf",&lv(0,2),&lv(1,2),&lv(2,2));
+		lv*=s_len*scale;
+		
+		//==== read species ====
+		if(DEBUG_VASP>1) std::cout<<"read species\n";
+		//read number of species
+		fgets(str_name, string::M, reader);
+		fgets(str_number, string::M, reader);
+		const int nNames=string::substrN(str_name,string::WS);
+		const int nNumbers=string::substrN(str_number,string::WS);
+		const int nSpecies=string::substrN(str_name,string::WS);
+		if(nNames!=nNumbers) throw std::runtime_error("Invalid number of species");
+		if(nSpecies<=0) throw std::runtime_error("Invalid number of species");
+		//read in the species names
+		names.resize(nSpecies);
+		names[0]=std::strtok(str_name,string::WS);
+		for(int i=1; i<nSpecies; ++i) names[i]=std::strtok(NULL,string::WS);
+		//read in the species numbers
+		nAtoms.resize(nSpecies);
+		nAtoms[0]=std::atoi(std::strtok(str_number,string::WS));
+		for(int i=1; i<nSpecies; ++i) nAtoms[i]=std::atoi(std::strtok(NULL,string::WS));
+		//compute the total number
+		nAtomsT=0;
+		for(int i=0; i<nSpecies; ++i) nAtomsT+=nAtoms[i];
+		
+		//==== read coord ====
+		if(DEBUG_VASP>0) std::cout<<"read coord\n";
+		fgets(input, string::M, reader);
+		if(input[0]=='D') direct=true;
+		else direct=false;
+		
+		//==== check if the cell is variable or not ====
+		if(DEBUG_VASP>0) std::cout<<"Checking whether cell is variable\n";
+		for(int n=0; n<nAtomsT; ++n) fgets(input, string::M, reader);
+		str=std::string(string::trim(fgets(input,string::M,reader)));
+		if(str==sim.name()) sim.cell_fixed()=false;
+		else sim.cell_fixed()=true;
+		// reset the line position 
+		if(!sim.cell_fixed()) for(int i=0; i<HEADER_SIZE; ++i) fgets(input,string::M,reader);
+		
+		//==== find the number of timesteps ====
+		if(DEBUG_VASP>0) std::cout<<"reading the number of timesteps\n";
+		std::rewind(reader);
+		//find the total number of lines in the file
+		int nLines=0;
+		while(fgets(input, string::M, reader)!=NULL){++nLines;};
+		if(sim.cell_fixed()) ts=std::floor((1.0*nLines-HEADER_SIZE)/(1.0*nAtomsT+1.0));
+		else ts=std::floor((1.0*nLines)/(1.0*nAtomsT+1.0+HEADER_SIZE));
+		
+		//==== reset the line position ====
+		if(DEBUG_VASP>0) std::cout<<"resetting the line position\n";
+		std::rewind(reader);
+		if(sim.cell_fixed()) for(int i=0; i<HEADER_SIZE; ++i) fgets(input,string::M,reader);
+		
+		//==== set the interval ====
+		if(DEBUG_VASP>0) std::cout<<"setting the interval\n";
+		if(interval.beg<0) throw std::invalid_argument("Invalid beginning timestep.");
+		sim.beg()=interval.beg-1;
+		if(interval.end<0){
+			sim.end()=ts+interval.end;
+		} else sim.end()=interval.end-1;
+		tsint=sim.end()-sim.beg()+1;
+		
+		//==== print data to screen ====
+		if(DEBUG_VASP>0){
+			std::cout<<"NAME    = "<<sim.name()<<"\n";
+			std::cout<<"ATOMT   = "<<atomT<<"\n";
+			std::cout<<"DIRECT  = "<<(direct?"T":"F")<<"\n";
+			std::cout<<"CELL    = \n"<<lv<<"\n";
+			std::cout<<"SPECIES = "; for(int i=0; i<nSpecies; ++i) std::cout<<names[i]<<" "; std::cout<<"\n";
+			std::cout<<"NUMBERS = "; for(int i=0; i<nSpecies; ++i) std::cout<<nAtoms[i]<<" "; std::cout<<"\n";
+			std::cout<<"NATOMST = "<<nAtomsT<<"\n";
+			std::cout<<"INTERVAL   = "<<sim.beg()<<":"<<sim.end()<<":"<<interval.stride<<" - "<<tsint<<"\n";
+			std::cout<<"TIMESTEPS  = "<<ts<<"\n";
+			std::cout<<"N_STEPS    = "<<tsint/interval.stride<<"\n";
+		}
+		
+		//==== resize the simulation ====
+		if(DEBUG_VASP>0) std::cout<<"allocating memory\n";
+		sim.resize(tsint/interval.stride,nAtomsT,atomT);
+		
+		//==== read positions ====
+		if(DEBUG_VASP>0) std::cout<<"reading positions\n";
+		//skip timesteps until beg is reached
+		for(int t=0; t<sim.beg(); ++t){
+			if(!sim.cell_fixed()) for(int i=0; i<HEADER_SIZE; ++i) fgets(input,string::M,reader); //skip header
+			fgets(input,string::M,reader);//skip single line
+			for(int n=0; n<nAtomsT; ++n) fgets(input,string::M,reader);
+		}
+		//read the positions
+		if(sim.cell_fixed()){
+			for(int t=0; t<sim.timesteps(); ++t) static_cast<Cell&>(sim.frame(t)).init(lv);
+			for(int t=0; t<sim.timesteps(); ++t){
+				if(DEBUG_VASP>1) std::cout<<"T = "<<t<<"\n";
+				else if(t%1000==0) std::cout<<"T = "<<t<<"\n";
+				fgets(input,string::M,reader);//skip line
+				for(int n=0; n<nAtomsT; ++n){
+					std::sscanf(
+						fgets(input,string::M,reader),"%lf %lf %lf",
+						&sim.frame(t).posn(n)[0],&sim.frame(t).posn(n)[1],&sim.frame(t).posn(n)[2]
+					);
+				}
+				//skip "stride-1" steps
+				for(int tt=0; tt<interval.stride-1; ++tt){
+					fgets(input,string::M,reader);//skip line
+					for(int n=0; n<nAtomsT; ++n){
+						fgets(input,string::M,reader);
+					}
+				}
+			}
+		} else {
+			for(int t=0; t<sim.timesteps(); ++t){
+				if(DEBUG_VASP>1) std::cout<<"T = "<<t<<"\n";
+				else if(t%1000==0) std::cout<<"T = "<<t<<"\n";
+				//read in lattice vectors
+				fgets(input,string::M,reader);//name
+				scale=std::atof(fgets(input,string::M,reader));//scale
+				for(int i=0; i<3; ++i){
+					fgets(input, string::M, reader);
+					lv(0,i)=std::atof(std::strtok(input,string::WS));
+					for(int j=1; j<3; ++j){
+						lv(j,i)=std::atof(std::strtok(NULL,string::WS));
+					}
+				}
+				static_cast<Cell&>(sim.frame(t)).init(s_len*scale*lv);
+				fgets(input,string::M,reader);//skip line (atom names)
+				fgets(input,string::M,reader);//skip line (atom numbers)
+				fgets(input,string::M,reader);//skip line (Direct or Cart)
+				for(int n=0; n<nAtomsT; ++n){
+					std::sscanf(
+						fgets(input,string::M,reader),"%lf %lf %lf",
+						&sim.frame(t).posn(n)[0],&sim.frame(t).posn(n)[1],&sim.frame(t).posn(n)[2]
+					);
+				}
+				//skip "stride-1" steps
+				for(int tt=0; tt<interval.stride-1; ++tt){
+					fgets(input,string::M,reader);//name
+					fgets(input,string::M,reader);//scale
+					for(int i=0; i<3; ++i){
+						fgets(input,string::M,reader);//lv
+					}
+					fgets(input,string::M,reader);//skip line (atom names)
+					fgets(input,string::M,reader);//skip line (atom numbers)
+					fgets(input,string::M,reader);//skip line (Direct or Cart)
+					for(int n=0; n<nAtomsT; ++n){
+						fgets(input,string::M,reader);
+					}
+				}
+			}
+		}
+		
+		//==== convert to Cartesian coordinates if necessary ====
+		if(direct){
+			if(DEBUG_VASP>0) std::cout<<"converting to cartesian coordinates\n";
+			for(int t=0; t<sim.timesteps(); ++t){
+				for(int n=0; n<nAtomsT; ++n){
+					sim.frame(t).posn(n)=sim.frame(t).R()*sim.frame(t).posn(n);
+				}
+			}
+		} else if(s_len!=1.0){
+			for(int t=0; t<sim.timesteps(); ++t){
+				for(int n=0; n<nAtomsT; ++n){
+					sim.frame(t).posn(n)*=s_len;
+				}
+			}
+		}
+		
+		//==== set species ====
+		if(DEBUG_VASP>0) std::cout<<"setting species\n";
+		if(atomT.name){
+			for(int t=0; t<sim.timesteps(); ++t){
+				int count=0;
+				for(int n=0; n<nSpecies; ++n){
+					for(int m=0; m<nAtoms[n]; ++m){
+						sim.frame(t).name(count++)=names[n];
+					}
+				}
+			}
+		}
+		
+		//==== close the file ====
+		if(DEBUG_VASP>0) std::cout<<"closing the file\n";
+		fclose(reader);
+		reader=NULL;
+		
+		//==== stop the timer ====
+		const clock_t stop=std::clock();
+		
+		//==== print the time ====
+		const double time=((double)(stop-start))/CLOCKS_PER_SEC;
+		std::cout<<"Simulation loaded in "<<time<<" seconds.\n";
+	}catch(std::exception& e){
+		std::cout<<"ERROR in "<<NAMESPACE_GLOBAL<<"::"<<NAMESPACE_LOCAL<<"::"<<funcName<<":\n";
+		std::cout<<e.what()<<"\n";
+		error=true;
+	}
+	
+	//free all local variables
+	if(reader!=NULL) fclose(reader);
+	delete[] input;
+	
+	if(error) throw std::runtime_error("I/O Exception: Could not read data.");
+}
+
+}
+
+//*****************************************************
 //XML
 //*****************************************************
 
@@ -558,84 +823,5 @@ void read(const char* file, int t, const AtomType& atomT, Structure& struc){
 }
 
 }
-
-/*Simulation& read(const Format& format, const Interval& interval, const AtomType& atomT, Simulation& sim){
-	const char* func_name="read(const Format&,const Interval&,const AtomT&,Simulation&)";
-	if(DEBUG_VASP>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<func_name<<":\n";
-	//local variables
-	clock_t start,stop;
-	double time;
-	bool error=false;
-	
-	try{		
-		//start the timer
-		start=std::clock();
-		
-		if(!format.poscar.empty()){
-			Structure struc;
-			POSCAR::read(format.poscar.c_str(),atomT,struc);
-			sim.resize(1,struc.nAtomsV(),struc.species(),atomT);
-			sim.frame(0)=struc;
-			sim.timesteps()=1;
-			sim.cell_fixed()=true;
-			std::cout<<"TIMESTEPS = "<<sim.timesteps()<<"\n";
-		} else if(!format.xdatcar.empty()){
-			XDATCAR::read(format.xdatcar.c_str(),interval,atomT,sim);
-		} else if(!format.xml.empty()){
-			Structure struc;
-			XML::read(format.xml.c_str(),interval.beg,atomT,struc);
-			sim.resize(1,struc.nAtomsV(),struc.species(),atomT);
-			sim.frame(0)=struc;
-		}
-		
-		//stop the timer
-		stop=std::clock();
-		
-		//print the time
-		time=((double)(stop-start))/CLOCKS_PER_SEC;
-		std::cout<<"Simulation read in "<<time<<" seconds.\n";
-	}catch(std::exception& e){
-		std::cout<<"Error in "<<NAMESPACE_GLOBAL<<"::"<<func_name<<":\n";
-		std::cout<<e.what()<<"\n";
-		error=true;
-	}
-	
-	if(error) throw std::runtime_error("I/O Error: Failed to read.");
-	else return sim;
-}*/
-
-/*const Simulation& write(const Format& format, const Interval& interval, const AtomType& atomT, const Simulation& sim){
-	const char* func_name="write(const Format&,const Interval&,const AtomT&,const Simulation&)";
-	if(DEBUG_VASP>0) std::cout<<NAMESPACE_GLOBAL<<"::"<<func_name<<":\n";
-	//local variables
-	clock_t start,stop;
-	double time;
-	bool error=false;
-	
-	try{		
-		//start the timer
-		start=std::clock();
-		
-		if(!format.poscar.empty()){
-			POSCAR::write(format.poscar.c_str(),atomT,sim.frame(interval.beg));
-		} else if(!format.xdatcar.empty()){
-			XDATCAR::write(format.xdatcar.c_str(),interval,atomT,sim);
-		} 
-		
-		//stop the timer
-		stop=std::clock();
-		
-		//print the time
-		time=((double)(stop-start))/CLOCKS_PER_SEC;
-		std::cout<<"Simulation read in "<<time<<" seconds.\n";
-	}catch(std::exception& e){
-		std::cout<<"Error in "<<NAMESPACE_GLOBAL<<"::"<<func_name<<":\n";
-		std::cout<<e.what()<<"\n";
-		error=true;
-	}
-	
-	if(error) throw std::runtime_error("I/O Error: Failed to read.");
-	else return sim;
-}*/
 
 }

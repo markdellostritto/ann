@@ -8,6 +8,7 @@
 // ann - structure
 #include "format.hpp"
 #include "structure_fwd.hpp"
+#include "sim.hpp"
 
 #ifndef DEBUG_VASP
 #define DEBUG_VASP 0
@@ -48,6 +49,18 @@ namespace POSCAR{
 static const char* NAMESPACE_LOCAL="POSCAR";
 void read(const char* file, const AtomType& atomT, Structure& struc);
 void write(const char* file, const AtomType& atomT, const Structure& struc);
+
+}
+
+//*****************************************************
+//XDATCAR
+//*****************************************************
+
+namespace XDATCAR{
+
+static const char* NAMESPACE_LOCAL="XDATCAR";
+void read(const char* file, const Interval& interval, const AtomType& atomT, Simulation& sim);
+//void write(const char* file, const Interval& interval, const AtomType& atomT, const Simulation& sim);
 
 }
 
