@@ -38,6 +38,8 @@
 #include "print.hpp"
 // ann - random
 #include "random.hpp"
+// ann - list
+#include "list.hpp"
 // ann - test - unit
 #include "test_unit.hpp"
 
@@ -218,6 +220,30 @@ void test_math_special_logp1(){
 	std::cout<<"time - approx = "<<time_approx<<" ns\n";
 	std::cout<<print::buf(str,char_buf)<<"\n";
 	delete[] str;
+}
+
+//**********************************************
+// list
+//**********************************************
+
+void test_list_shuffle(){
+	const int N=20;
+	int* arr=new int[N];
+	for(int i=0; i<N; ++i) arr[i]=i+1;
+	rng::gen::CG2 cg2=rng::gen::CG2(std::time(NULL));
+	
+	const int M=10;
+	char* str=new char[print::len_buf];
+	std::cout<<"TEST - LIST - SHUFFLE\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	for(int j=0; j<M; ++j){
+		std::cout<<"arr = "; for(int i=0; i<N; ++i) std::cout<<arr[i]<<" "; std::cout<<"\n";
+		list::shuffle(arr,N,cg2);
+	}
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	
+	delete[] str;
+	delete[] arr;
 }
 
 //**********************************************
@@ -997,7 +1023,7 @@ void test_unit_opt_sgd(){
 		+std::fabs(sgd.lambda()-sgdc.lambda())
 		+std::fabs(sgd.gamma()-sgdc.gamma())
 		+std::fabs(sgd.gamma0()-sgdc.gamma0())
-		+std::fabs(sgd.pow()-sgdc.pow())
+		+std::fabs(sgd.power()-sgdc.power())
 		+std::abs(size_pack-size)
 		+std::abs(size_unpack-size)
 	);
@@ -1067,7 +1093,7 @@ void test_unit_opt_sdm(){
 		+std::fabs(sdm.lambda()-sdmc.lambda())
 		+std::fabs(sdm.gamma()-sdmc.gamma())
 		+std::fabs(sdm.gamma0()-sdmc.gamma0())
-		+std::fabs(sdm.pow()-sdmc.pow())
+		+std::fabs(sdm.power()-sdmc.power())
 		+std::fabs(sdm.eta()-sdmc.eta())
 		+std::abs(size_pack-size)
 		+std::abs(size_unpack-size)
@@ -1137,7 +1163,8 @@ void test_unit_opt_nag(){
 		+std::fabs(nag.lambda()-nagc.lambda())
 		+std::fabs(nag.gamma()-nagc.gamma())
 		+std::fabs(nag.gamma0()-nagc.gamma0())
-		+std::fabs(nag.pow()-nagc.pow())
+		+std::fabs(nag.power()-nagc.power())
+		+std::fabs(nag.power()-nagc.power())
 		+std::fabs(nag.eta()-nagc.eta())
 		+std::abs(size_pack-size)
 		+std::abs(size_unpack-size)
@@ -1206,7 +1233,7 @@ void test_unit_opt_adam(){
 		+std::fabs(adam.lambda()-adamc.lambda())
 		+std::fabs(adam.gamma()-adamc.gamma())
 		+std::fabs(adam.gamma0()-adamc.gamma0())
-		+std::fabs(adam.pow()-adamc.pow())
+		+std::fabs(adam.power()-adamc.power())
 		+std::fabs(adam.beta1i()-adamc.beta1i())
 		+std::fabs(adam.beta2i()-adamc.beta2i())
 		+std::abs(size_pack-size)
@@ -1276,7 +1303,7 @@ void test_unit_opt_nadam(){
 		+std::fabs(nadam.lambda()-nadamc.lambda())
 		+std::fabs(nadam.gamma()-nadamc.gamma())
 		+std::fabs(nadam.gamma0()-nadamc.gamma0())
-		+std::fabs(nadam.pow()-nadamc.pow())
+		+std::fabs(nadam.power()-nadamc.power())
 		+std::fabs(nadam.beta1i()-nadamc.beta1i())
 		+std::fabs(nadam.beta2i()-nadamc.beta2i())
 		+std::abs(size_pack-size)
@@ -1286,6 +1313,76 @@ void test_unit_opt_nadam(){
 	char* str=new char[print::len_buf];
 	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - OPTIMIZE - NADAM\n";
+	std::cout<<"n_steps = "<<data.step()<<"\n";
+	std::cout<<"val     = "<<data.val()<<"\n";
+	std::cout<<"x       = "<<data.p().transpose()<<"\n";
+	std::cout<<"err - s = "<<errs<<"\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
+}
+
+void test_unit_opt_amsgrad(){
+	//rosenberg function
+	Rosen rosen;
+	//init data
+	Opt::Data data(2);
+	data.p()[0]=2.0*(1.0*std::rand()/RAND_MAX-0.5);
+	data.p()[1]=2.0*(1.0*std::rand()/RAND_MAX-0.5);
+	data.pOld()=data.p();
+	data.max()=100000;
+	data.nPrint()=100;
+	data.algo()=Opt::ALGO::AMSGRAD;
+	data.optVal()=Opt::VAL::FTOL_ABS;
+	data.tol()=1e-8;
+	//init optimizer
+	Opt::AMSGRAD amsgrad(data.dim());
+	amsgrad.decay()=Opt::DECAY::CONST;
+	amsgrad.alpha()=1;
+	amsgrad.gamma()=1e-3;
+	//optimize
+	for(int i=0; i<data.max(); ++i){
+		//compute the value and gradient
+		data.val()=rosen(data.p(),data.g());
+		//compute the new position
+		amsgrad.step(data);
+		//calculate the difference
+		data.dv()=std::fabs(data.val()-data.valOld());
+		data.dp()=(data.p()-data.pOld()).norm();
+		//check the break condition
+		switch(data.optVal()){
+			case Opt::VAL::FTOL_REL: if(data.dv()<data.tol()) break;
+			case Opt::VAL::XTOL_REL: if(data.dp()<data.tol()) break;
+			case Opt::VAL::FTOL_ABS: if(data.val()<data.tol()) break;
+		}
+		//print the status
+		data.pOld().noalias()=data.p();//set "old" p value
+		data.gOld().noalias()=data.g();//set "old" g value
+		data.valOld()=data.val();//set "old" value
+		//update step
+		++data.step();
+	}
+	//serialization
+	Opt::AMSGRAD amsgradc;
+	const int size=serialize::nbytes(amsgrad);
+	char* arr=new char[size];
+	const int size_pack=serialize::pack(amsgrad,arr);
+	const int size_unpack=serialize::unpack(amsgradc,arr);
+	const double errs=(
+		std::abs(amsgrad.dim()-amsgradc.dim())
+		+std::fabs(amsgrad.alpha()-amsgradc.alpha())
+		+std::fabs(amsgrad.lambda()-amsgradc.lambda())
+		+std::fabs(amsgrad.gamma()-amsgradc.gamma())
+		+std::fabs(amsgrad.gamma0()-amsgradc.gamma0())
+		+std::fabs(amsgrad.power()-amsgradc.power())
+		+std::fabs(amsgrad.beta1i()-amsgradc.beta1i())
+		+std::fabs(amsgrad.beta2i()-amsgradc.beta2i())
+		+std::abs(size_pack-size)
+		+std::abs(size_unpack-size)
+	);
+	//print
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	std::cout<<"TEST - UNIT - OPTIMIZE - AMSGRAD\n";
 	std::cout<<"n_steps = "<<data.step()<<"\n";
 	std::cout<<"val     = "<<data.val()<<"\n";
 	std::cout<<"x       = "<<data.p().transpose()<<"\n";
@@ -1329,13 +1426,15 @@ void test_unit_ewald_madelung(){
 	Ewald3D::Coulomb ewald;
 	static const double mc=1.74756;
 	//initialize the ewald object
-	ewald.init(strucg,1e-6);
+	const double prec=1e-8;
+	ewald.init(strucg,prec);
 	//compute the total energy
 	const double r0=0.5*a0;//min dist
 	const double mce=-2*ewald.energy(strucg)/strucg.nAtoms()*r0/units::consts::ke();
 	char* str=new char[print::len_buf];
 	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - EWALD - MADELUNG\n";
+	std::cout<<"prec              = "<<prec<<"\n";
 	std::cout<<"madelung constant = "<<mc<<"\n";
 	std::cout<<"madelung (ewald)  = "<<mce<<"\n";
 	std::cout<<"error (percent)   = "<<std::fabs((mce-mc)/mc*100.0)<<"\n";
@@ -1417,13 +1516,34 @@ void test_unit_string_hash(){
 // random
 //**********************************************
 
+void test_random_seed(){
+	
+	rng::gen::CG1 cg1v1;
+	rng::gen::CG1 cg1v2;
+	rng::gen::CG1 cg1v3;
+	
+	cg1v1.init(std::time(NULL));
+	cg1v2.init(std::time(NULL));
+	cg1v3.init(std::time(NULL));
+	
+	for(int i=0; i<5; ++i){
+		std::cout<<"cg1v1 "<<cg1v1.randf()<<"\n";
+	}
+	for(int i=0; i<5; ++i){
+		std::cout<<"cg1v2 "<<cg1v2.randf()<<"\n";
+	}
+	for(int i=0; i<5; ++i){
+		std::cout<<"cg1v3 "<<cg1v3.randf()<<"\n";
+	}
+}
+
 void test_random_time(){
 	//rng's
-	RNG::LCG lcg;
-	RNG::XOR xorc;
-	RNG::MWC mwc;
-	RNG::CG1 cg1;
-	RNG::CG2 cg2;
+	rng::gen::LCG lcg;
+	rng::gen::XOR xorc;
+	rng::gen::MWC mwc;
+	rng::gen::CG1 cg1;
+	rng::gen::CG2 cg2;
 	
 	//init
 	lcg.init(1);
@@ -1476,7 +1596,7 @@ void test_random_time(){
 void test_random_dist(){
 	//==== global variables ===
 	//random number generator
-	RNG::CG2 cg2=RNG::CG2(); cg2.init(1);
+	rng::gen::CG2 cg2=rng::gen::CG2(); cg2.init(1);
 	//histogram
 	const int N=1e6;
 	const int nbins=100;
@@ -1489,7 +1609,7 @@ void test_random_dist(){
 		//parameters
 		const double beta=1.26426748297829;
 		//dist
-		RNG::DistExp dist=RNG::DistExp(beta);
+		rng::dist::Exp dist=rng::dist::Exp(beta);
 		//histogram
 		const double xmin=0;
 		const double xmax=5.0*beta;
@@ -1521,7 +1641,7 @@ void test_random_dist(){
 		const double mu=0.0;
 		const double sigma=1.0;
 		//dist
-		RNG::DistNormal dist=RNG::DistNormal(mu,sigma);
+		rng::dist::Normal dist=rng::dist::Normal(mu,sigma);
 		//histogram
 		const double xmin=mu-5.0*sigma;
 		const double xmax=mu+5.0*sigma;
@@ -1555,14 +1675,15 @@ void test_random_dist(){
 
 void test_unit_nn(){
 	//local function variables
-	NN::Network nn,nn_copy;
+	NeuralNet::ANN nn,nn_copy;
+	NeuralNet::ANNInit init;
 	//resize the nn
-	nn.idev()=1.0;
-	nn.initType()=NN::InitN::HE;
-	nn.tfType()=NN::TransferN::TANH;
+	init.sigma()=1.0;
+	init.initType()=NeuralNet::InitN::HE;
+	nn.tfType()=NeuralNet::TransferN::TANH;
 	std::vector<int> nh(2);
 	nh[0]=7; nh[1]=5;
-	nn.resize(2,nh,3);
+	nn.resize(init,2,nh,3);
 	//pack
 	const int size=serialize::nbytes(nn);
 	char* memarr=new char[size];
@@ -1584,7 +1705,7 @@ void test_unit_nn_tfunc(){
 	
 	//linear
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_lin(ff,fd);
+	NeuralNet::TransferFFDV::f_lin(ff,fd);
 	writer=fopen("tfunc_linear.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1595,7 +1716,7 @@ void test_unit_nn_tfunc(){
 	
 	//sigmoid
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_sigmoid(ff,fd);
+	NeuralNet::TransferFFDV::f_sigmoid(ff,fd);
 	writer=fopen("tfunc_sigmoid.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1606,7 +1727,7 @@ void test_unit_nn_tfunc(){
 	
 	//tanh
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_tanh(ff,fd);
+	NeuralNet::TransferFFDV::f_tanh(ff,fd);
 	writer=fopen("tfunc_tanh.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1617,7 +1738,7 @@ void test_unit_nn_tfunc(){
 	
 	//isru
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_isru(ff,fd);
+	NeuralNet::TransferFFDV::f_isru(ff,fd);
 	writer=fopen("tfunc_isru.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1628,7 +1749,7 @@ void test_unit_nn_tfunc(){
 	
 	//arctan
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_arctan(ff,fd);
+	NeuralNet::TransferFFDV::f_arctan(ff,fd);
 	writer=fopen("tfunc_arctan.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1639,7 +1760,7 @@ void test_unit_nn_tfunc(){
 	
 	//softsign
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_softsign(ff,fd);
+	NeuralNet::TransferFFDV::f_softsign(ff,fd);
 	writer=fopen("tfunc_softsign.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1650,7 +1771,7 @@ void test_unit_nn_tfunc(){
 	
 	//softsign
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_softsign(ff,fd);
+	NeuralNet::TransferFFDV::f_softsign(ff,fd);
 	writer=fopen("tfunc_softsign.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1661,7 +1782,7 @@ void test_unit_nn_tfunc(){
 	
 	//relu
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_relu(ff,fd);
+	NeuralNet::TransferFFDV::f_relu(ff,fd);
 	writer=fopen("tfunc_relu.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1672,7 +1793,7 @@ void test_unit_nn_tfunc(){
 	
 	//softplus
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_softplus(ff,fd);
+	NeuralNet::TransferFFDV::f_softplus(ff,fd);
 	writer=fopen("tfunc_softplus.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1683,7 +1804,7 @@ void test_unit_nn_tfunc(){
 	
 	//softplus
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_softplus2(ff,fd);
+	NeuralNet::TransferFFDV::f_softplus2(ff,fd);
 	writer=fopen("tfunc_softplus2.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1694,7 +1815,7 @@ void test_unit_nn_tfunc(){
 	
 	//elu
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_elu(ff,fd);
+	NeuralNet::TransferFFDV::f_elu(ff,fd);
 	writer=fopen("tfunc_elu.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1705,7 +1826,7 @@ void test_unit_nn_tfunc(){
 	
 	//gelu
 	for(int i=0; i<N; ++i) ff[i]=xmin+dx*i;
-	NN::TransferFFDV::f_gelu(ff,fd);
+	NeuralNet::TransferFFDV::f_gelu(ff,fd);
 	writer=fopen("tfunc_gelu.dat","w");
 	if(writer!=NULL){
 		fprintf(writer,"#X F D\n");
@@ -1724,15 +1845,16 @@ void test_unit_nn_out(){
 	//init rand
 	std::srand(std::time(NULL));
 	//resize the nn
-	NN::Network nn;
-	nn.idev()=1.0;
-	nn.initType()=NN::InitN::HE;
-	nn.tfType()=NN::TransferN::TANH;
+	NeuralNet::ANN nn;
+	NeuralNet::ANNInit init;
+	init.sigma()=1.0;
+	init.initType()=NeuralNet::InitN::HE;
+	nn.tfType()=NeuralNet::TransferN::TANH;
 	std::vector<int> nh(2);
 	nh[0]=7; nh[1]=5;
 	//loop over all samples
 	for(int n=0; n<N; ++n){
-		nn.resize(nIn,nh,nOut);
+		nn.resize(init,nIn,nh,nOut);
 		//set input/output scaling
 		nn.inw()=Eigen::VectorXd::Random(nIn);
 		nn.inb()=Eigen::VectorXd::Random(nIn);
@@ -1745,13 +1867,26 @@ void test_unit_nn_out(){
 		//compute error
 		Eigen::VectorXd vec0,vec1,vec2,vec3,vec4;
 		Eigen::VectorXd grad1,grad2,grad3;
+		Eigen::VectorXd gradd1,gradd2,gradd3;
 		vec0=nn.inw().cwiseProduct(nn.in()+nn.inb());
-		vec1=nn.edge(0)*vec0+nn.bias(0); grad1=vec1;
+		vec1=nn.edge(0)*vec0+nn.bias(0); grad1=vec1; gradd1=vec1;
+		#ifndef NN_COMPUTE_D2
 		nn.tffdv(0)(vec1,grad1);
-		vec2=nn.edge(1)*vec1+nn.bias(1); grad2=vec2;
+		#else
+		nn.tffdv(0)(vec1,grad1,gradd1);
+		#endif
+		vec2=nn.edge(1)*vec1+nn.bias(1); grad2=vec2; gradd2=vec2;
+		#ifndef NN_COMPUTE_D2
 		nn.tffdv(1)(vec2,grad2);
-		vec3=nn.edge(2)*vec2+nn.bias(2); grad3=vec3;
+		#else
+		nn.tffdv(1)(vec2,grad2,gradd2);
+		#endif
+		vec3=nn.edge(2)*vec2+nn.bias(2); grad3=vec3; gradd3=vec3;
+		#ifndef NN_COMPUTE_D2
 		nn.tffdv(2)(vec3,grad3);
+		#else
+		nn.tffdv(2)(vec3,grad3,gradd3);
+		#endif
 		vec4=nn.outb()+nn.outw().cwiseProduct(vec3);
 		erra+=(vec4-nn.out()).norm();
 		errp+=(vec4-nn.out()).norm()/vec4.norm()*100;
@@ -1762,7 +1897,7 @@ void test_unit_nn_out(){
 	char* str=new char[print::len_buf];
 	//print the results
 	std::cout<<print::buf(str,char_buf)<<"\n";
-	std::cout<<"TEST - NN - OUT\n";
+	std::cout<<"TEST - ANN - OUT\n";
 	std::cout<<"transfer = "<<nn.tfType()<<"\n";
 	std::cout<<"config   = "<<nn.nIn()<<" "; for(int i=0; i<nh.size(); ++i) std::cout<<nh[i]<<" "; std::cout<<nn.nOut()<<"\n";
 	std::cout<<"erra     = "<<erra<<"\n";
@@ -1771,37 +1906,44 @@ void test_unit_nn_out(){
 	delete[] str;
 }
 
-void test_unit_nn_grad(){
+void test_unit_nn_dOutdVal(){
 	//local function variables
 	const int N=100;
 	double erra=0,errp=0;
-	NN::Network nn;
+	double time=0;
+	NeuralNet::DOutDVal dOutDVal;
+	NeuralNet::ANN nn;
+	NeuralNet::ANNInit init;
 	std::vector<int> nh(2);
 	const int nIn=4;
 	const int nOut=3;
 	nh[0]=7; nh[1]=5;
-	nn.idev()=1.0;
-	nn.initType()=NN::InitN::HE;
-	nn.tfType()=NN::TransferN::TANH;
+	init.sigma()=1.0;
+	init.initType()=NeuralNet::InitN::HE;
+	nn.tfType()=NeuralNet::TransferN::TANH;
 	//init rand
 	std::srand(std::time(NULL));
 	//loop over all samples
 	for(int m=0; m<N; ++m){
 		//resize the nn
 		Eigen::MatrixXd dOutExact,dOutApprox;
-		nn.resize(nIn,nh,nOut);
+		nn.resize(init,nIn,nh,nOut);
+		dOutDVal.resize(nn);
 		//set input/output scaling
 		nn.inw()=Eigen::VectorXd::Random(nIn);
 		nn.inb()=Eigen::VectorXd::Random(nIn);
 		nn.outw()=Eigen::VectorXd::Random(nOut);
 		nn.outb()=Eigen::VectorXd::Random(nOut);
 		//initialize the input nodes
-		for(int n=0; n<nn.nIn(); ++n) nn.in()[n]=std::rand()/RAND_MAX-0.5;
+		for(int n=0; n<nn.nIn(); ++n) nn.in()[n]=(1.0*std::rand())/RAND_MAX-0.5;
 		Eigen::VectorXd in=nn.in();
 		//execute the network, compute analytic gradient
 		nn.execute();
-		nn.grad_out();
-		dOutApprox=nn.dodi();
+		clock_t start=std::clock();
+		dOutDVal.grad(nn);
+		clock_t stop=std::clock();
+		time+=((double)(stop-start))/CLOCKS_PER_SEC*1e9/N;
+		dOutApprox=dOutDVal.dodi();
 		//compute brute force gradient
 		dOutExact=Eigen::MatrixXd::Zero(nn.nOut(),nn.nIn());
 		Eigen::VectorXd delta=Eigen::VectorXd::Random(nn.nIn())/100.0;
@@ -1827,14 +1969,148 @@ void test_unit_nn_grad(){
 	//compute the error
 	erra/=N;
 	errp/=N;
+	time/=N;
 	//print the results
 	char* str=new char[print::len_buf];
 	std::cout<<print::buf(str,char_buf)<<"\n";
-	std::cout<<"TEST - NN - GRAD\n";
+	std::cout<<"TEST - ANN - DOutDVal\n";
 	std::cout<<"transfer = "<<nn.tfType()<<"\n";
 	std::cout<<"config   = "<<nn.nIn()<<" "; for(int i=0; i<nh.size(); ++i) std::cout<<nh[i]<<" "; std::cout<<nn.nOut()<<"\n";
 	std::cout<<"erra     = "<<erra<<"\n";
 	std::cout<<"errp     = "<<errp<<"\n";
+	std::cout<<"time     = "<<time<<"\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
+}
+
+void test_unit_nn_dOutDP(){
+	//local function variables
+	const int N=100;
+	double erra=0,errp=0;
+	clock_t start,stop;
+	double time=0;
+	NeuralNet::DOutDP dOutDP;
+	NeuralNet::ANN nn,nn_copy;
+	NeuralNet::ANNInit init;
+	std::vector<int> nh(3);
+	const int nIn=4;
+	const int nOut=3;
+	nh[0]=7; nh[1]=5; nh[2]=4;
+	init.sigma()=1.0;
+	init.initType()=NeuralNet::InitN::HE;
+	nn.tfType()=NeuralNet::TransferN::TANH;
+	//init rand
+	std::srand(std::time(NULL));
+	//loop over all samples
+	for(int iter=0; iter<N; ++iter){
+		//resize the nn
+		nn.resize(init,nIn,nh,nOut);
+		dOutDP.resize(nn);
+		//set input/output scaling
+		nn.inw()=Eigen::VectorXd::Random(nIn);
+		nn.inb()=Eigen::VectorXd::Random(nIn);
+		nn.outw()=Eigen::VectorXd::Random(nOut);
+		nn.outb()=Eigen::VectorXd::Random(nOut);
+		//initialize the input nodes
+		for(int n=0; n<nn.nIn(); ++n) nn.in()[n]=(1.0*std::rand())/RAND_MAX-0.5;
+		//execute the network, compute analytic gradient
+		nn.execute();
+		start=std::clock();
+		dOutDP.grad(nn);
+		stop=std::clock();
+		time+=((double)(stop-start))/CLOCKS_PER_SEC*1e9/N;
+		std::vector<std::vector<Eigen::VectorXd> > gradBApprox=dOutDP.dodb();
+		std::vector<std::vector<Eigen::MatrixXd> > gradWApprox=dOutDP.dodw();
+		//compute brute force gradient - bias
+		std::vector<std::vector<Eigen::VectorXd> > gradBExact;
+		gradBExact.resize(nn.nOut());
+		for(int n=0; n<nn.nOut(); ++n){
+			gradBExact[n].resize(nn.nlayer());
+			for(int l=0; l<nn.nlayer(); ++l){
+				gradBExact[n][l]=Eigen::VectorXd::Zero(nn.bias(l).size());
+			}
+		}
+		for(int l=0; l<nn.nlayer(); ++l){
+			for(int i=0; i<nn.bias(l).size(); ++i){
+				const double delta=nn.bias(l)[i]/100.0;
+				//point 1
+				nn_copy=nn;
+				nn_copy.bias(l)[i]-=delta;
+				nn_copy.execute();
+				const Eigen::VectorXd pt1=nn_copy.out();
+				//point 2
+				nn_copy=nn;
+				nn_copy.bias(l)[i]+=delta;
+				nn_copy.execute();
+				const Eigen::VectorXd pt2=nn_copy.out();
+				//gradient
+				const Eigen::VectorXd grad=0.5*(pt2-pt1)/delta;
+				for(int n=0; n<nn.nOut(); ++n){
+					gradBExact[n][l](i)=grad(n);
+				}
+			}
+		}
+		std::vector<std::vector<Eigen::MatrixXd> > gradWExact;
+		gradWExact.resize(nn.nOut());
+		for(int n=0; n<nn.nOut(); ++n){
+			gradWExact[n].resize(nn.nlayer());
+			for(int l=0; l<nn.nlayer(); ++l){
+				gradWExact[n][l]=Eigen::MatrixXd::Zero(nn.edge(l).rows(),nn.edge(l).cols());
+			}
+		}
+		for(int l=0; l<nn.nlayer(); ++l){
+			for(int j=0; j<nn.edge(l).rows(); ++j){
+				for(int k=0; k<nn.edge(l).cols(); ++k){
+					const double delta=nn.edge(l)(j,k)/100.0;
+					//point 1
+					nn_copy=nn;
+					nn_copy.edge(l)(j,k)-=delta;
+					nn_copy.execute();
+					const Eigen::VectorXd pt1=nn_copy.out();
+					//point 2
+					nn_copy=nn;
+					nn_copy.edge(l)(j,k)+=delta;
+					nn_copy.execute();
+					const Eigen::VectorXd pt2=nn_copy.out();
+					//grad
+					const Eigen::VectorXd grad=0.5*(pt2-pt1)/delta;
+					for(int n=0; n<nn.nOut(); ++n){
+						gradWExact[n][l](j,k)=grad[n];
+					}
+				}
+			}
+		}
+		//compute the error
+		for(int n=0; n<nn.nOut(); ++n){
+			for(int l=0; l<nn.nlayer(); ++l){
+				//std::cout<<"gradBApprox["<<n<<"]["<<l<<"] = \n"<<gradBApprox[n][l]<<"\n";
+				//std::cout<<"gradBExact["<<n<<"]["<<l<<"] = \n"<<gradBExact[n][l]<<"\n";
+				erra+=(gradBExact[n][l]-gradBApprox[n][l]).norm();
+				errp+=(gradBExact[n][l]-gradBApprox[n][l]).norm()/gradBExact[n][l].norm()*100;
+			}
+		}
+		for(int n=0; n<nn.nOut(); ++n){
+			for(int l=0; l<nn.nlayer(); ++l){
+				//std::cout<<"gradWApprox["<<n<<"]["<<l<<"] = \n"<<gradWApprox[n][l]<<"\n";
+				//std::cout<<"gradWExact["<<n<<"]["<<l<<"] = \n"<<gradWExact[n][l]<<"\n";
+				erra+=(gradWExact[n][l]-gradWApprox[n][l]).norm();
+				errp+=(gradWExact[n][l]-gradWApprox[n][l]).norm()/gradWExact[n][l].norm()*100;
+			}
+		}
+	}
+	//compute the error
+	erra/=N;
+	errp/=N;
+	time/=N;
+	//print the results
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	std::cout<<"TEST - ANN - DOutDP\n";
+	std::cout<<"transfer = "<<nn.tfType()<<"\n";
+	std::cout<<"config   = "<<nn.nIn()<<" "; for(int i=0; i<nh.size(); ++i) std::cout<<nh[i]<<" "; std::cout<<nn.nOut()<<"\n";
+	std::cout<<"erra     = "<<erra<<"\n";
+	std::cout<<"errp     = "<<errp<<"\n";
+	std::cout<<"time     = "<<time<<"\n";
 	std::cout<<print::buf(str,char_buf)<<"\n";
 	delete[] str;
 }
@@ -1852,12 +2128,14 @@ void test_unit_nn_time(){
 	nh[3].resize(3,5);
 	std::srand(std::time(NULL));
 	for(int m=0; m<M; ++m){
-		NN::Network nn;
-		nn.idev()=1.0;
-		nn.initType()=NN::InitN::HE;
-		nn.tfType()=NN::TransferN::TANH;
-		if(nh[m].size()>=0) nn.resize(3,3);
-		else nn.resize(3,nh[m],3);
+		NeuralNet::ANN nn;
+		NeuralNet::ANNInit init;
+		init.sigma()=1.0;
+		init.initType()=NeuralNet::InitN::HE;
+		nn.tfType()=NeuralNet::TransferN::TANH;
+		if(nh[m].size()>=0) nn.resize(init,3,3);
+		else nn.resize(init,3,nh[m],3);
+		NeuralNet::Cost cost(nn);
 		start=std::clock();
 		for(int n=0; n<N; ++n){
 			//initialize the input nodes
@@ -1874,7 +2152,7 @@ void test_unit_nn_time(){
 			Eigen::VectorXd grad=Eigen::VectorXd::Random(nn.size());
 			Eigen::VectorXd dcdo=Eigen::VectorXd::Random(3);
 			//compute gradient
-			nn.grad(dcdo,grad);
+			cost.grad(nn,dcdo);
 		}
 		stop=std::clock();
 		time_grad[m]=((double)(stop-start))/CLOCKS_PER_SEC*1e9/N;
@@ -1887,7 +2165,7 @@ void test_unit_nn_time(){
 	double time_avg=0;
 	char* str=new char[print::len_buf];
 	std::cout<<print::buf(str,char_buf)<<"\n";
-	std::cout<<"TEST - NN - TIME - EXECUTION\n";
+	std::cout<<"TEST - ANN - TIME - EXECUTION\n";
 	std::cout<<"transfer = TANH\n";
 	std::cout<<"time - "<<time_exec[0]<<" ns - "; for(int i=0; i<config[0].size(); ++i) std::cout<<config[0][i]<<" "; std::cout<<"\n";
 	std::cout<<"time - "<<time_exec[1]<<" ns - "; for(int i=0; i<config[1].size(); ++i) std::cout<<config[1][i]<<" "; std::cout<<"\n";
@@ -1898,7 +2176,7 @@ void test_unit_nn_time(){
 	std::cout<<"time - avg = "<<time_avg/time_exec.size()<<"\n";
 	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<print::buf(str,char_buf)<<"\n";
-	std::cout<<"TEST - NN - TIME - GRADIENT\n";
+	std::cout<<"TEST - ANN - TIME - GRADIENT\n";
 	std::cout<<"transfer = TANH\n";
 	std::cout<<"time - "<<time_grad[0]<<" ns - "; for(int i=0; i<config[0].size(); ++i) std::cout<<config[0][i]<<" "; std::cout<<"\n";
 	std::cout<<"time - "<<time_grad[1]<<" ns - "; for(int i=0; i<config[1].size(); ++i) std::cout<<config[1][i]<<" "; std::cout<<"\n";
@@ -1912,24 +2190,25 @@ void test_unit_nn_time(){
 }
 
 //**********************************************
-// nn
+// nn-pot
 //**********************************************
 
 void test_unit_nnh(){
 	NNH nnh,nnh_copy;
+	NeuralNet::ANNInit init;
 	//initialize neural network
 	std::cout<<"initializing neural network\n";
 	std::vector<int> nh(4);
 	nh[0]=12; nh[1]=8; nh[2]=4; nh[3]=2;
-	nnh.nn().idev()=1.0;
-	nnh.nn().initType()=NN::InitN::HE;
-	nnh.nn().tfType()=NN::TransferN::ARCTAN;
-	nnh.nn().seed()=-1;
-	nnh.nn().resize(nh);
+	init.sigma()=1.0;
+	init.initType()=NeuralNet::InitN::HE;
+	init.seed()=-1;
+	nnh.nn().tfType()=NeuralNet::TransferN::ARCTAN;
+	nnh.nn().resize(init,nh);
 	//initialize basis
 	std::cout<<"initializing basis\n";
-	BasisR basisR; basisR.init_G2(6,cutoff::Name::COS,10.0);
-	BasisA basisA; basisA.init_G4(4,cutoff::Name::COS,10.0);
+	BasisR basisR; basisR.init_G2(6,NormN::UNIT,cutoff::Name::COS,10.0);
+	BasisA basisA; basisA.init_G4(4,NormN::UNIT,cutoff::Name::COS,10.0);
 	std::vector<Atom> species(2);
 	species[0].name()="Ar";
 	species[0].id()=string::hash("Ar");
@@ -1940,8 +2219,7 @@ void test_unit_nnh(){
 	species[1].mass()=12.0;
 	species[1].energy()=-9.0;
 	nnh.atom()=species[0];
-	nnh.rc()=10.0;
-	nnh.resize(species);
+	nnh.resize(species.size());
 	nnh.basisR(0)=basisR;
 	nnh.basisR(1)=basisR;
 	nnh.basisA(0,0)=basisA;
@@ -1964,19 +2242,20 @@ void test_unit_nnh(){
 void test_unit_nnp(){
 	NNH nnh;
 	NNPot nnp,nnp_copy;
+	NeuralNet::ANNInit init;
 	//initialize neural network
 	std::cout<<"initializing neural network\n";
 	std::vector<int> nh(4);
 	nh[0]=12; nh[1]=8; nh[2]=4; nh[3]=2;
-	nnh.nn().idev()=1.0;
-	nnh.nn().initType()=NN::InitN::HE;
-	nnh.nn().tfType()=NN::TransferN::ARCTAN;
-	nnh.nn().seed()=-1;
-	nnh.nn().resize(nh);
+	init.sigma()=1.0;
+	init.initType()=NeuralNet::InitN::HE;
+	init.seed()=-1;
+	nnh.nn().tfType()=NeuralNet::TransferN::ARCTAN;
+	nnh.nn().resize(init,nh);
 	//initialize basis
 	std::cout<<"initializing basis\n";
-	BasisR basisR; basisR.init_G2(6,cutoff::Name::COS,10.0);
-	BasisA basisA; basisA.init_G4(4,cutoff::Name::COS,10.0);
+	BasisR basisR; basisR.init_G2(6,NormN::UNIT,cutoff::Name::COS,10.0);
+	BasisA basisA; basisA.init_G4(4,NormN::UNIT,cutoff::Name::COS,10.0);
 	std::vector<Atom> species(2);
 	species[0].name()="Ar";
 	species[0].id()=string::hash("Ar");
@@ -1986,9 +2265,8 @@ void test_unit_nnp(){
 	species[1].id()=string::hash("Ne");
 	species[1].mass()=12.0;
 	species[1].energy()=-9.0;
-	nnh.rc()=10.0;
 	nnh.atom()=species[0];
-	nnh.resize(species);
+	nnh.resize(species.size());
 	nnh.basisR(0)=basisR;
 	nnh.basisR(1)=basisR;
 	nnh.basisA(0,0)=basisA;
@@ -2285,6 +2563,16 @@ int main(int argc, char* argv[]){
 	std::cout<<print::buf(str)<<"\n";
 	
 	//**********************************************
+	// list
+	//**********************************************
+	
+	std::cout<<print::buf(str)<<"\n";
+	std::cout<<print::title("LIST",str)<<"\n";
+	test_list_shuffle();
+	std::cout<<print::title("LIST",str)<<"\n";
+	std::cout<<print::buf(str)<<"\n";
+	
+	//**********************************************
 	// accumulator - 1D
 	//**********************************************
 
@@ -2355,6 +2643,7 @@ int main(int argc, char* argv[]){
 	test_unit_opt_nag();
 	test_unit_opt_adam();
 	test_unit_opt_nadam();
+	test_unit_opt_amsgrad();
 	std::cout<<print::title("OPTIMIZE",str)<<"\n";
 	std::cout<<print::buf(str)<<"\n";
 	
@@ -2385,6 +2674,7 @@ int main(int argc, char* argv[]){
 	
 	std::cout<<print::buf(str)<<"\n";
 	std::cout<<print::title("RANDOM",str)<<"\n";
+	test_random_seed();
 	test_random_time();
 	test_random_dist();
 	std::cout<<print::title("RANDOM",str)<<"\n";
@@ -2395,13 +2685,15 @@ int main(int argc, char* argv[]){
 	//**********************************************
 	
 	std::cout<<print::buf(str)<<"\n";
-	std::cout<<print::title("NN",str)<<"\n";
+	std::cout<<print::title("ANN",str)<<"\n";
 	test_unit_nn();
 	test_unit_nn_tfunc();
 	test_unit_nn_out();
-	test_unit_nn_grad();
+	test_unit_nn_dOutdVal();
+	test_unit_nn_dOutDP();
+	//test_unit_nn_grad2();
 	test_unit_nn_time();
-	std::cout<<print::title("NN",str)<<"\n";
+	std::cout<<print::title("ANN",str)<<"\n";
 	std::cout<<print::buf(str)<<"\n";
 	
 	//**********************************************

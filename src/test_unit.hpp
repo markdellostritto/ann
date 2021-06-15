@@ -44,6 +44,12 @@ void test_math_special_sin();
 void test_math_special_logp1();
 
 //**********************************************
+// list
+//**********************************************
+
+void test_list_shuffle();
+
+//**********************************************
 // accumulator - 1D
 //**********************************************
 
@@ -82,6 +88,7 @@ void test_unit_opt_sdm();
 void test_unit_opt_nag();
 void test_unit_opt_adam();
 void test_unit_opt_nadam();
+void test_unit_opt_amsgrad();
 
 //**********************************************
 // ewald
@@ -100,6 +107,7 @@ void test_unit_string_hash();
 // random
 //**********************************************
 
+void test_random_seed();
 void test_random_time();
 void test_random_dist();
 
@@ -110,7 +118,8 @@ void test_random_dist();
 void test_unit_nn();
 void test_unit_nn_tfunc();
 void test_unit_nn_out();
-void test_unit_nn_grad();
+void test_unit_nn_dOutdVal();
+void test_unit_nn_dOutDP();
 void test_unit_nn_time();
 
 //**********************************************
