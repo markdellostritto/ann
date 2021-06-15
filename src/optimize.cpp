@@ -4,6 +4,7 @@
 #elif (defined __ICC || defined __INTEL_COMPILER)
 #include <mathimf.h> //intel math library
 #endif
+#include <ctime>
 // c++ libraries
 #include <iostream>
 #include <string>
@@ -122,6 +123,7 @@ std::ostream& operator<<(std::ostream& out, const DECAY::type& type){
 		case DECAY::INV: out<<"INV"; break;
 		case DECAY::POW: out<<"POW"; break;
 		case DECAY::STEP: out<<"STEP"; break;
+		case DECAY::COS: out<<"COS"; break;
 		default: out<<"UNKNOWN"; break;
 	}
 	return out;
@@ -134,6 +136,7 @@ DECAY::type DECAY::read(const char* str){
 	else if(std::strcmp(str,"INV")==0) return DECAY::INV;
 	else if(std::strcmp(str,"POW")==0) return DECAY::POW;
 	else if(std::strcmp(str,"STEP")==0) return DECAY::STEP;
+	else if(std::strcmp(str,"COS")==0) return DECAY::COS;
 	else return DECAY::UNKNOWN;
 }
 
@@ -201,9 +204,12 @@ std::ostream& operator<<(std::ostream& out, const Model& model){
 	out<<"DECAY  = "<<model.decay_<<"\n";
 	out<<"GAMMA  = "<<model.gamma_<<"\n";
 	out<<"GAMMA0 = "<<model.gamma0_<<"\n";
+	out<<"GMAX   = "<<model.gmax_<<"\n";
+	out<<"GMIN   = "<<model.gmin_<<"\n";
 	out<<"ALPHA  = "<<model.alpha_<<"\n";
 	out<<"LAMBDA = "<<model.lambda_<<"\n";
-	out<<"POW    = "<<model.power_;
+	out<<"POW    = "<<model.power_<<"\n";
+	out<<"MIX    = "<<model.mix_<<"\n";
 	return out;
 }
 
@@ -219,6 +225,7 @@ void Model::defaults(){
 	alpha_=1;
 	power_=0;
 	period_=0;
+	mix_=0;
 }
 
 void Model::init(int n){
@@ -234,9 +241,9 @@ void Model::update_step(int step){
 		case DECAY::SQRT: gamma_*=sqrt((1.0+alpha_*step)/(1.0+alpha_*(step+1))); break;
 		case DECAY::INV:  gamma_*=(1.0+alpha_*step)/(1.0+alpha_*(step+1)); break;
 		case DECAY::POW:  gamma_*=pow((1.0+alpha_*step)/(1.0+alpha_*(step+1)),power_); break;
-		case DECAY::STEP: if(step>0 && step%period_==0) gamma_*=alpha_;
-		break;
-		default: break;
+		case DECAY::STEP: if(step>0 && step%period_==0) gamma_*=alpha_; break;
+		case DECAY::COS:  gamma_=(gmax_-gmin_)*0.5*(std::cos(math::func::mod((2.0*math::constant::PI*step)/period_,math::constant::PI))+1.0)*exp(-alpha_*step)+gmin_; break;
+		default: throw std::invalid_argument("Model::update_step(int): invalid decay schedule.");
 	}
 }
 
@@ -542,6 +549,7 @@ void ADAM::init(int dim){
 	mgrad2_=Eigen::VectorXd::Zero(dim);
 	beta1i_=beta1_;//power w.r.t i
 	beta2i_=beta2_;//power w.r.t i
+	std::srand(std::time(NULL));
 }
 
 //NADAM
@@ -759,14 +767,14 @@ void RPROP::step(Data& d){
 		const double s=d.g()[n]*d.gOld()[n];
 		if(s>0){
 			delta_[n]=math::cmp::min(delta_[n]*etaP,deltaMax);
-			dx_[n]=-1.0*math::func::sign(d.g()[n])*delta_[n];
+			dx_[n]=-1.0*math::func::sgn(d.g()[n])*delta_[n];
 			d.p()[n]+=dx_[n];
 		}else if(s<0){
 			delta_[n]=math::cmp::max(delta_[n]*etaM,deltaMin);
 			if(inc) d.p()[n]-=dx_[n];
 			d.g()[n]=0.0;
 		} else if(s==0){
-			dx_[n]=-1.0*math::func::sign(d.g()[n])*delta_[n];
+			dx_[n]=-1.0*math::func::sgn(d.g()[n])*delta_[n];
 			d.p()[n]+=dx_[n];
 		}
 	}
@@ -779,7 +787,7 @@ void RPROP::step(Data& d){
 			delta_[n]=math::cmp::max(delta_[n]*etaM,deltaMin);
 			grad[n]=0.0;
 		}
-		x[n]-=math::func::sign(grad[n])*delta_[n];
+		x[n]-=math::func::sgn(grad[n])*delta_[n];
 	}*/
 }
 
@@ -976,7 +984,13 @@ Model& read(Model& model, FILE* reader){
 			model.power()=std::atof(strlist.at(1).c_str());
 		} else if(strlist.at(0)=="PERIOD"){
 			model.period()=std::atoi(strlist.at(1).c_str());
-		}
+		} else if(strlist.at(0)=="GMIN"){
+			model.gmin()=std::atof(strlist.at(1).c_str());
+		} else if(strlist.at(0)=="GMAX"){
+			model.gmax()=std::atof(strlist.at(1).c_str());
+		} else if(strlist.at(0)=="MIX"){
+			model.mix()=std::atof(strlist.at(1).c_str());
+		} 
 	}
 	delete[] input;
 	return model;
@@ -1181,9 +1195,12 @@ template <> int nbytes(const Opt::Model& obj){
 	size+=sizeof(Opt::DECAY::type);//decay_
 	size+=sizeof(double);//gamma_
 	size+=sizeof(double);//gamma0_
+	size+=sizeof(double);//gmax_
+	size+=sizeof(double);//gmin_
 	size+=sizeof(double);//alpha_
 	size+=sizeof(double);//lambda_
 	size+=sizeof(double);//power_
+	size+=sizeof(double);//mix_
 	return size;
 }
 template <> int nbytes(const Opt::SGD& obj){
@@ -1306,9 +1323,12 @@ template <> int pack(const Opt::Model& obj, char* arr){
 	std::memcpy(arr+pos,&obj.decay(),sizeof(Opt::DECAY::type)); pos+=sizeof(Opt::DECAY::type);//decay_
 	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);//gamma_
 	std::memcpy(arr+pos,&obj.gamma0(),sizeof(double)); pos+=sizeof(double);//gamma0_
+	std::memcpy(arr+pos,&obj.gmax(),sizeof(double)); pos+=sizeof(double);//gmax_
+	std::memcpy(arr+pos,&obj.gmin(),sizeof(double)); pos+=sizeof(double);//gmin_
 	std::memcpy(arr+pos,&obj.alpha(),sizeof(double)); pos+=sizeof(double);//alpha_
 	std::memcpy(arr+pos,&obj.lambda(),sizeof(double)); pos+=sizeof(double);//lambda_
 	std::memcpy(arr+pos,&obj.power(),sizeof(double)); pos+=sizeof(double);//power_
+	std::memcpy(arr+pos,&obj.mix(),sizeof(double)); pos+=sizeof(double);//mix_
 	return pos;
 }
 template <> int pack(const Opt::SGD& obj, char* arr){
@@ -1431,9 +1451,12 @@ template <> int unpack(Opt::Model& obj, const char* arr){
 	std::memcpy(&obj.decay(),arr+pos,sizeof(Opt::DECAY::type)); pos+=sizeof(Opt::DECAY::type);//decay_
 	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);//gamma_
 	std::memcpy(&obj.gamma0(),arr+pos,sizeof(double)); pos+=sizeof(double);//gamma0_
+	std::memcpy(&obj.gmax(),arr+pos,sizeof(double)); pos+=sizeof(double);//gmax_
+	std::memcpy(&obj.gmin(),arr+pos,sizeof(double)); pos+=sizeof(double);//gmin_
 	std::memcpy(&obj.alpha(),arr+pos,sizeof(double)); pos+=sizeof(double);//alpha_
 	std::memcpy(&obj.lambda(),arr+pos,sizeof(double)); pos+=sizeof(double);//lambda_
 	std::memcpy(&obj.power(),arr+pos,sizeof(double)); pos+=sizeof(double);//power_
+	std::memcpy(&obj.mix(),arr+pos,sizeof(double)); pos+=sizeof(double);//mix_
 	return pos;
 }
 template <> int unpack(Opt::SGD& obj, const char* arr){

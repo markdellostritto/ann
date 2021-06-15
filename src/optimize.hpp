@@ -72,7 +72,8 @@ struct DECAY{
 		SQRT=3,
 		INV=4,
 		POW=5,
-		STEP=6
+		STEP=6,
+		COS=7
 	};
 	static type read(const char* str);
 };
@@ -173,6 +174,8 @@ protected:
 	double gamma_;//gradient step size
 	double gamma0_;//gradient step size - initial
 	double power_;//step decay power
+	double mix_;//mixing parameter
+	double gmax_,gmin_;
 public:
 	//==== constructors/destructors ====
 	Model(){defaults();}
@@ -196,10 +199,16 @@ public:
 	const double& gamma()const{return gamma_;}
 	double& gamma0(){return gamma0_;}
 	const double& gamma0()const{return gamma0_;}
+	double& gmin(){return gmin_;}
+	const double& gmin()const{return gmin_;}
+	double& gmax(){return gmax_;}
+	const double& gmax()const{return gmax_;}
 	double& lambda(){return lambda_;}
 	const double& lambda()const{return lambda_;}
 	double& power(){return power_;}
 	const double& power()const{return power_;}
+	double& mix(){return mix_;}
+	const double& mix()const{return mix_;}
 	
 	//==== member functions ====
 	void defaults();
@@ -212,7 +221,7 @@ public:
 };
 
 //steepest-desccent
-class SGD: public Model{
+class SGD final: public Model{
 public:
 	//constructors/destructors
 	SGD(){defaults();}
@@ -227,7 +236,7 @@ public:
 };
 
 //steepest-descent + momentum
-class SDM: public Model{
+class SDM final: public Model{
 private:
 	double eta_;//mixing term
 	Eigen::VectorXd dx_;//change in parameters
@@ -250,7 +259,7 @@ public:
 };
 
 //nesterov accelerated gradient
-class NAG: public Model{
+class NAG final: public Model{
 private:
 	double eta_;//mixing term
 	Eigen::VectorXd dx_;
@@ -273,7 +282,7 @@ public:
 };
 
 //adagrad
-class ADAGRAD: public Model{
+class ADAGRAD final: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
@@ -294,7 +303,7 @@ public:
 };
 
 //adadelta
-class ADADELTA: public Model{
+class ADADELTA final: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
 	double eta_;//mixing fraction
@@ -324,7 +333,7 @@ public:
 };
 
 //rmsprop
-class RMSPROP: public Model{
+class RMSPROP final: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
 	Eigen::VectorXd mgrad2_;//avg of square of gradient
@@ -345,7 +354,7 @@ public:
 };
 
 //adam
-class ADAM: public Model{
+class ADAM final: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
 	static const double beta1_;
@@ -377,7 +386,7 @@ public:
 };
 
 //nadam
-class NADAM: public Model{
+class NADAM final: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
 	static const double beta1_;
@@ -409,7 +418,7 @@ public:
 };
 
 //amsgrad
-class AMSGRAD: public Model{
+class AMSGRAD final: public Model{
 private:
 	static const double eps_;//small term to prevent divergence
 	static const double beta1_;
@@ -444,7 +453,7 @@ public:
 };
 
 //bfgs
-class BFGS: public Model{
+class BFGS final: public Model{
 private:
 	Eigen::MatrixXd B_,BOld_;
 	Eigen::VectorXd s_,y_;
@@ -462,7 +471,7 @@ public:
 };
 
 //rprop
-class RPROP: public Model{
+class RPROP final: public Model{
 private:
 	static const double etaP;
 	static const double etaM;

@@ -11,6 +11,8 @@
 #include <iostream>
 #include <exception>
 #include <algorithm>
+#include <random>
+#include <chrono>
 // ann - structure
 #include "structure.hpp"
 // ann - statistics
@@ -73,23 +75,24 @@ template <> int nbytes(const NNPotOpt& obj){
 	//optimization
 		size+=nbytes(obj.data_);
 		switch(obj.data_.algo()){
-			case Opt::ALGO::SGD:		size+=nbytes(static_cast<const Opt::SGD&>(*obj.model_)); break;
-			case Opt::ALGO::SDM:		size+=nbytes(static_cast<const Opt::SDM&>(*obj.model_)); break;
-			case Opt::ALGO::NAG:		size+=nbytes(static_cast<const Opt::NAG&>(*obj.model_)); break;
+			case Opt::ALGO::SGD:	size+=nbytes(static_cast<const Opt::SGD&>(*obj.model_)); break;
+			case Opt::ALGO::SDM:	size+=nbytes(static_cast<const Opt::SDM&>(*obj.model_)); break;
+			case Opt::ALGO::NAG:	size+=nbytes(static_cast<const Opt::NAG&>(*obj.model_)); break;
 			case Opt::ALGO::ADAGRAD:	size+=nbytes(static_cast<const Opt::ADAGRAD&>(*obj.model_)); break;
-			case Opt::ALGO::ADADELTA:	size+=nbytes(static_cast<const Opt::ADADELTA&>(*obj.model_)); break;
+			case Opt::ALGO::ADADELTA:size+=nbytes(static_cast<const Opt::ADADELTA&>(*obj.model_)); break;
 			case Opt::ALGO::RMSPROP:	size+=nbytes(static_cast<const Opt::RMSPROP&>(*obj.model_)); break;
-			case Opt::ALGO::ADAM:		size+=nbytes(static_cast<const Opt::ADAM&>(*obj.model_)); break;
-			case Opt::ALGO::NADAM:		size+=nbytes(static_cast<const Opt::NADAM&>(*obj.model_)); break;
+			case Opt::ALGO::ADAM:	size+=nbytes(static_cast<const Opt::ADAM&>(*obj.model_)); break;
+			case Opt::ALGO::NADAM:	size+=nbytes(static_cast<const Opt::NADAM&>(*obj.model_)); break;
 			case Opt::ALGO::AMSGRAD:	size+=nbytes(static_cast<const Opt::AMSGRAD&>(*obj.model_)); break;
-			case Opt::ALGO::BFGS:		size+=nbytes(static_cast<const Opt::BFGS&>(*obj.model_)); break;
-			case Opt::ALGO::RPROP:		size+=nbytes(static_cast<const Opt::RPROP&>(*obj.model_)); break;
+			case Opt::ALGO::BFGS:	size+=nbytes(static_cast<const Opt::BFGS&>(*obj.model_)); break;
+			case Opt::ALGO::RPROP:	size+=nbytes(static_cast<const Opt::RPROP&>(*obj.model_)); break;
 			default: throw std::runtime_error("nbytes(const NNPotOpt&): Invalid optimization method."); break;
 		}
 	//nn
 		size+=sizeof(bool);//pre-conditioning
 		size+=sizeof(NeuralNet::LossN);
 		size+=nbytes(obj.nnpot_);
+		size+=sizeof(double);//huberw_
 	//return the size
 		return size;
 }
@@ -123,6 +126,7 @@ template <> int pack(const NNPotOpt& obj, char* arr){
 		std::memcpy(arr+pos,&obj.preCond_,sizeof(bool)); pos+=sizeof(bool);
 		std::memcpy(arr+pos,&obj.loss_,sizeof(NeuralNet::LossN)); pos+=sizeof(NeuralNet::LossN);
 		pos+=pack(obj.nnpot_,arr+pos);
+		std::memcpy(arr+pos,&obj.huberw_,sizeof(double)); pos+=sizeof(double);
 	//return bytes written
 		return pos;
 }
@@ -191,6 +195,7 @@ template <> int unpack(NNPotOpt& obj, const char* arr){
 		std::memcpy(&obj.preCond_,arr+pos,sizeof(bool)); pos+=sizeof(bool);
 		std::memcpy(&obj.loss_,arr+pos,sizeof(NeuralNet::LossN)); pos+=sizeof(NeuralNet::LossN);
 		pos+=unpack(obj.nnpot_,arr+pos);
+		std::memcpy(&obj.huberw_,arr+pos,sizeof(double)); pos+=sizeof(double);
 	//return bytes read
 		return pos;
 }
@@ -237,6 +242,7 @@ std::ostream& operator<<(std::ostream& out, const NNPotOpt& nnPotOpt){
 	out<<print::title("NN - POT - OPT",str)<<"\n";
 	out<<"N_BATCH      = "<<nnPotOpt.nBatch_<<"\n";
 	out<<"LOSS         = "<<nnPotOpt.loss_<<"\n";
+	out<<"HUBERW       = "<<nnPotOpt.huberw_<<"\n";
 	out<<"CHARGE       = "<<nnPotOpt.charge_<<"\n";
 	out<<"CALC_FORCE   = "<<nnPotOpt.calcForce_<<"\n";
 	out<<"CALC_SYMM    = "<<nnPotOpt.calcSymm_<<"\n";
@@ -305,6 +311,7 @@ void NNPotOpt::defaults(){
 		charge_=false;
 		init_.clear();
 		loss_=NeuralNet::LossN::MSE;
+		huberw_=1.0;
 	//input/output
 		calcForce_=true;
 		calcSymm_=true;
@@ -427,13 +434,16 @@ void NNPotOpt::train(int batchSize){
 	if(NN_POT_TRAIN_PRINT_FUNC>0) std::cout<<"NNPotOpt::train(NNPot&,std::vector<Structure>&,int):\n";
 	//====== local function variables ======
 	//statistics
+		std::vector<int> N;//total number of inputs for each element
 		std::vector<Eigen::VectorXd> avg_in;//average of the inputs for each element (nnpot_.nSpecies_ x nInput_)
 		std::vector<Eigen::VectorXd> max_in;//max of the inputs for each element (nnpot_.nSpecies_ x nInput_)
 		std::vector<Eigen::VectorXd> min_in;//min of the inputs for each element (nnpot_.nSpecies_ x nInput_)
 		std::vector<Eigen::VectorXd> dev_in;//average of the stddev for each element (nnpot_.nSpecies_ x nInput_)
+	//timing
+		Clock clock;
 	//misc
 		int count=0;
-	
+		
 	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"training NN potential\n";
 	
 	//====== check the parameters ======
@@ -441,6 +451,9 @@ void NNPotOpt::train(int batchSize){
 	else if(strucTrain_->size()==0) throw std::invalid_argument("NNPotOpt::train(int): No training data provided.");
 	if(strucVal_==NULL) throw std::runtime_error("NNPotOpt::train(int): NULL POINTER - no validation structures.");
 	else if(strucVal_->size()==0) throw std::invalid_argument("NNPotOpt::train(int): No validation data provided.");
+	
+	//====== initialize the random number generator ======
+	rngen_=std::mt19937(std::chrono::system_clock::now().time_since_epoch().count());
 	
 	//====== compute the number of atoms of each element ======
 	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"computing the number of atoms of each element\n";
@@ -480,7 +493,7 @@ void NNPotOpt::train(int batchSize){
 	//indices
 	indices_.resize(strucTrain_->size());
 	for(int i=0; i<indices_.size(); ++i) indices_[i]=i;
-	std::random_shuffle(indices_.begin(),indices_.end());
+	std::shuffle(indices_.begin(),indices_.end(),rngen_);
 	parallel::bcast(BATCH.label(),0,indices_);
 	//batch
 	batch_.resize(batchSize,0);
@@ -488,8 +501,8 @@ void NNPotOpt::train(int batchSize){
 	cBatch_=0;
 	
 	//====== collect input statistics ======
-	//local variables
-	std::vector<int> N(nnpot_.nspecies());//total number of inputs for each element
+	//resize arrays
+	N.resize(nElements_);
 	avg_in.resize(nElements_);
 	max_in.resize(nElements_);
 	min_in.resize(nElements_);
@@ -515,10 +528,10 @@ void NNPotOpt::train(int batchSize){
 	}
 	//accumulate the number
 	for(int i=0; i<nElements_; ++i){
-		double Nloc=(1.0*N[i])/BATCH.size();
-		double temp=0;
-		MPI_Allreduce(&Nloc,&temp,1,MPI_DOUBLE,MPI_SUM,WORLD.label());
-		N[i]=(int)temp;
+		double Nloc=(1.0*N[i])/BATCH.size();//normalize by the size of the BATCH group
+		double tmp=0;
+		MPI_Allreduce(&Nloc,&tmp,1,MPI_DOUBLE,MPI_SUM,WORLD.label());
+		N[i]=static_cast<int>(std::round(tmp));
 	}
 	//compute the max/min
 	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"compute the max/min\n";
@@ -550,16 +563,16 @@ void NNPotOpt::train(int batchSize){
 	//accumulate the min/max
 	for(int i=0; i<min_in.size(); ++i){
 		for(int j=0; j<min_in[i].size(); ++j){
-			double temp=0;
-			MPI_Allreduce(&min_in[i][j],&temp,1,MPI_DOUBLE,MPI_MIN,WORLD.label());
-			min_in[i][j]=temp;
+			double tmp=0;
+			MPI_Allreduce(&min_in[i][j],&tmp,1,MPI_DOUBLE,MPI_MIN,WORLD.label());
+			min_in[i][j]=tmp;
 		}
 	}
 	for(int i=0; i<max_in.size(); ++i){
 		for(int j=0; j<max_in[i].size(); ++j){
-			double temp=0;
-			MPI_Allreduce(&max_in[i][j],&temp,1,MPI_DOUBLE,MPI_MAX,WORLD.label());
-			max_in[i][j]=temp;
+			double tmp=0;
+			MPI_Allreduce(&max_in[i][j],&tmp,1,MPI_DOUBLE,MPI_MAX,WORLD.label());
+			max_in[i][j]=tmp;
 		}
 	}
 	//compute the average - loop over all structures
@@ -577,10 +590,10 @@ void NNPotOpt::train(int batchSize){
 	//accumulate the average
 	for(int i=0; i<avg_in.size(); ++i){
 		for(int j=0; j<avg_in[i].size(); ++j){
-			double temp=0;
-			avg_in[i][j]/=BATCH.size();
-			MPI_Allreduce(&avg_in[i][j],&temp,1,MPI_DOUBLE,MPI_SUM,WORLD.label());
-			avg_in[i][j]=temp/N[i];
+			double tmp=0;
+			avg_in[i][j]/=BATCH.size();//normalize by the size of the BATCH group
+			MPI_Allreduce(&avg_in[i][j],&tmp,1,MPI_DOUBLE,MPI_SUM,WORLD.label());
+			avg_in[i][j]=tmp/N[i];
 		}
 	}
 	//compute the stddev - loop over all structures
@@ -598,10 +611,10 @@ void NNPotOpt::train(int batchSize){
 	//accumulate the stddev
 	for(int i=0; i<dev_in.size(); ++i){
 		for(int j=0; j<dev_in[i].size(); ++j){
-			double temp=0;
-			dev_in[i][j]/=BATCH.size();
-			MPI_Allreduce(&dev_in[i][j],&temp,1,MPI_DOUBLE,MPI_SUM,WORLD.label());
-			dev_in[i][j]=std::sqrt(temp/(N[i]-1.0));
+			double tmp=0;
+			dev_in[i][j]/=BATCH.size();//normalize by the size of the BATCH group
+			MPI_Allreduce(&dev_in[i][j],&tmp,1,MPI_DOUBLE,MPI_SUM,WORLD.label());
+			dev_in[i][j]=std::sqrt(tmp/(N[i]-1.0));
 		}
 	}
 	
@@ -614,18 +627,17 @@ void NNPotOpt::train(int batchSize){
 	}
 	if(preCond_){
 		if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"pre-conditioning input\n";
-		//set the preconditioning vectors
-		//inb_=avg_in;//resize only
+		//set the preconditioning vectors - bias
 		for(int i=0; i<inb_.size(); ++i){
 			for(int j=0; j<inb_[i].size(); ++j){
 				inb_[i][j]=-1*avg_in[i][j];
 			}
 		}
-		//inw_=dev_in;//resize only
+		//set the preconditioning vectors - weight
 		for(int i=0; i<inw_.size(); ++i){
 			for(int j=0; j<inw_[i].size(); ++j){
-				if(inw_[i][j]==0) inw_[i][j]=1;
-				else inw_[i][j]=1.0/(1.0*inw_[i][j]);
+				if(dev_in[i][j]==0) inw_[i][j]=1;
+				else inw_[i][j]=1.0/(1.0*dev_in[i][j]);
 			}
 		}
 	}
@@ -633,29 +645,37 @@ void NNPotOpt::train(int batchSize){
 	//====== set the bias for each of the species ======
 	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"setting the bias for each species\n";
 	for(int n=0; n<nElements_; ++n){
-		for(int i=0; i<nnpot_.nnh(n).nn().nIn(); ++i) nnpot_.nnh(n).nn().inb()[i]=inb_[n][i];
-		for(int i=0; i<nnpot_.nnh(n).nn().nIn(); ++i) nnpot_.nnh(n).nn().inw()[i]=inw_[n][i];
-		nnpot_.nnh(n).nn().outb()[0]=0.0;
-		nnpot_.nnh(n).nn().outw()[0]=1.0;
+		NeuralNet::ANN& nn_=nnpot_.nnh(n).nn();
+		for(int i=0; i<nn_.nIn(); ++i) nn_.inb()[i]=inb_[n][i];
+		for(int i=0; i<nn_.nIn(); ++i) nn_.inw()[i]=inw_[n][i];
+		nn_.outb()[0]=0.0;
+		nn_.outw()[0]=1.0;
 	}
 	
-	//====== initialize the optimization data ======
+	//====== resize the optimization data ======
 	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"initializing the optimization data\n";
-	//set parameters for each element
+	//resize per-element arrays
 	pElement_.resize(nElements_);
 	gElement_.resize(nElements_);
 	gTotal_.resize(nElements_);
 	gLocal_.resize(nElements_);
 	nParams_=0;
 	for(int n=0; n<nElements_; ++n){
-		nnpot_.nnh(n).nn()>>pElement_[n];//resizes vector and sets values
-		nnpot_.nnh(n).nn()>>gElement_[n];//resizes vector
-		nnpot_.nnh(n).nn()>>gTotal_[n];  //resizes vector
-		nnpot_.nnh(n).nn()>>gLocal_[n];  //resizes vector
-		gElement_[n]=Eigen::VectorXd::Random(gElement_[n].size())*1e-6;
-		nParams_+=pElement_[n].size();
+		const int nn_size=nnpot_.nnh(n).nn().size();
+		pElement_[n]=Eigen::VectorXd::Zero(nn_size);
+		gElement_[n]=Eigen::VectorXd::Zero(nn_size);
+		gTotal_[n]=Eigen::VectorXd::Zero(nn_size);
+		gLocal_[n]=Eigen::VectorXd::Zero(nn_size);
+		nParams_+=nn_size;
 	}
-	//set initial parameters
+	//resize gradient objects
+	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"resizing gradient data\n";
+	cost_.resize(nElements_);
+	for(int i=0; i<nElements_; ++i){
+		cost_[i].resize(nnpot_.nnh(i).nn());
+	}
+	
+	//====== initialize the optimization data ======
 	if(restart_){
 		//restart
 		if(WORLD.rank()==0) std::cout<<"restarting optimization\n";
@@ -670,7 +690,12 @@ void NNPotOpt::train(int batchSize){
 		//resize the optimization objects
 		data_.init(nParams_);
 		model_->init(nParams_);
-		//set initial values
+		//load random initial values in the per-element arrays
+		for(int n=0; n<nElements_; ++n){
+			nnpot_.nnh(n).nn()>>pElement_[n];
+			gElement_[n]=Eigen::VectorXd::Random(nnpot_.nnh(n).nn().size())*1e-6;
+		}
+		//load initial values from per-element arrays into global arrays
 		count=0;
 		for(int n=0; n<nElements_; ++n){
 			for(int m=0; m<pElement_[n].size(); ++m){
@@ -681,7 +706,7 @@ void NNPotOpt::train(int batchSize){
 		}
 	}
 	
-	//====== print optimization data ======
+	//====== print input statistics and bias ======
 	if(NN_POT_TRAIN_PRINT_DATA>-1 && WORLD.rank()==0){
 		char* str=new char[print::len_buf];
 		std::cout<<print::buf(str)<<"\n";
@@ -698,18 +723,11 @@ void NNPotOpt::train(int batchSize){
 		delete[] str;
 	}
 	
-	//====== resize gradient data ======
-	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"resizing gradient data\n";
-	cost_.resize(nnpot_.nspecies());
-	for(int i=0; i<nnpot_.nspecies(); ++i){
-		cost_[i].resize(nnpot_.nnh(i).nn());
-	}
-	
 	//====== execute the optimization ======
 	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"executing the optimization\n";
 	//optimization variables
 	bool fbreak=false;
-	identity_.resize(1); identity_[0]=1;
+	identity_=Eigen::VectorXd::Constant(1,1);
 	//bcast parameters
 	MPI_Bcast(data_.p().data(),data_.p().size(),MPI_DOUBLE,0,WORLD.label());
 	//allocate status vectors
@@ -736,8 +754,9 @@ void NNPotOpt::train(int batchSize){
 	const double nBatchi_=1.0/nBatch_;
 	const double nVali_=1.0/nVal_;
 	if(WORLD.rank()==0) printf("opt gamma err_t err_v\n");
-	Clock clock;
+	//start the clock
 	clock.begin();
+	//begin optimization
 	for(int iter=0; iter<data_.max(); ++iter){
 		double error_train_sum_=0,error_val_sum_=0;
 		//compute the error and gradient
@@ -759,9 +778,8 @@ void NNPotOpt::train(int batchSize){
 			//pack the gradient
 			count=0;
 			for(int n=0; n<nElements_; ++n){
-				for(int m=0; m<gElement_[n].size(); ++m){
-					data_.g()[count++]=gElement_[n][m];
-				}
+				std::memcpy(data_.g().data()+count,gElement_[n].data(),gElement_[n].size()*sizeof(double));
+				count+=gElement_[n].size();
 			}
 			//print/write error
 			if(data_.step()%data_.nPrint()==0){
@@ -789,6 +807,11 @@ void NNPotOpt::train(int batchSize){
 			if(model_->lambda()>0){
 				const double fac=-1.0*model_->gamma()/model_->gamma0()*model_->lambda();
 				data_.p().noalias()+=fac*maskWeight.cwiseProduct(data_.pOld());
+			}
+			//update weights - mixing
+			if(model_->mix()>0){
+				data_.p()*=(1.0-model_->mix());
+				data_.p().noalias()+=data_.pOld()*model_->mix();
 			}
 			//compute the difference
 			data_.dv()=std::fabs(data_.val()-data_.valOld());
@@ -838,8 +861,9 @@ void NNPotOpt::train(int batchSize){
 		writer_error_=NULL;
 	}
 	
-	//====== unpack final parameters into element arrays ======
-	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"unpacking final parameters into element arrays\n";
+	//====== unpack final parameters ======
+	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"packing final parameters into neural network\n";
+	//unpack from global to per-element arrays
 	count=0;
 	for(int n=0; n<nElements_; ++n){
 		for(int m=0; m<pElement_[n].size(); ++m){
@@ -848,9 +872,7 @@ void NNPotOpt::train(int batchSize){
 			++count;
 		}
 	}
-	
-	//====== pack final parameters into neural network ======
-	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"packing final parameters into neural network\n";
+	//pack from per-element arrays into neural networks
 	for(int n=0; n<nElements_; ++n) nnpot_.nnh(n).nn()<<pElement_[n];
 	
 	if(NN_POT_TRAIN_PRINT_DATA>-1 && WORLD.rank()==0){
@@ -875,15 +897,15 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 	parallel::Dist dist_atom;
 	
 	//====== reset the error ======
-	error_train_=0;
+	error_train_=0; //error - training
+	error_val_=0;   //error - validation
 	
 	//====== unpack total parameters into element arrays ======
 	if(NN_POT_TRAIN_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"unpacking total parameters into element arrays\n";
 	int count=0;
 	for(int n=0; n<nElements_; ++n){
-		for(int m=0; m<pElement_[n].size(); ++m){
-			pElement_[n][m]=x[count++];
-		}
+		std::memcpy(pElement_[n].data(),x.data()+count,pElement_[n].size()*sizeof(double));
+		count+=pElement_[n].size();
 	}
 	
 	//====== unpack arrays into element nn's ======
@@ -899,7 +921,7 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 	for(int i=0; i<batch_.size(); ++i) batch_[i]=indices_[(cBatch_++)%indices_.size()];
 	std::sort(batch_.begin(),batch_.end());
 	if(cBatch_>=indices_.size()){
-		std::random_shuffle(indices_.begin(),indices_.end());
+		std::shuffle(indices_.begin(),indices_.end(),rngen_);
 		parallel::bcast(BATCH.label(),0,indices_);
 		cBatch_=0;
 	}
@@ -918,7 +940,7 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 		for(int n=0; n<dist_atom.size(); ++n){
 			//get the atom index
 			const int m=dist_atom.index(n);
-			//find the element index in the nn
+			//find the element index in the nn potential
 			const int index=nnpot_.index(strucl.name(m));
 			//execute the network
 			nnpot_.nnh(index).nn().execute(strucl.symm(m));
@@ -939,6 +961,7 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 		}
 		//compute the gradient (dc/da) of cost (c) w.r.t. output (a) normalized by number of atoms
 		const double dcda=(energyt-strucl.energy())/strucl.nAtoms();
+		//compute the error and parameter gradients
 		switch(loss_){
 			case NeuralNet::LossN::MSE:{
 				error_train_+=0.5*dcda*dcda;
@@ -949,11 +972,11 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 			case NeuralNet::LossN::MAE:{
 				error_train_+=std::fabs(dcda);
 				for(int j=0; j<nElements_; ++j){
-					gElement_[j].noalias()+=gTotal_[j]*math::func::sign(dcda)*1.0/strucl.nAtoms();
+					gElement_[j].noalias()+=gTotal_[j]*math::func::sgn(dcda)*1.0/strucl.nAtoms();
 				}
 			} break;
 			case NeuralNet::LossN::HUBER:{
-				const double w=1.0;
+				const double w=huberw_;
 				const double sqrtf=sqrt(1.0+(dcda*dcda)/(w*w));
 				error_train_+=w*w*(sqrtf-1.0);
 				for(int j=0; j<nElements_; ++j){
@@ -976,8 +999,9 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 			//compute the energy
 			double energyl=0;
 			for(int n=0; n<dist_atom.size(); ++n){
+				//get the atom index
 				const int m=dist_atom.index(n);
-				//find the element index in the m
+				//find the element index in the nn potential
 				const int index=nnpot_.index(strucl.name(m));
 				//execute the network
 				nnpot_.nnh(index).nn().execute(strucl.symm(m));
@@ -987,7 +1011,7 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 			//accumulate energy
 			double energyt=0;
 			MPI_Allreduce(&energyl,&energyt,1,MPI_DOUBLE,MPI_SUM,BATCH.label());
-			//add to the error - normalized by the number of atoms
+			//compute the error - normalized by the number of atoms
 			const double dcda=(energyt-strucl.energy())/strucl.nAtoms();
 			switch(loss_){
 				case NeuralNet::LossN::MSE:{
@@ -997,7 +1021,7 @@ double NNPotOpt::error(const Eigen::VectorXd& x){
 					error_val_+=std::fabs(dcda);
 				} break;
 				case NeuralNet::LossN::HUBER:{
-					const double w=1.0;
+					const double w=huberw_;
 					error_val_+=w*w*(sqrt(1.0+(dcda*dcda)/(w*w))-1.0);
 				} break;
 				default: break;
@@ -1081,7 +1105,7 @@ int main(int argc, char* argv[]){
 		char* input=new char[string::M];
 		char* strbuf=new char[print::len_buf];
 	//writing
-		bool write_basis=true;   //writing - basis functions
+		bool write_basis=false;   //writing - basis functions
 		bool write_energy=false; //writing - energies
 		bool write_ewald=false;  //writing - ewald energies
 		bool write_corr=false;   //writing - input correlation
@@ -1092,8 +1116,6 @@ int main(int argc, char* argv[]){
 		//************************************************************************************
 		// LOADING/INITIALIZATION
 		//************************************************************************************
-		
-		std::srand(std::time(NULL));
 		
 		//======== initialize mpi ========
 		MPI_Init(&argc,&argv);
@@ -1205,14 +1227,17 @@ int main(int argc, char* argv[]){
 				} else if(strlist.at(0)=="DATA_TEST"){//data - testing
 					data_test.push_back(strlist.at(1));
 				} else if(strlist.at(0)=="ATOM"){//atom - name/mass/energy
+					//process the string
 					const std::string name=strlist.at(1);
 					const std::string tag=string::to_upper(strlist.at(2));
 					const std::string val=strlist.at(3);
 					const int id=string::hash(name);
+					//look for the atom name in the existing list of atom names
 					int index=-1;
 					for(int i=0; i<nnPotOpt.atoms_.size(); ++i){
 						if(name==nnPotOpt.atoms_[i].name()){index=i;break;}
 					}
+					//if atom is not found, add it
 					if(index<0){
 						index=nnPotOpt.atoms_.size();
 						nnPotOpt.atoms_.push_back(Atom());
@@ -1221,6 +1246,7 @@ int main(int argc, char* argv[]){
 						nnPotOpt.files_basis_.resize(nnPotOpt.files_basis_.size()+1);
 						nnPotOpt.nh_.resize(nnPotOpt.nh_.size()+1);
 					}
+					//set tag value
 					if(tag=="MASS") nnPotOpt.atoms_[index].mass()=std::atof(val.c_str());
 					else if(tag=="CHARGE") nnPotOpt.atoms_[index].charge()=std::atof(val.c_str());
 					else if(tag=="ENERGY") nnPotOpt.atoms_[index].energy()=std::atof(val.c_str());
@@ -1231,7 +1257,7 @@ int main(int argc, char* argv[]){
 						nnPotOpt.nh_[index].resize(nl);
 						for(int i=0; i<nl; ++i){
 							nnPotOpt.nh_[index][i]=std::atoi(strlist.at(i+3).c_str());
-							if(nnPotOpt.nh_[index][i]==0) throw std::invalid_argument("Invalid hidden layer configuration.");
+							if(nnPotOpt.nh_[index][i]<=0) throw std::invalid_argument("Invalid hidden layer configuration.");
 						}
 					} else throw std::invalid_argument("Invalid atom tag.");
 				} 
@@ -1246,6 +1272,10 @@ int main(int argc, char* argv[]){
 					nnPotOpt.init_.distT()=rng::dist::Name::read(string::to_upper(strlist.at(1)).c_str());
 				} else if(strlist.at(0)=="INIT"){//initialization
 					nnPotOpt.init_.initType()=NeuralNet::InitN::read(string::to_upper(strlist.at(1)).c_str());
+				} else if(strlist.at(0)=="W_INIT"){//initialization
+					nnPotOpt.init_.wInit()=std::atof(strlist.at(1).c_str());
+				} else if(strlist.at(0)=="B_INIT"){//initialization
+					nnPotOpt.init_.bInit()=std::atof(strlist.at(1).c_str());
 				} else if(strlist.at(0)=="TRANSFER"){//transfer function
 					nnPotOpt.tfType_=NeuralNet::TransferN::read(string::to_upper(strlist.at(1)).c_str());
 				} else if(strlist.at(0)=="CHARGE"){//whether charge contributions to energy are included (n.y.i.)
@@ -1253,6 +1283,8 @@ int main(int argc, char* argv[]){
 					if(nnPotOpt.charge_) atomT.charge=true;
 				} else if(strlist.at(0)=="LOSS"){
 					nnPotOpt.loss_=NeuralNet::LossN::read(string::to_upper(strlist.at(1)).c_str());
+				} else if(strlist.at(0)=="HUBERW"){
+					nnPotOpt.huberw_=std::atof(strlist.at(1).c_str());
 				}
 				//ewald
 				if(strlist.at(0)=="PREC"){//precision of ewald calculation
@@ -1385,7 +1417,6 @@ int main(int argc, char* argv[]){
 			if(format==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
 			if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
 			if(nnPotOpt.loss_==NeuralNet::LossN::UNKNOWN) throw std::invalid_argument("Invalid loss function.");
-			
 		}
 		
 		//======== bcast the paramters ========
@@ -1401,6 +1432,7 @@ int main(int argc, char* argv[]){
 		MPI_Bcast(&nnPotOpt.writeSymm_,1,MPI_C_BOOL,0,WORLD.label());
 		MPI_Bcast(&nnPotOpt.norm_,1,MPI_C_BOOL,0,WORLD.label());
 		MPI_Bcast(&nnPotOpt.loss_,1,MPI_INT,0,WORLD.label());
+		MPI_Bcast(&nnPotOpt.huberw_,1,MPI_DOUBLE,0,WORLD.label());
 		//file i/o
 		MPI_Bcast(&format,1,MPI_INT,0,WORLD.label());
 		//writing
@@ -1571,15 +1603,11 @@ int main(int argc, char* argv[]){
 			std::cout<<"ntrain = "<<nnPotOpt.nTrain_<<"\n";
 			std::cout<<"nval   = "<<nnPotOpt.nVal_<<"\n";
 			std::cout<<"ntest  = "<<nnPotOpt.nTest_<<"\n";
+			std::cout<<"nbatch = "<<nnPotOpt.nBatch_<<"\n";
 		}
-		
-		//======== set the batch size ========
+		//check the batch size
 		if(nnPotOpt.nBatch_<=0) throw std::invalid_argument("Invalid batch size.");
 		if(nnPotOpt.nBatch_>nnPotOpt.nTrain_) throw std::invalid_argument("Invalid batch size.");
-		if(WORLD.rank()==0){
-			std::cout<<"nbatch = "<<nnPotOpt.nBatch_<<"\n";
-			if(nnPotOpt.nBatch_%WORLD.size()!=0) std::cout<<"WARNING: Using a batch size which is not a multiple of the number of processors can lead to sub-optimal performance.\n";
-		}
 		
 		//======== gen thread dist + offset, batch communicators ========
 		//split WORLD into BATCH
@@ -1619,8 +1647,12 @@ int main(int argc, char* argv[]){
 		MPI_Barrier(WORLD.label());
 		//print batch communicators
 		{
-			std::cout<<print::buf(strbuf)<<"\n";
-			std::cout<<print::title("BATCH Communicators",strbuf)<<"\n";
+			if(WORLD.rank()==0){
+				std::cout<<print::buf(strbuf)<<"\n";
+				std::cout<<print::title("BATCH Communicators",strbuf)<<"\n";
+				std::cout<<std::flush;
+			}
+			MPI_Barrier(WORLD.label());
 			const int sizeb=serialize::nbytes(BATCH);
 			const int sizet=WORLD.size()*serialize::nbytes(BATCH);
 			char* arrb=new char[sizeb];
@@ -1629,15 +1661,19 @@ int main(int argc, char* argv[]){
 			MPI_Gather(arrb,sizeb,MPI_CHAR,arrt,sizeb,MPI_CHAR,0,WORLD.label());
 			if(WORLD.rank()==0){
 				for(int i=0; i<WORLD.size(); ++i){
-					parallel::Comm temp;
-					serialize::unpack(temp,arrt+i*sizeb);
-					std::cout<<"BATCH["<<i<<"] = "<<temp<<"\n";
+					parallel::Comm tmp;
+					serialize::unpack(tmp,arrt+i*sizeb);
+					std::cout<<"BATCH["<<i<<"] = "<<tmp<<"\n";
 				}
 			}
 			delete[] arrb;
 			delete[] arrt;
-			std::cout<<print::title("BATCH Communicators",strbuf)<<"\n";
-			std::cout<<print::buf(strbuf)<<"\n";
+			if(WORLD.rank()==0){
+				std::cout<<print::title("BATCH Communicators",strbuf)<<"\n";
+				std::cout<<print::buf(strbuf)<<"\n";
+				std::cout<<std::flush;
+			}
+			MPI_Barrier(WORLD.label());
 		}
 		//thread dist - divide structures equally among the batch groups
 		dist_batch.init(BATCH.ngroup(),BATCH.color(),nnPotOpt.nBatch_);
@@ -1900,6 +1936,7 @@ int main(int argc, char* argv[]){
 		
 		//======== initialize the potential (rank 0) ========
 		if(WORLD.rank()==0){
+			//======== read the basis (if not restarting) ========
 			if(!nnPotOpt.restart_){
 				//resize the potential
 				if(NN_POT_TRAIN_PRINT_STATUS>-1) std::cout<<"resizing potential\n";
@@ -2237,46 +2274,43 @@ int main(int argc, char* argv[]){
 			time_symm_test=clock.duration();
 			MPI_Barrier(WORLD.label());
 			
-			//======== write the inputs ========
-			if(NN_POT_TRAIN_PRINT_STATUS>-1 && WORLD.rank()==0) std::cout<<"writing symmetry functions\n";
+			//======== write the inputs (symmetry functions) ========
+			if(NN_POT_TRAIN_PRINT_STATUS>-1 && WORLD.rank()==0) std::cout<<"writing symmetry function inputs\n";
 			if(nnPotOpt.writeSymm_){
-				for(int i=0; i<WORLD.size(); ++i){
-					if(WORLD.rank()==i){
-						// structures - training
-						for(int j=0; j<dist_train.size(); ++j){
-							//create filename
-							std::string file_t=files_train[indices_train[dist_train.index(j)]];
-							std::string filename=file_t.substr(0,file_t.find_last_of('.'));
-							filename=filename+".dat";
-							//filename=filename+".ann";
-							//write to file
-							Structure::write_binary(struc_train[j],filename.c_str());
-							//ANN::write(filename.c_str(),struc_train[j].atomType(),struc_train[j]);
-						}
-						// structures - validation
-						for(int j=0; j<dist_val.size(); ++j){
-							//create filename
-							std::string file_v=files_val[indices_val[dist_val.index(j)]];
-							std::string filename=file_v.substr(0,file_v.find_last_of('.'));
-							filename=filename+".dat";
-							//filename=filename+".ann";
-							//write to file
-							Structure::write_binary(struc_val[j],filename.c_str());
-							//ANN::write(filename.c_str(),struc_val[j].atomType(),struc_val[j]);
-						}
-						// structures - testing
-						for(int j=0; j<dist_test.size(); ++j){
-							//create filename
-							std::string file_t=files_test[indices_test[dist_test.index(j)]];
-							std::string filename=file_t.substr(0,file_t.find_last_of('.'));
-							filename=filename+".dat";
-							//filename=filename+".ann";
-							//write to file
-							Structure::write_binary(struc_test[j],filename.c_str());
-							//ANN::write(filename.c_str(),struc_test[j].atomType(),struc_test[j]);
-						}
+				if(BATCH.rank()==0){
+					// structures - training
+					for(int j=0; j<dist_train.size(); ++j){
+						//create filename
+						std::string file_t=files_train[indices_train[dist_train.index(j)]];
+						std::string filename=file_t.substr(0,file_t.find_last_of('.'));
+						filename=filename+".dat";
+						//filename=filename+".ann";
+						//write to file
+						Structure::write_binary(struc_train[j],filename.c_str());
+						//ANN::write(filename.c_str(),struc_train[j].atomType(),struc_train[j]);
 					}
-					MPI_Barrier(WORLD.label());
+					// structures - validation
+					for(int j=0; j<dist_val.size(); ++j){
+						//create filename
+						std::string file_v=files_val[indices_val[dist_val.index(j)]];
+						std::string filename=file_v.substr(0,file_v.find_last_of('.'));
+						filename=filename+".dat";
+						//filename=filename+".ann";
+						//write to file
+						Structure::write_binary(struc_val[j],filename.c_str());
+						//ANN::write(filename.c_str(),struc_val[j].atomType(),struc_val[j]);
+					}
+					// structures - testing
+					for(int j=0; j<dist_test.size(); ++j){
+						//create filename
+						std::string file_t=files_test[indices_test[dist_test.index(j)]];
+						std::string filename=file_t.substr(0,file_t.find_last_of('.'));
+						filename=filename+".dat";
+						//filename=filename+".ann";
+						//write to file
+						Structure::write_binary(struc_test[j],filename.c_str());
+						//ANN::write(filename.c_str(),struc_test[j].atomType(),struc_test[j]);
+					}
 				}
 			}
 		
@@ -2317,9 +2351,9 @@ int main(int argc, char* argv[]){
 				std::cout<<print::buf(strbuf)<<"\n";
 				std::cout<<print::title("MEMORY",strbuf)<<"\n";
 				std::cout<<"memory unit - MB\n";
-				std::cout<<"mem - train = "; for(int i=0; i<WORLD.size(); ++i) std::cout<<(1.0*mem_train[i])/1e6<<" "; std::cout<<"\n";
-				std::cout<<"mem - val   = "; for(int i=0; i<WORLD.size(); ++i) std::cout<<(1.0*mem_val[i])/1e6<<" "; std::cout<<"\n";
-				std::cout<<"mem - test  = "; for(int i=0; i<WORLD.size(); ++i) std::cout<<(1.0*mem_test[i])/1e6<<" "; std::cout<<"\n";
+				std::cout<<"mem - train - loc = "; for(int i=0; i<WORLD.size(); ++i) std::cout<<(1.0*mem_train[i])/1e6<<" "; std::cout<<"\n";
+				std::cout<<"mem - val   - loc = "; for(int i=0; i<WORLD.size(); ++i) std::cout<<(1.0*mem_val[i])/1e6<<" "; std::cout<<"\n";
+				std::cout<<"mem - test  - loc = "; for(int i=0; i<WORLD.size(); ++i) std::cout<<(1.0*mem_test[i])/1e6<<" "; std::cout<<"\n";
 				std::cout<<"mem - train - tot = "<<(1.0*mem_train_t)/1e6<<"\n";
 				std::cout<<"mem - val   - tot = "<<(1.0*mem_val_t)/1e6<<"\n";
 				std::cout<<"mem - test  - tot = "<<(1.0*mem_test_t)/1e6<<"\n";
