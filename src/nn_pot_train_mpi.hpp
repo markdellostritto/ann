@@ -63,7 +63,7 @@ public:
 		int nBatch_;//number of structures in batch
 		std::vector<int> batch_;//small batch of inputs (simulations)
 		std::vector<int> indices_;//indices of all the inputs (simulations)
-		std::mt19937 rngen_;
+		std::mt19937 rngen_;//random number generator
 	//nn
 		int nParams_;//total number of parameters
 		bool preCond_;//whether to pre-condition the inputs
@@ -74,7 +74,7 @@ public:
 		NeuralNet::ANNInit init_;//neural network initialization parameters
 		NeuralNet::TransferN::type tfType_;//transfer function
 		std::vector<std::vector<int> > nh_;//hidden layer configuration
-		double huberw_;
+		double huberw_;//huber loss width
 	//input/output
 		std::string file_error_;//file storing the error
 		std::string file_ann_;//ann file
@@ -83,7 +83,6 @@ public:
 		bool restart_;//restart
 		bool calcForce_;//whether to compute the force
 		bool calcSymm_;//whether to compute the symmetry functions
-		bool writeSymm_;//whether to compute the symmetry functions
 		bool norm_;//normalize the energies
 	//optimization
 		Opt::Data data_;//optimization - data
