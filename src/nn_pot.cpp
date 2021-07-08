@@ -160,8 +160,6 @@ void NNPot::defaults(){
 		nnh_.clear();
 	//cutoff
 		rc_=0;
-	//resize the lattice vector shifts
-		R_.clear();
 }
 
 //==== resizing ====
@@ -196,587 +194,183 @@ void NNPot::init_symm(Structure& struc)const{
 }
 
 /**
-* compute the symmetry functions for a given structure
+* Compute the symmetry functions for a given structure.
+* The symmetry functions are computed by looping over all nearest-neighbor pairs
+* and all unique nearest-neighbor triples.  Thus, the neighbor list must be set 
+* for the structure, and the type must correspond to the index of the atomic species
+* in the NNP.
 * @param struc - the structure for which we will compute the symmetry functions
 */
 void NNPot::calc_symm(Structure& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::calc_symm(Structure&):\n";
-	if(struc.R().norm()>math::constant::ZERO){
-		//lattice vector shifts - factor of two: max distance = 1/2 lattice vector
-		const int ratiox=floor(2.0*rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
-		const int ratioy=floor(2.0*rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
-		const int ratioz=floor(2.0*rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
-		if(ratiox>0 || ratioy>0 || ratioz>0){
-			Eigen::Vector3d tmp;
-			const int shellx=floor(1.0*rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
-			const int shelly=floor(1.0*rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
-			const int shellz=floor(1.0*rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
-			const int Rmax=(2*shellx+1)*(2*shelly+1)*(2*shellz+1);
-			if(NN_POT_PRINT_DATA>0) std::cout<<"Rmax = "<<Rmax<<"\n";
-			if(NN_POT_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<") = "<<(2*shellx+1)*(2*shelly+1)*(2*shellz+1)<<"\n";
-			R_.resize(Rmax);
-			int Rsize=0;
-			for(int ix=-shellx; ix<=shellx; ++ix){
-				for(int iy=-shelly; iy<=shelly; ++iy){
-					for(int iz=-shellz; iz<=shellz; ++iz){
-						R_[Rsize++].noalias()=ix*struc.R().col(0)+iy*struc.R().col(1)+iz*struc.R().col(2);
-					}
-				}
+	for(int i=0; i<struc.nAtoms(); ++i){
+		//reset the inputs
+		struc.symm(i).setZero();
+		//get the index of species i
+		const int II=struc.type(i);
+		//loop over all neighbors
+		for(int j=0; j<struc.neigh(i).size(); ++j){
+			//get the index of species j
+			const int JJ=struc.neigh(i)[j].type();
+			//get the distance from J to I
+			const Eigen::Vector3d& rIJ=struc.neigh(i)[j].r();
+			const double dIJ=struc.neigh(i)[j].dr();
+			//set the basis
+			const int offsetR_=nnh_[II].offsetR(JJ);
+			BasisR& basisRij_=nnh_[II].basisR(JJ);
+			//compute the IJ contribution to all radial basis functions
+			basisRij_.symm(dIJ);
+			for(int nr=0; nr<basisRij_.nfR(); ++nr){
+				struc.symm(i)[offsetR_+nr]+=basisRij_.symm()[nr];
 			}
-			if(NN_POT_PRINT_DATA>0) std::cout<<"Rsize = "<<Rsize<<"\n";
-			//loop over all atoms
-			if(NN_POT_PRINT_STATUS>0) std::cout<<"computing symmetry functions\n";
-			for(int i=0; i<struc.nAtoms(); ++i){
-				//reset the inputs
-				if(NN_POT_PRINT_STATUS>2) std::cout<<"resetting inputs\n";
-				struc.symm(i).setZero();
-				//find the index of the species of atom i
-				const int II=index(struc.name(i));
-				//loop over all pairs
-				for(int j=0; j<struc.nAtoms(); ++j){
-					//find the index of the species of atom j
-					const int JJ=index(struc.name(j));
-					//find rIJ_:=rI_-rJ_ with respect to the unit cell
-					const Eigen::Vector3d rIJ_=struc.diff(struc.posn(i),struc.posn(j),tmp);
-					//loop over lattice vector shifts - atom j
-					for(int iJ=0; iJ<Rsize; ++iJ){
-						//alter the rIJ_ distance by a lattice vector shift
-						const Eigen::Vector3d rIJt_=rIJ_+R_[iJ];
-						const double dIJ=rIJt_.norm();
-						if(math::constant::ZERO<dIJ && dIJ<rc_){
-							if(NN_POT_PRINT_STATUS>2) std::cout<<"computing phir("<<i<<","<<j<<")\n";
-							//compute the IJ contribution to all radial basis functions
-							const int offsetR_=nnh_[II].offsetR(JJ);
-							BasisR& basisRij_=nnh_[II].basisR(JJ);
-							basisRij_.symm(dIJ);
-							for(int nr=0; nr<basisRij_.nfR(); ++nr){
-								struc.symm(i)[offsetR_+nr]+=basisRij_.symm()[nr];
-							}
-							//loop over all triplets
-							for(int k=0; k<struc.nAtoms(); ++k){
-								//find the index of the species of atom k
-								const int KK=index(struc.name(k));
-								//find rIJ_:=rI_-rK_ with respect to the unit cell
-								const Eigen::Vector3d rIK_=struc.diff(struc.posn(i),struc.posn(k),tmp);
-								//loop over all cell shifts  - atom k
-								for(int iK=0; iK<Rsize; ++iK){
-									//alter the rIK_ distance by a lattice vector shift
-									const Eigen::Vector3d rIKt_=rIK_+R_[iK];
-									const double dIK=rIKt_.norm();
-									if(math::constant::ZERO<dIK && dIK<rc_){
-										//calc rJK
-										const Eigen::Vector3d rJKt_=rIKt_-rIJt_;
-										const double dJK=rJKt_.norm();
-										if(math::constant::ZERO<dJK){
-											//compute the IJ,IK,JK contribution to all angular basis functions
-											const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
-											BasisA& basisAijk_=nnh_[II].basisA(JJ,KK);
-											const double cosIJK=rIJt_.dot(rIKt_)/(dIJ*dIK);
-											const double d[3]={dIJ,dIK,dJK};
-											basisAijk_.symm(cosIJK,d);
-											for(int na=0; na<basisAijk_.nfA(); ++na){
-												struc.symm(i)[offsetA_+na]+=0.5*basisAijk_.symm()[na];//0.5 for double counting
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		} else {
-			Eigen::Vector3d rIJ_,rIK_,rJK_;
-			//generate cell list
-			CellList cellList(rc_,struc);
-			std::vector<Eigen::Vector3i> nnc(27);
-			int count=0;
-			for(int i=-1; i<=1; i++){
-				for(int j=-1; j<=1; j++){
-					for(int k=-1; k<=1; k++){
-						nnc[count++]<<i,j,k;
-					}
-				}
-			}
-			//loop over all atoms
-			if(NN_POT_PRINT_STATUS>0) std::cout<<"computing symmetry functions\n";
-			for(int i=0; i<struc.nAtoms(); ++i){
-				//find the index of the species of atom j
-				const int II=index(struc.name(i));
-				const Eigen::Vector3i& cell=cellList.cell(i);
-				//reset the inputs
-				if(NN_POT_PRINT_STATUS>2) std::cout<<"resetting inputs\n";
-				struc.symm(i).setZero();
-				//loop over all neighboring cells
-				for(int jc=0; jc<nnc.size(); ++jc){
-					const Eigen::Vector3i jcell=cell+nnc[jc];
-					//loop over atoms in cell
-					for(int j=0; j<cellList.atoms(jcell).size(); ++j){
-						const int nj=cellList.atoms(jcell)[j];
-						//find the index of the species of atom j
-						const int JJ=index(struc.name(nj));
-						//calc rIJ
-						if(NN_POT_PRINT_STATUS>2) std::cout<<"symm r("<<i<<","<<nj<<")\n";
-						//calc radial contribution - loop over all radial functions
-						if(NN_POT_PRINT_STATUS>2) std::cout<<"computing radial functions\n";
-						struc.diff(struc.posn(i),struc.posn(nj),rIJ_);
-						const double dIJ=rIJ_.norm();
-						if(math::constant::ZERO<dIJ && dIJ<rc_){
-							if(NN_POT_PRINT_STATUS>2) std::cout<<"computing phir("<<i<<","<<nj<<")\n";
-							//compute the IJ contribution to all radial basis functions
-							const int offsetR_=nnh_[II].offsetR(JJ);
-							BasisR& basisRij_=nnh_[II].basisR(JJ);
-							basisRij_.symm(dIJ);
-							for(int nr=0; nr<basisRij_.nfR(); ++nr){
-								struc.symm(i)[offsetR_+nr]+=basisRij_.symm()[nr];
-							}
-							//loop over all neighboring cells
-							for(int kc=0; kc<nnc.size(); ++kc){
-								const Eigen::Vector3i kcell=cell+nnc[kc];
-								//loop over all triplets
-								for(int k=0; k<cellList.atoms(kcell).size(); ++k){
-									const int nk=cellList.atoms(kcell)[k];
-									//find the index of the species of atom i
-									const int KK=index(struc.name(nk));
-									//calculate rIK
-									if(NN_POT_PRINT_STATUS>2) std::cout<<"computing phia("<<i<<","<<nj<<","<<nk<<")\n";
-									struc.diff(struc.posn(i),struc.posn(nk),rIK_);
-									const double dIK=rIK_.norm();
-									if(math::constant::ZERO<dIK && dIK<rc_){
-										//calculate rJK
-										struc.diff(struc.posn(nj),struc.posn(nk),rJK_);
-										const double dJK=rJK_.norm();
-										if(math::constant::ZERO<dJK){
-											//compute the IJ,IK,JK contribution to all angular basis functions
-											const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
-											BasisA& basisAijk_=nnh_[II].basisA(JJ,KK);
-											const double cosIJK=rIJ_.dot(rIK_)/(dIJ*dIK);
-											const double d[3]={dIJ,dIK,dJK};
-											basisAijk_.symm(cosIJK,d);
-											for(int na=0; na<basisAijk_.nfA(); ++na){
-												struc.symm(i)[offsetA_+na]+=0.5*basisAijk_.symm()[na];//0.5 for double counting
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	} else {
-		//loop over all atoms
-		if(NN_POT_PRINT_STATUS>0) std::cout<<"computing symmetry functions\n";
-		for(int i=0; i<struc.nAtoms(); ++i){
-			//find the index of the species of atom i
-			const int II=index(struc.name(i));
-			//reset the inputs
-			if(NN_POT_PRINT_STATUS>2) std::cout<<"resetting inputs\n";
-			struc.symm(i).setZero();
-			//loop over all pairs
-			for(int j=0; j<struc.nAtoms(); ++j){
-				if(i==j) continue;
-				//find the index of the species of atom j
-				const int JJ=index(struc.name(j));
-				//calc rIJ
-				const Eigen::Vector3d rIJ_=struc.posn(i)-struc.posn(j);
-				const double dIJ=rIJ_.norm();
-				if(dIJ<rc_){
-					if(NN_POT_PRINT_STATUS>2) std::cout<<"computing phir("<<i<<","<<j<<")\n";
-					//compute the IJ contribution to all radial basis functions
-					const int offsetR_=nnh_[II].offsetR(JJ);
-					BasisR& basisRij_=nnh_[II].basisR(JJ);
-					basisRij_.symm(dIJ);
-					for(int nr=0; nr<basisRij_.nfR(); ++nr){
-						struc.symm(i)[offsetR_+nr]+=basisRij_.symm()[nr];
-					}
-					//loop over all triplets
-					for(int k=j+1; k<struc.nAtoms(); ++k){
-						if(i==k) continue;
-						//find the index of the species of atom k
-						const int KK=index(struc.name(k));
-						//calc rIK
-						const Eigen::Vector3d rIK_=struc.posn(i)-struc.posn(k);
-						const double dIK=rIK_.norm();
-						if(dIK<rc_){
-							//calc rJK
-							const Eigen::Vector3d rJK_=struc.posn(j)-struc.posn(k);
-							const double dJK=rJK_.norm();
-							if(math::constant::ZERO<dJK){
-								//compute the IJ,IK,JK contribution to all angular basis functions
-								const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
-								BasisA& basisAijk_=nnh_[II].basisA(JJ,KK);
-								const double cosIJK=rIJ_.dot(rIK_)/(dIJ*dIK);
-								const double d[3]={dIJ,dIK,dJK};
-								basisAijk_.symm(cosIJK,d);
-								for(int na=0; na<basisAijk_.nfA(); ++na){
-									struc.symm(i)[offsetA_+na]+=basisAijk_.symm()[na];
-								}
-							}
-						}
-					}
+			//loop over all unique triplets
+			for(int k=j+1; k<struc.neigh(i).size(); ++k){
+				//find the index of the species of atom k
+				const int KK=struc.neigh(i)[k].type();
+				//get the distance from K to I
+				const Eigen::Vector3d& rIK=struc.neigh(i)[k].r();
+				const double dIK=struc.neigh(i)[k].dr();
+				//get the distance from J to K
+				const double dJK=(struc.neigh(i)[k].r()-struc.neigh(i)[j].r()).norm();
+				//set the basis
+				const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
+				BasisA& basisAijk_=nnh_[II].basisA(JJ,KK);
+				//compute the IJ,IK,JK contribution to all angular basis functions
+				const double cosIJK=rIJ.dot(rIK)/(dIJ*dIK);
+				const double d[3]={dIJ,dIK,dJK};
+				basisAijk_.symm(cosIJK,d);
+				for(int na=0; na<basisAijk_.nfA(); ++na){
+					struc.symm(i)[offsetA_+na]+=basisAijk_.symm()[na];
 				}
 			}
 		}
 	}
-	/*for(int i=0; i<struc.nAtoms(); ++i){
-		std::cout<<struc.name(i)<<" symm["<<i<<"] = "<<struc.symm(i).transpose()<<"\n";
-	}*/
 }
 
 /**
 * compute the forces on the atoms for a given structure
 * @param struc - the structure for which we will compute the forces
 * @param calc_symm_ - whether we need to compute the symmetry functions
+* The forces are computed by looping over all nearest-neighbor pairs
+* and all unique nearest-neighbor triples.  Thus, the neighbor list must be set 
+* for the structure, and the type must correspond to the index of the atomic species
+* in the NNP.  In addition, the index for each neighbor must be set to -1 if it is
+* a periodic image or within [0,natoms] in which case the Newton's third law force
+* pair must be added to the neighbor atom.
 */
-void NNPot::forces(Structure& struc, bool calc_symm_){
+void NNPot::forces(Structure& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::forces(Structure&,bool):\n";
-	//local variables
-	Eigen::VectorXd dEdG;
-	//set the inputs for the atoms
-	if(calc_symm_) calc_symm(struc);
 	//reset the force
 	for(int i=0; i<struc.nAtoms(); ++i) struc.force(i).setZero();
-	if(struc.nAtoms()>1){
 	//compute the forces
-	if(struc.R().norm()>math::constant::ZERO){
-		//periodic structure
-		Eigen::Vector3d tmp;
-		//lattice vector shifts
-		const int shellx=floor(1.0*rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
-		const int shelly=floor(1.0*rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
-		const int shellz=floor(1.0*rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
-		const int Rmax=(2*shellx+1)*(2*shelly+1)*(2*shellz+1);
-		if(NN_POT_PRINT_DATA>0) std::cout<<"Rmax = "<<Rmax<<"\n";
-		if(NN_POT_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<") = "<<(2*shellx+1)*(2*shelly+1)*(2*shellz+1)<<"\n";
-		R_.resize(Rmax);
-		int Rsize=0;
-		for(int ix=-shellx; ix<=shellx; ++ix){
-			for(int iy=-shelly; iy<=shelly; ++iy){
-				for(int iz=-shellz; iz<=shellz; ++iz){
-					R_[Rsize++].noalias()=ix*struc.R().col(0)+iy*struc.R().col(1)+iz*struc.R().col(2);
+	for(int i=0; i<struc.nAtoms(); ++i){
+		//get the index of species i
+		const int II=struc.type(i);
+		//execute the appropriate network
+		nnh_[II].nn().execute(struc.symm(i));
+		//calculate the network gradient
+		nnh_[II].dOutDVal().grad(nnh_[II].nn());
+		//set the gradient (n.b. dodi - do/di - deriv. of out w.r.t. in)
+		const Eigen::VectorXd& dEdG=nnh_[II].dOutDVal().dodi().row(0);
+		//loop over all neighbors
+		for(int j=0; j<struc.neigh(i).size(); ++j){
+			//get the indices of the jth neighbor
+			const int JJ=struc.neigh(i)[j].type();
+			const int jj=struc.neigh(i)[j].index();
+			//get the distance from J to I
+			const Eigen::Vector3d& rIJ=struc.neigh(i)[j].r();
+			const double dIJ=struc.neigh(i)[j].dr();
+			const double dIJi=1.0/dIJ;
+			//compute the IJ contribution to the radial force
+			const int offsetR_=nnh_[II].offsetR(JJ);
+			const double amp=nnh_[II].basisR(JJ).force(dIJ,dEdG.data()+offsetR_)*dIJi;
+			struc.force(i).noalias()+=amp*rIJ;
+			if(jj>=0) struc.force(jj).noalias()-=amp*rIJ;
+			//loop over all unique triplets
+			for(int k=j+1; k<struc.neigh(i).size(); ++k){
+				//find the index of the species of atom k
+				const int KK=struc.neigh(i)[k].type();
+				const int kk=struc.neigh(i)[k].index();
+				//get the distance from K to I
+				const Eigen::Vector3d& rIK=struc.neigh(i)[k].r();
+				const double dIK=struc.neigh(i)[k].dr();
+				const double dIKi=1.0/dIK;
+				//get the distance from J to K
+				const Eigen::Vector3d rJK=(struc.neigh(i)[k].r()-struc.neigh(i)[j].r());
+				const double dJK=rJK.norm();
+				const double dJKi=1.0/dJK;
+				//set the basis
+				const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
+				BasisA& basisAijk_=nnh_[II].basisA(JJ,KK);
+				//compute the IJ,IK,JK contribution to the angular force
+				double phi=0; double eta[3]={0,0,0};
+				const double cosIJK=rIJ.dot(rIK)*dIJi*dIKi;
+				const double d[3]={dIJ,dIK,dJK};
+				nnh_[II].basisA(JJ,KK).force(phi,eta,cosIJK,d,dEdG.data()+offsetA_);
+				struc.force(i).noalias()+=(phi*(dIKi-cosIJK*dIJi)+eta[0])*rIJ*dIJi;
+				struc.force(i).noalias()+=(phi*(dIJi-cosIJK*dIKi)+eta[1])*rIK*dIKi;
+				if(jj>=0){
+					struc.force(jj).noalias()-=(-phi*cosIJK*dIJi+eta[0])*rIJ*dIJi+phi*dIJi*rIK*dIKi;
+					struc.force(jj).noalias()-=eta[2]*rJK*dJKi;
+				}
+				if(kk>=0){
+					struc.force(kk).noalias()-=(-phi*cosIJK*dIKi+eta[1])*rIK*dIKi+phi*dIKi*rIJ*dIJi;
+					struc.force(kk).noalias()+=eta[2]*rJK*dJKi;
 				}
 			}
 		}
-		//loop over all atoms
-		for(int i=0; i<struc.nAtoms(); ++i){
-			//find the index of the species of atom i
-			const int II=index(struc.name(i));
-			//execute the appropriate network
-			nnh_[II].nn().execute(struc.symm(i));
-			//calculate the network gradient
-			nnh_[II].dOutDVal().grad(nnh_[II].nn());
-			//set the gradient (n.b. dodi - do/di - deriv. of out w.r.t. in)
-			dEdG=nnh_[II].dOutDVal().dodi().row(0);
-			//loop over pairs
-			for(int j=0; j<struc.nAtoms(); ++j){
-				//find the index of the species of atom j
-				const int JJ=index(struc.name(j));
-				//find rIJ_:=rI_-rJ_ with respect to the unit cell
-				const Eigen::Vector3d rIJ_=struc.diff(struc.posn(i),struc.posn(j),tmp);
-				//loop over lattice vector shifts - atom j
-				for(int iJ=0; iJ<Rsize; ++iJ){
-					//alter the rIJ_ distance by a lattice vector shift
-					const Eigen::Vector3d rIJt_=rIJ_+R_[iJ];
-					const double dIJ=rIJt_.norm();
-					//check rIJ
-					if(math::constant::ZERO<dIJ && dIJ<rc_){
-						const double dIJi=1.0/dIJ;
-						//compute the IJ contribution to the radial force
-						const int offsetR_=nnh_[II].offsetR(JJ);
-						const double amp=nnh_[II].basisR(JJ).force(dIJ,dEdG.data()+offsetR_)*dIJi;
-						struc.force(i).noalias()+=amp*rIJt_;
-						struc.force(j).noalias()-=amp*rIJt_;
-						//loop over all triplets
-						for(int k=0; k<struc.nAtoms(); ++k){
-							if(NN_POT_PRINT_STATUS>2) std::cout<<"computing theta("<<i<<","<<j<<","<<k<<")\n";
-							//find the index of the species of atom k
-							const int KK=index(struc.name(k));
-							//find rIK_:=rI_-rK_ with respect to the unit cell
-							const Eigen::Vector3d rIK_=struc.diff(struc.posn(i),struc.posn(k),tmp);
-							//loop over all cell shifts - atom k
-							for(int iK=0; iK<Rsize; ++iK){
-								//alter the rIK_ distance by a lattice vector shift
-								const Eigen::Vector3d rIKt_=rIK_+R_[iK];
-								const double dIK=rIKt_.norm();
-								if(math::constant::ZERO<dIK && dIK<rc_){
-									const double dIKi=1.0/dIK;
-									//compute rJK
-									const Eigen::Vector3d rJKt_=rIKt_-rIJt_;
-									const double dJK=rJKt_.norm();
-									if(math::constant::ZERO<dJK){
-										const double dJKi=1.0/dJK;
-										//compute the IJ,IK,JK contribution to the angular force
-										const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
-										const double cosIJK=rIJt_.dot(rIKt_)*dIJi*dIKi;
-										const double d[3]={dIJ,dIK,dJK};
-										double phi=0; double eta[3]={0,0,0};
-										nnh_[II].basisA(JJ,KK).force(phi,eta,cosIJK,d,dEdG.data()+offsetA_);
-										phi*=0.5; eta[0]*=0.5; eta[1]*=0.5; eta[2]*=0.5;//0.5 for double counting
-										struc.force(i).noalias()+=(phi*(dIKi-cosIJK*dIJi)+eta[0])*rIJt_*dIJi;
-										struc.force(i).noalias()+=(phi*(dIJi-cosIJK*dIKi)+eta[1])*rIKt_*dIKi;
-										struc.force(j).noalias()-=(-phi*cosIJK*dIJi+eta[0])*rIJt_*dIJi+phi*dIJi*rIKt_*dIKi;
-										struc.force(j).noalias()-=eta[2]*rJKt_*dJKi;
-										struc.force(k).noalias()-=(-phi*cosIJK*dIKi+eta[1])*rIKt_*dIKi+phi*dIKi*rIJt_*dIJi;
-										struc.force(k).noalias()+=eta[2]*rJKt_*dJKi;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	} else {
-		//loop over all atoms
-		for(int i=0; i<struc.nAtoms(); ++i){
-			//find the index of the species of atom i
-			const int II=index(struc.name(i));
-			//execute the appropriate network
-			nnh_[II].nn().execute(struc.symm(i));
-			//calculate the network gradient
-			nnh_[II].dOutDVal().grad(nnh_[II].nn());
-			//set the gradient (n.b. dodi - do/di - deriv. of out w.r.t. in)
-			dEdG=nnh_[II].dOutDVal().dodi().row(0);
-			//loop over pairs
-			for(int j=0; j<struc.nAtoms(); ++j){
-				//find the index of the species of atom j
-				const int JJ=index(struc.name(j));
-				//compute rIJ
-				const Eigen::Vector3d rIJ_=struc.posn(i)-struc.posn(j);
-				const double dIJ=rIJ_.norm();
-				//check rIJ
-				if(math::constant::ZERO<dIJ && dIJ<rc_){
-					const double dIJi=1.0/dIJ;
-					//compute the IJ contribution to the radial force
-					const int offsetR_=nnh_[II].offsetR(JJ);
-					const double amp=nnh_[II].basisR(JJ).force(dIJ,dEdG.data()+offsetR_)*dIJi;
-					struc.force(i).noalias()+=amp*rIJ_;
-					struc.force(j).noalias()-=amp*rIJ_;
-					//loop over all triplets
-					for(int k=0; k<struc.nAtoms(); ++k){
-						if(NN_POT_PRINT_STATUS>2) std::cout<<"computing theta("<<i<<","<<j<<","<<k<<")\n";
-						//find the index of the species of atom k
-						const int KK=index(struc.name(k));
-						//compute rIK
-						const Eigen::Vector3d rIK_=struc.posn(i)-struc.posn(k);
-						const double dIK=rIK_.norm();
-						if(math::constant::ZERO<dIK && dIK<rc_){
-							const double dIKi=1.0/dIK;
-							//compute rJK
-							const Eigen::Vector3d rJK_=struc.posn(j)-struc.posn(k);
-							const double dJK=rJK_.norm();
-							if(math::constant::ZERO<dJK){
-								const double dJKi=1.0/dJK;
-								//compute the IJ,IK,JK contribution to the angular force
-								const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
-								const double cosIJK=rIJ_.dot(rIK_)*dIJi*dIKi;
-								const double d[3]={dIJ,dIK,dJK};
-								double phi=0; double eta[3]={0,0,0};
-								nnh_[II].basisA(JJ,KK).force(phi,eta,cosIJK,d,dEdG.data()+offsetA_);
-								phi*=0.5; eta[0]*=0.5; eta[1]*=0.5; eta[2]*=0.5;//0.5 for double counting
-								struc.force(i).noalias()+=(phi*(dIKi-cosIJK*dIJi)+eta[0])*rIJ_*dIJi;
-								struc.force(i).noalias()+=(phi*(dIJi-cosIJK*dIKi)+eta[1])*rIK_*dIKi;
-								struc.force(j).noalias()-=(-phi*cosIJK*dIJi+eta[0])*rIJ_*dIJi+phi*dIJi*rIK_*dIKi;
-								struc.force(j).noalias()-=eta[2]*rJK_*dJKi;
-								struc.force(k).noalias()-=(-phi*cosIJK*dIKi+eta[1])*rIK_*dIKi+phi*dIKi*rIJ_*dIJi;
-								struc.force(k).noalias()+=eta[2]*rJK_*dJKi;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
 	}
 }
 
 /**
 * execute all atomic networks and return energy
+* it is assumed that the symmetry functions have been computed
 * @param struc - the structure for which we will compute the energy
-* @param calc_symm_ - whether we need to compute the symmetry functions
 */
-double NNPot::energy(Structure& struc, bool calc_symm_){
+double NNPot::energy(const Structure& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::energy(Structure&,bool):\n";
 	double energy=0;
-	//set the inputs for the atoms
-	if(calc_symm_) calc_symm(struc);
 	//loop over atoms
 	for(int n=0; n<struc.nAtoms(); ++n){
 		//set the index
-		const int index=map_[string::hash(struc.name(n))];
+		const int ii=index(struc.name(n));
 		//compute the energy
-		energy+=nnh_[index].energy(struc.symm(n));
+		energy+=nnh_[ii].energy(struc.symm(n));
 	}
 	return energy;
 }
 
-double NNPot::compute(Structure& struc, bool calc_symm_){
+/**
+* Compute symmetry functions, energy and forces.
+* The neighbor list must be set for the structure, and the type must correspond 
+* to the index of the atomic species in the NNP.  In addition, the index for 
+* each neighbor must be set to -1 if it is a periodic image or within [0,natoms]
+* in which case the Newton's third law force pair must be added to the neighbor atom.
+* @param struc - the structure for which we will compute the energy
+* @return total energy
+*/
+double NNPot::compute(Structure& struc){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::compute(Structure&,bool):\n";
-	//local variables
-	Eigen::VectorXd dEdG;
-	double energyt=0;
 	//set the inputs for the atoms
-	if(calc_symm_) calc_symm(struc);
-	//reset the force
-	for(int i=0; i<struc.nAtoms(); ++i) struc.force(i).setZero();
-	if(struc.R().norm()>math::constant::ZERO){
-		//lattice vector shifts
-		const int shellx=floor(2.0*rc_/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
-		const int shelly=floor(2.0*rc_/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
-		const int shellz=floor(2.0*rc_/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
-		const int Rmax=(2*shellx+1)*(2*shelly+1)*(2*shellz+1);
-		if(NN_POT_PRINT_DATA>0) std::cout<<"Rmax = "<<Rmax<<"\n";
-		if(NN_POT_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<") = "<<(2*shellx+1)*(2*shelly+1)*(2*shellz+1)<<"\n";
-		R_.resize(Rmax);
-		int Rsize=0;
-		for(int ix=-shellx; ix<=shellx; ++ix){
-			for(int iy=-shelly; iy<=shelly; ++iy){
-				for(int iz=-shellz; iz<=shellz; ++iz){
-					//const Eigen::Vector3d R=ix*struc.R().col(0)+iy*struc.R().col(1)+iz*struc.R().col(2);
-					//if(R.norm()<2.0*rc_) R_[Rsize++]=R;
-					R_[Rsize++].noalias()=ix*struc.R().col(0)+iy*struc.R().col(1)+iz*struc.R().col(2);
-				}
-			}
-		}
-		//loop over all atoms
-		for(int i=0; i<struc.nAtoms(); ++i){
-			//find the index of the species of atom i
-			const int II=map_[string::hash(struc.name(i))];
-			//copy position
-			const Eigen::Vector3d rI_=struc.posn(i);
-			//execute the appropriate network
-			nnh_[II].nn().execute(struc.symm(i));
-			energyt+=nnh_[II].nn().out()[0]+nnh_[II].atom().energy();
-			//calculate the network gradient
-			nnh_[II].dOutDVal().grad(nnh_[II].nn());
-			//set the gradient (n.b. dodi - do/di - deriv. of out w.r.t. in)
-			dEdG=nnh_[II].dOutDVal().dodi().row(0);
-			//loop over pairs
-			for(int j=0; j<struc.nAtoms(); ++j){
-				//find the index of the species of atom j
-				const int JJ=map_[string::hash(struc.name(j))];
-				//loop over lattice vector shifts - atom j
-				for(int iJ=0; iJ<Rsize; ++iJ){
-					//compute rIJ
-					const Eigen::Vector3d rJ_=struc.posn(j)+R_[iJ];
-					const Eigen::Vector3d rIJ_=rI_-rJ_;
-					const double dIJ=rIJ_.norm();
-					//check rIJ
-					if(math::constant::ZERO<dIJ && dIJ<rc_){
-						const double dIJi=1.0/dIJ;
-						//compute the IJ contribution to the radial force
-						const int offsetR_=nnh_[II].offsetR(JJ);
-						const double amp=nnh_[II].basisR(JJ).force(dIJ,dEdG.data()+offsetR_)*dIJi;
-						struc.force(i).noalias()+=amp*rIJ_;
-						struc.force(j).noalias()-=amp*rIJ_;
-						//loop over all triplets
-						for(int k=0; k<struc.nAtoms(); ++k){
-							if(NN_POT_PRINT_STATUS>2) std::cout<<"computing theta("<<i<<","<<j<<","<<k<<")\n";
-							//find the index of the species of atom k
-							const int KK=map_[string::hash(struc.name(k))];
-							//loop over all cell shifts - atom k
-							for(int iK=0; iK<Rsize; ++iK){
-								//compute rIK
-								const Eigen::Vector3d rK_=struc.posn(k)+R_[iK];
-								const Eigen::Vector3d rIK_=rI_-rK_;
-								const double dIK=rIK_.norm();
-								if(math::constant::ZERO<dIK && dIK<rc_){
-									const double dIKi=1.0/dIK;
-									//compute rJK
-									const Eigen::Vector3d rJK_=rJ_-rK_;
-									const double dJK=rJK_.norm();
-									if(math::constant::ZERO<dJK){
-										const double dJKi=1.0/dJK;
-										//compute the IJ,IK,JK contribution to the angular force
-										const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
-										const double cosIJK=rIJ_.dot(rIK_)*dIJi*dIKi;
-										const double d[3]={dIJ,dIK,dJK};
-										double phi=0; double eta[3]={0,0,0};
-										nnh_[II].basisA(JJ,KK).force(phi,eta,cosIJK,d,dEdG.data()+offsetA_);
-										struc.force(i).noalias()+=(phi*(dIKi-cosIJK*dIJi)+eta[0])*rIJ_*dIJi;
-										struc.force(i).noalias()+=(phi*(dIJi-cosIJK*dIKi)+eta[1])*rIK_*dIKi;
-										struc.force(j).noalias()-=(-phi*cosIJK*dIJi+eta[0])*rIJ_*dIJi+phi*dIJi*rIK_*dIKi;
-										struc.force(j).noalias()-=eta[2]*rJK_*dJKi;
-										struc.force(k).noalias()-=(-phi*cosIJK*dIKi+eta[1])*rIK_*dIKi+phi*dIKi*rIJ_*dIJi;
-										struc.force(k).noalias()+=eta[2]*rJK_*dJKi;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	} else {
-		//loop over all atoms
-		for(int i=0; i<struc.nAtoms(); ++i){
-			//find the index of the species of atom i
-			const int II=index(struc.name(i));
-			//execute the appropriate network
-			nnh_[II].nn().execute(struc.symm(i));
-			energyt+=nnh_[II].nn().out()[0]+nnh_[II].atom().energy();
-			//calculate the network gradient
-			nnh_[II].dOutDVal().grad(nnh_[II].nn());
-			//set the gradient (n.b. dodi - do/di - deriv. of out w.r.t. in)
-			dEdG=nnh_[II].dOutDVal().dodi().row(0);
-			//loop over pairs
-			for(int j=0; j<struc.nAtoms(); ++j){
-				//find the index of the species of atom j
-				const int JJ=index(struc.name(j));
-				//compute rIJ
-				const Eigen::Vector3d rIJ_=struc.posn(i)-struc.posn(j);
-				const double dIJ=rIJ_.norm();
-				//check rIJ
-				if(math::constant::ZERO<dIJ && dIJ<rc_){
-					const double dIJi=1.0/dIJ;
-					//compute the IJ contribution to the radial force
-					const int offsetR_=nnh_[II].offsetR(JJ);
-					const double amp=nnh_[II].basisR(JJ).force(dIJ,dEdG.data()+offsetR_)*dIJi;
-					struc.force(i).noalias()+=amp*rIJ_;
-					struc.force(j).noalias()-=amp*rIJ_;
-					//loop over all triplets
-					for(int k=0; k<struc.nAtoms(); ++k){
-						if(NN_POT_PRINT_STATUS>2) std::cout<<"computing theta("<<i<<","<<j<<","<<k<<")\n";
-						//find the index of the species of atom k
-						const int KK=index(struc.name(k));
-						//compute rIK
-						const Eigen::Vector3d rIK_=struc.posn(i)-struc.posn(k);
-						const double dIK=rIK_.norm();
-						if(math::constant::ZERO<dIK && dIK<rc_){
-							const double dIKi=1.0/dIK;
-							//compute rJK
-							const Eigen::Vector3d rJK_=struc.posn(j)-struc.posn(k);
-							const double dJK=rJK_.norm();
-							if(math::constant::ZERO<dJK){
-								const double dJKi=1.0/dJK;
-								//compute the IJ,IK,JK contribution to the angular force
-								const int offsetA_=nnh_[II].nInputR()+nnh_[II].offsetA(JJ,KK);
-								const double cosIJK=rIJ_.dot(rIK_)*dIJi*dIKi;
-								const double d[3]={dIJ,dIK,dJK};
-								double phi=0; double eta[3]={0,0,0};
-								nnh_[II].basisA(JJ,KK).force(phi,eta,cosIJK,d,dEdG.data()+offsetA_);
-								struc.force(i).noalias()+=(phi*(dIKi-cosIJK*dIJi)+eta[0])*rIJ_*dIJi;
-								struc.force(i).noalias()+=(phi*(dIJi-cosIJK*dIKi)+eta[1])*rIK_*dIKi;
-								struc.force(j).noalias()-=(-phi*cosIJK*dIJi+eta[0])*rIJ_*dIJi+phi*dIJi*rIK_*dIKi;
-								struc.force(j).noalias()-=eta[2]*rJK_*dJKi;
-								struc.force(k).noalias()-=(-phi*cosIJK*dIKi+eta[1])*rIK_*dIKi+phi*dIKi*rIJ_*dIJi;
-								struc.force(k).noalias()+=eta[2]*rJK_*dJKi;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return energyt;
+	calc_symm(struc);
+	//compute the energy
+	struc.energy()=energy(struc);
+	//compute the forces
+	forces(struc);
+	//return energy
+	return struc.energy();
 }
 
 //==== static functions ====
 
 //read/write basis
 
+/**
+* Read the basis for a given species from file.
+* @param file - the name of the file from which the object will be read
+* @param nnpot - the neural network potential to be written
+* @param atomName - the species for which we will read the basis
+*/
 void NNPot::read_basis(const char* file, NNPot& nnpot, const char* atomName){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::read(const char*,NNPot&,const char*):\n";
 	FILE* reader=NULL;
@@ -788,6 +382,12 @@ void NNPot::read_basis(const char* file, NNPot& nnpot, const char* atomName){
 	} else throw std::runtime_error(std::string("NNPot::read(const char*,NNPot&): Could not open nnpot file: \"")+std::string(file)+std::string("\""));
 }
 
+/**
+* Read the basis for a given species from file.
+* @param reader - the file pointer from which the object will be read
+* @param nnpot - the neural network potential to be written
+* @param atomName - the species for which we will read the basis
+*/
 void NNPot::read_basis(FILE* reader, NNPot& nnpot, const char* atomName){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::read_basis(FILE*,NNPot&,const char*):\n";
 	//==== local function variables ====
@@ -858,6 +458,7 @@ void NNPot::write(const char* file, const NNPot& nnpot){
 */
 void NNPot::read(const char* file, NNPot& nnpot){
 	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::read(const char*,NNPot&):\n";
+	std::cout<<"file = "<<file<<"\n";
 	FILE* reader=NULL;
 	reader=fopen(file,"r");
 	if(reader!=NULL){
@@ -920,29 +521,37 @@ void NNPot::write(FILE* writer, const NNPot& nnpot){
 * @param nnpot - stores the neural network potential to be read
 */
 void NNPot::read(FILE* reader, NNPot& nnpot){
-	if(NN_POT_PRINT_FUNC>0) std::cout<<"NNPot::read(FILE*,NNPot&):\n";
+	if(NN_POT_PRINT_FUNC>-1) std::cout<<"NNPot::read(FILE*,NNPot&):\n";
 	//==== local function variables ====
 	std::vector<std::string> strlist;
 	char* input=new char[string::M];
 	//==== header ====
+	std::cout<<"reading header\n";
 	fgets(input,string::M,reader);
 	//==== number of species ====
+	std::cout<<"reading nspecies\n";
 	string::split(fgets(input,string::M,reader),string::WS,strlist);
 	const int nspecies=std::atoi(strlist.at(1).c_str());
+	std::cout<<"nspecies = "<<nspecies<<"\n";
 	if(nspecies<=0) throw std::invalid_argument("NNPot::read(FILE*,NNPot&): invalid number of species.");
 	//==== species ====
+	std::cout<<"reading species\n";
 	std::vector<Atom> species(nspecies);
 	for(int n=0; n<nspecies; ++n){
 		Atom::read(fgets(input,string::M,reader),species[n]);
 	}
 	//==== resize ====
+	std::cout<<"resizing\n";
 	nnpot.resize(species);
 	//==== global cutoff ====
+	std::cout<<"reading cutoff\n";
 	string::split(fgets(input,string::M,reader),string::WS,strlist);
 	const double rc=std::atof(strlist.at(1).c_str());
 	if(rc<=0) throw std::invalid_argument("NNPot::read(FILE*,NNPot&): invalid cutoff.");
 	else nnpot.rc()=rc;
+	std::cout<<"rc = "<<rc<<"\n";
 	//==== basis ====
+	std::cout<<"reading basis\n";
 	for(int i=0; i<nspecies; ++i){
 		//read central species
 		string::split(fgets(input,string::M,reader),string::WS,strlist);
@@ -968,10 +577,12 @@ void NNPot::read(FILE* reader, NNPot& nnpot){
 		}
 	}
 	//==== initialize inputs ====
+	std::cout<<"init inputs\n";
 	for(int i=0; i<nspecies; ++i){
 		nnpot.nnh(i).init_input();
 	}
 	//==== neural network ====
+	std::cout<<"reading nn\n";
 	for(int n=0; n<nspecies; ++n){
 		//read species
 		string::split(fgets(input,string::M,reader),string::WS,strlist);

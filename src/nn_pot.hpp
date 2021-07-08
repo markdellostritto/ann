@@ -88,9 +88,13 @@ NOTES:
 	However, the class NNPot is required to define all species, define all neural network potentials, and to
 	compute the symmetry functions, total energies, and forces for a given atomic configuration.
 */
-
 class NNH{
 private:
+	//network configuration
+	int nInput_;//number of radial + angular symmetry functions
+	int nInputR_;//number of radial symmetry functions
+	int nInputA_;//number of angular symmetry functions
+	
 	//hamiltonian
 	int nspecies_;//the total number of species
 	Atom atom_;//atom - name, mass, energy, charge
@@ -99,13 +103,8 @@ private:
 	
 	//basis for pair/triple interactions
 	std::vector<BasisR> basisR_;//radial basis functions (nspecies_)
-	LMat<BasisA> basisA_;//angular basis functions (nspecies x (nspecies+1)/2)
-	
-	//network configuration
-	int nInput_;//number of radial + angular symmetry functions
-	int nInputR_;//number of radial symmetry functions
-	int nInputA_;//number of angular symmetry functions
 	std::vector<int> offsetR_;//offset for the given radial basis (nspecies_)
+	LMat<BasisA> basisA_;//angular basis functions (nspecies x (nspecies+1)/2)
 	LMat<int> offsetA_;//offset for the given radial basis (nspecies x (nspecies+1)/2)
 public:
 	//==== constructors/destructors ====
@@ -139,7 +138,7 @@ public:
 	//==== member functions ====
 	//misc
 		void defaults();//set defaults
-		void clear(){defaults();};//clear the potential
+		void clear(){defaults();}//clear the potential
 	//resizing
 		void resize(int nspecies);//resize
 		void init_input();//initialize the inputs
@@ -161,9 +160,7 @@ PRIVATE:
 		note that the atom id is a unique integer generated from the atom name
 		the index is the position of the atom in the list of NNHs (nnh_)
 		thus, this maps assigns the correct index in "nnh_" to each atom id, and thus each atom name
-	std::vector<Eigen::Vector3d> R_ - stores lattice vector offsets
 */
-
 class NNPot{
 private:
 	//global cutoff
@@ -173,9 +170,6 @@ private:
 	int nspecies_;//number of types of atoms
 	Map<int,int> map_;//map atom ids to nnpot index
 	std::vector<NNH> nnh_;//the hamiltonians for each species
-	
-	//utility
-	std::vector<Eigen::Vector3d> R_;
 public:
 	//==== constructors/destructors ====
 	NNPot(){defaults();}
@@ -210,9 +204,9 @@ public:
 	//nn-struc
 		void init_symm(Structure& struc)const;//assign vector of all species in the simulations
 		void calc_symm(Structure& struc);//calculate inputs - symmetry functions
-		void forces(Structure& struc, bool calc_symm=true);//calculate forces
-		double energy(Structure& struc, bool calc_symm=true);//sum over atomic energyies and return total energy
-		double compute(Structure& struc, bool calc_symm=true);//calculate forces
+		void forces(Structure& struc);//calculate forces
+		double energy(const Structure& struc);//sum over atomic energyies and return total energy
+		double compute(Structure& struc);//calculate forces
 		
 	//==== static functions ====
 	static void read_basis(const char* file, NNPot& nnpot, const char* atomName);//read basis for atomName
