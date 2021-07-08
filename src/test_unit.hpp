@@ -89,6 +89,7 @@ void test_unit_opt_nag();
 void test_unit_opt_adam();
 void test_unit_opt_nadam();
 void test_unit_opt_amsgrad();
+void test_unit_opt_cg();
 
 //**********************************************
 // ewald
@@ -128,6 +129,7 @@ void test_unit_nn_time();
 
 void test_unit_nnh();
 void test_unit_nnp();
+void test_unit_nnp_csymm();
 
 //**********************************************
 // structure

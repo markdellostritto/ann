@@ -30,6 +30,7 @@
 // ann - structure
 #include "structure.hpp"
 #include "cell_list.hpp"
+#include "vasp.hpp"
 // ann - units
 #include "units.hpp"
 // ann - compiler
@@ -1022,7 +1023,6 @@ void test_unit_opt_sgd(){
 		+std::fabs(sgd.alpha()-sgdc.alpha())
 		+std::fabs(sgd.lambda()-sgdc.lambda())
 		+std::fabs(sgd.gamma()-sgdc.gamma())
-		+std::fabs(sgd.gamma0()-sgdc.gamma0())
 		+std::fabs(sgd.power()-sgdc.power())
 		+std::abs(size_pack-size)
 		+std::abs(size_unpack-size)
@@ -1092,7 +1092,6 @@ void test_unit_opt_sdm(){
 		+std::fabs(sdm.alpha()-sdmc.alpha())
 		+std::fabs(sdm.lambda()-sdmc.lambda())
 		+std::fabs(sdm.gamma()-sdmc.gamma())
-		+std::fabs(sdm.gamma0()-sdmc.gamma0())
 		+std::fabs(sdm.power()-sdmc.power())
 		+std::fabs(sdm.eta()-sdmc.eta())
 		+std::abs(size_pack-size)
@@ -1162,7 +1161,6 @@ void test_unit_opt_nag(){
 		+std::fabs(nag.alpha()-nagc.alpha())
 		+std::fabs(nag.lambda()-nagc.lambda())
 		+std::fabs(nag.gamma()-nagc.gamma())
-		+std::fabs(nag.gamma0()-nagc.gamma0())
 		+std::fabs(nag.power()-nagc.power())
 		+std::fabs(nag.power()-nagc.power())
 		+std::fabs(nag.eta()-nagc.eta())
@@ -1232,7 +1230,6 @@ void test_unit_opt_adam(){
 		+std::fabs(adam.alpha()-adamc.alpha())
 		+std::fabs(adam.lambda()-adamc.lambda())
 		+std::fabs(adam.gamma()-adamc.gamma())
-		+std::fabs(adam.gamma0()-adamc.gamma0())
 		+std::fabs(adam.power()-adamc.power())
 		+std::fabs(adam.beta1i()-adamc.beta1i())
 		+std::fabs(adam.beta2i()-adamc.beta2i())
@@ -1302,7 +1299,6 @@ void test_unit_opt_nadam(){
 		+std::fabs(nadam.alpha()-nadamc.alpha())
 		+std::fabs(nadam.lambda()-nadamc.lambda())
 		+std::fabs(nadam.gamma()-nadamc.gamma())
-		+std::fabs(nadam.gamma0()-nadamc.gamma0())
 		+std::fabs(nadam.power()-nadamc.power())
 		+std::fabs(nadam.beta1i()-nadamc.beta1i())
 		+std::fabs(nadam.beta2i()-nadamc.beta2i())
@@ -1372,7 +1368,6 @@ void test_unit_opt_amsgrad(){
 		+std::fabs(amsgrad.alpha()-amsgradc.alpha())
 		+std::fabs(amsgrad.lambda()-amsgradc.lambda())
 		+std::fabs(amsgrad.gamma()-amsgradc.gamma())
-		+std::fabs(amsgrad.gamma0()-amsgradc.gamma0())
 		+std::fabs(amsgrad.power()-amsgradc.power())
 		+std::fabs(amsgrad.beta1i()-amsgradc.beta1i())
 		+std::fabs(amsgrad.beta2i()-amsgradc.beta2i())
@@ -1383,6 +1378,73 @@ void test_unit_opt_amsgrad(){
 	char* str=new char[print::len_buf];
 	std::cout<<print::buf(str,char_buf)<<"\n";
 	std::cout<<"TEST - UNIT - OPTIMIZE - AMSGRAD\n";
+	std::cout<<"n_steps = "<<data.step()<<"\n";
+	std::cout<<"val     = "<<data.val()<<"\n";
+	std::cout<<"x       = "<<data.p().transpose()<<"\n";
+	std::cout<<"err - s = "<<errs<<"\n";
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	delete[] str;
+}
+
+void test_unit_opt_cg(){
+	//rosenberg function
+	Rosen rosen;
+	//init data
+	Opt::Data data(2);
+	data.p()[0]=2.0*(1.0*std::rand()/RAND_MAX-0.5);
+	data.p()[1]=2.0*(1.0*std::rand()/RAND_MAX-0.5);
+	data.pOld()=data.p();
+	data.max()=100000;
+	data.nPrint()=100;
+	data.algo()=Opt::ALGO::CG;
+	data.optVal()=Opt::VAL::FTOL_ABS;
+	data.tol()=1e-8;
+	//init optimizer
+	Opt::CG cg(data.dim());
+	cg.decay()=Opt::DECAY::CONST;
+	cg.alpha()=1;
+	cg.gamma()=1e-3;
+	//optimize
+	for(int i=0; i<data.max(); ++i){
+		//compute the value and gradient
+		data.val()=rosen(data.p(),data.g());
+		//compute the new position
+		cg.step(data);
+		//calculate the difference
+		data.dv()=std::fabs(data.val()-data.valOld());
+		data.dp()=(data.p()-data.pOld()).norm();
+		//check the break condition
+		switch(data.optVal()){
+			case Opt::VAL::FTOL_REL: if(data.dv()<data.tol()) break;
+			case Opt::VAL::XTOL_REL: if(data.dp()<data.tol()) break;
+			case Opt::VAL::FTOL_ABS: if(data.val()<data.tol()) break;
+		}
+		//print the status
+		data.pOld().noalias()=data.p();//set "old" p value
+		data.gOld().noalias()=data.g();//set "old" g value
+		data.valOld()=data.val();//set "old" value
+		//update step
+		++data.step();
+	}
+	//serialization
+	Opt::CG cgc;
+	const int size=serialize::nbytes(cg);
+	char* arr=new char[size];
+	const int size_pack=serialize::pack(cg,arr);
+	const int size_unpack=serialize::unpack(cgc,arr);
+	const double errs=(
+		std::abs(cg.dim()-cgc.dim())
+		+std::fabs(cg.alpha()-cgc.alpha())
+		+std::fabs(cg.lambda()-cgc.lambda())
+		+std::fabs(cg.gamma()-cgc.gamma())
+		+std::fabs(cg.power()-cgc.power())
+		+std::abs(size_pack-size)
+		+std::abs(size_unpack-size)
+	);
+	//print
+	char* str=new char[print::len_buf];
+	std::cout<<print::buf(str,char_buf)<<"\n";
+	std::cout<<"TEST - UNIT - OPTIMIZE - CG\n";
 	std::cout<<"n_steps = "<<data.step()<<"\n";
 	std::cout<<"val     = "<<data.val()<<"\n";
 	std::cout<<"x       = "<<data.p().transpose()<<"\n";
@@ -2291,6 +2353,61 @@ void test_unit_nnp(){
 	std::cout<<nnp_copy<<"\n";
 }
 
+void test_unit_nnp_csymm(){
+	//local function variables
+	std::vector<Atom> atoms;
+	NNPot nnpot;
+	Structure struc_small;
+	Structure struc_large;
+	AtomType atomT;
+	atomT.name=true; atomT.an=false; atomT.type=true; atomT.index=false;
+	atomT.posn=true; atomT.force=false; atomT.symm=true; atomT.charge=false;
+	atomT.neigh=true;
+	//set the atoms
+	std::cout<<"setting atoms\n";
+	atoms.resize(1);
+	atoms[0].name()="Ar";
+	atoms[0].mass()=22.90;
+	atoms[0].energy()=0.0;
+	atoms[0].charge()=0.0;
+	//resize the nnpot
+	std::cout<<"setting nnpot\n";
+	nnpot.rc()=9.0;
+	nnpot.resize(atoms);
+	NNPot::read_basis("basis_Ar",nnpot,"Ar");
+	//print the nnpot
+	std::cout<<nnpot<<"\n";
+	//read the structures
+	std::cout<<"reading structures\n";
+	VASP::POSCAR::read("Ar.vasp",atomT,struc_small);
+	VASP::POSCAR::read("Ar_l4.vasp",atomT,struc_large);
+	//set the type
+	for(int i=0; i<struc_small.nAtoms(); ++i) struc_small.type(i)=nnpot.index(struc_small.name(i));
+	for(int i=0; i<struc_large.nAtoms(); ++i) struc_large.type(i)=nnpot.index(struc_large.name(i));
+	//compute neighbor lists
+	Structure::neigh_list(struc_small,nnpot.rc());
+	Structure::neigh_list(struc_large,nnpot.rc());
+	//init the symmetry functions
+	std::cout<<"initializing symmetry functions\n";
+	nnpot.init_symm(struc_small);
+	nnpot.init_symm(struc_large);
+	//compute the symmetry functions
+	std::cout<<"computing symmetry functions\n";
+	nnpot.calc_symm(struc_small);
+	nnpot.calc_symm(struc_large);
+	//find average symmetry function
+	Eigen::VectorXd symm_small=Eigen::VectorXd::Zero(struc_small.symm(0).size());
+	Eigen::VectorXd symm_large=Eigen::VectorXd::Zero(struc_large.symm(0).size());
+	std::cout<<"symm_small = "<<struc_small.symm(0).transpose()<<"\n";
+	std::cout<<"symm_large = "<<struc_large.symm(0).transpose()<<"\n";
+	/*for(int i=0; i<struc_small.nAtoms(); ++i){
+		std::cout<<"symm - small - "<<i<<" = "<<struc_small.symm(i).transpose()<<"\n";
+	}
+	for(int i=0; i<struc_large.nAtoms(); ++i){
+		std::cout<<"symm - large - "<<i<<" = "<<struc_large.symm(i).transpose()<<"\n";
+	}*/
+}
+
 //**********************************************
 // structure
 //**********************************************
@@ -2644,6 +2761,7 @@ int main(int argc, char* argv[]){
 	test_unit_opt_adam();
 	test_unit_opt_nadam();
 	test_unit_opt_amsgrad();
+	test_unit_opt_cg();
 	std::cout<<print::title("OPTIMIZE",str)<<"\n";
 	std::cout<<print::buf(str)<<"\n";
 	
@@ -2707,6 +2825,9 @@ int main(int argc, char* argv[]){
 	std::cout<<"&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
 	test_unit_nnp();
 	std::cout<<"&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
+	std::cout<<"**************************************************************************\n";
+	test_unit_nnp_csymm();
+	std::cout<<"**************************************************************************\n";
 	std::cout<<print::title("NNH",str)<<"\n";
 	std::cout<<print::buf(str)<<"\n";
 	
