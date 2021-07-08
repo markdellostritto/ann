@@ -37,6 +37,7 @@ struct ALGO{
 		AMSGRAD=9,
 		BFGS=10,
 		RPROP=11,
+		CG=12,
 	};
 	static type read(const char* str);
 	static const char* name(const ALGO::type& t);
@@ -172,7 +173,6 @@ protected:
 	double alpha_;//step decay constant
 	double lambda_;//regularization parameter
 	double gamma_;//gradient step size
-	double gamma0_;//gradient step size - initial
 	double power_;//step decay power
 	double mix_;//mixing parameter
 	double gmax_,gmin_;
@@ -197,8 +197,6 @@ public:
 	const double& alpha()const{return alpha_;}
 	double& gamma(){return gamma_;}
 	const double& gamma()const{return gamma_;}
-	double& gamma0(){return gamma0_;}
-	const double& gamma0()const{return gamma0_;}
 	double& gmin(){return gmin_;}
 	const double& gmin()const{return gmin_;}
 	double& gmax(){return gmax_;}
@@ -506,6 +504,27 @@ public:
 		Neurocomputing 50:105-123, 2003
 */
 
+//cg
+class CG final: public Model{
+private:
+	static const double eps_;//small term to prevent divergence
+	Eigen::VectorXd cgd_;//cg direction
+public:
+	//constructors/destructors
+	CG(){defaults();}
+	CG(int dim){init(dim);}
+	~CG(){}
+	//access
+	Eigen::VectorXd& cgd(){return cgd_;}
+	const Eigen::VectorXd& cgd()const{return cgd_;}
+	//member functions
+	void step(Data& d);
+	void defaults();
+	void init(int dim);
+	//operators
+	friend std::ostream& operator<<(std::ostream& out, const CG& cg);
+};
+
 //read from file
 
 Model& read(Model& model, const char* file);
@@ -570,6 +589,7 @@ namespace serialize{
 	template <> int nbytes(const Opt::AMSGRAD& obj);
 	template <> int nbytes(const Opt::BFGS& obj);
 	template <> int nbytes(const Opt::RPROP& obj);
+	template <> int nbytes(const Opt::CG& obj);
 	
 	//**********************************************
 	// packing
@@ -588,6 +608,7 @@ namespace serialize{
 	template <> int pack(const Opt::AMSGRAD& obj, char* arr);
 	template <> int pack(const Opt::BFGS& obj, char* arr);
 	template <> int pack(const Opt::RPROP& obj, char* arr);
+	template <> int pack(const Opt::CG& obj, char* arr);
 	
 	//**********************************************
 	// unpacking
@@ -606,6 +627,7 @@ namespace serialize{
 	template <> int unpack(Opt::AMSGRAD& obj, const char* arr);
 	template <> int unpack(Opt::BFGS& obj, const char* arr);
 	template <> int unpack(Opt::RPROP& obj, const char* arr);
+	template <> int unpack(Opt::CG& obj, const char* arr);
 	
 }
 

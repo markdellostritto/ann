@@ -41,6 +41,7 @@ std::ostream& operator<<(std::ostream& out, const ALGO::type& type){
 		case ALGO::AMSGRAD: out<<"AMSGRAD"; break;
 		case ALGO::BFGS: out<<"BFGS"; break;
 		case ALGO::RPROP: out<<"RPROP"; break;
+		case ALGO::CG: out<<"CG"; break;
 		default: out<<"UNKNOWN"; break;
 	}
 	return out;
@@ -59,6 +60,7 @@ const char* ALGO::name(const ALGO::type& t){
 		case ALGO::AMSGRAD: return "AMSGRAD";
 		case ALGO::BFGS: return "BFGS";
 		case ALGO::RPROP: return "RPROP";
+		case ALGO::CG: return "CG";
 		default: return "UNKNOWN";
 	}
 }
@@ -75,6 +77,7 @@ ALGO::type ALGO::read(const char* str){
 	else if(std::strcmp(str,"AMSGRAD")==0) return ALGO::AMSGRAD;
 	else if(std::strcmp(str,"BFGS")==0) return ALGO::BFGS;
 	else if(std::strcmp(str,"RPROP")==0) return ALGO::RPROP;
+	else if(std::strcmp(str,"CG")==0) return ALGO::CG;
 	else return ALGO::UNKNOWN;
 }
 
@@ -203,13 +206,12 @@ std::ostream& operator<<(std::ostream& out, const Model& model){
 	out<<"DIM    = "<<model.dim_<<"\n";
 	out<<"DECAY  = "<<model.decay_<<"\n";
 	out<<"GAMMA  = "<<model.gamma_<<"\n";
-	out<<"GAMMA0 = "<<model.gamma0_<<"\n";
 	out<<"GMAX   = "<<model.gmax_<<"\n";
 	out<<"GMIN   = "<<model.gmin_<<"\n";
 	out<<"ALPHA  = "<<model.alpha_<<"\n";
 	out<<"LAMBDA = "<<model.lambda_<<"\n";
 	out<<"POW    = "<<model.power_<<"\n";
-	out<<"MIX    = "<<model.mix_<<"\n";
+	out<<"MIX    = "<<model.mix_;
 	return out;
 }
 
@@ -221,7 +223,6 @@ void Model::defaults(){
 	algo_=ALGO::UNKNOWN;
 	decay_=DECAY::CONST;
 	gamma_=0;
-	gamma0_=0;
 	alpha_=1;
 	power_=0;
 	period_=0;
@@ -237,10 +238,10 @@ void Model::init(int n){
 void Model::update_step(int step){
 	switch(decay_){
 		case DECAY::CONST: break;
-		case DECAY::EXP:  gamma_*=exp(-alpha_); break;
-		case DECAY::SQRT: gamma_*=sqrt((1.0+alpha_*step)/(1.0+alpha_*(step+1))); break;
-		case DECAY::INV:  gamma_*=(1.0+alpha_*step)/(1.0+alpha_*(step+1)); break;
-		case DECAY::POW:  gamma_*=pow((1.0+alpha_*step)/(1.0+alpha_*(step+1)),power_); break;
+		case DECAY::EXP:  gamma_*=(1.0-alpha_); break;
+		case DECAY::SQRT: gamma_*=(1.0-0.5*alpha_/(1.0+alpha_*step)); break;
+		case DECAY::INV:  gamma_*=(1.0-alpha_/(1.0+alpha_*step)); break;
+		case DECAY::POW:  gamma_*=(1.0-power_*alpha_/(1.0+alpha_*step)); break;
 		case DECAY::STEP: if(step>0 && step%period_==0) gamma_*=alpha_; break;
 		case DECAY::COS:  gamma_=(gmax_-gmin_)*0.5*(std::cos(math::func::mod((2.0*math::constant::PI*step)/period_,math::constant::PI))+1.0)*exp(-alpha_*step)+gmin_; break;
 		default: throw std::invalid_argument("Model::update_step(int): invalid decay schedule.");
@@ -798,6 +799,45 @@ void RPROP::init(int dim){
 	dx_=Eigen::VectorXd::Constant(dim,0.0);
 }
 
+//CG
+	
+const double CG::eps_=1e-8;
+
+void CG::defaults(){
+	algo_=ALGO::CG;
+}
+
+std::ostream& operator<<(std::ostream& out, const CG& cg){
+	char* str=new char[print::len_buf];
+	out<<print::buf(str)<<"\n";
+	out<<print::title("CG",str)<<"\n";
+	out<<static_cast<const Model&>(cg)<<"\n";
+	out<<print::title("CG",str)<<"\n";
+	out<<print::buf(str);
+	delete[] str;
+	return out;
+}
+
+void CG::step(Data& d){
+	if(OPT_PRINT_FUNC>1) std::cout<<"CG::step(Data&):\n";
+	//update gradient step
+	update_step(d.step());
+	//compute new cg direction
+	//const double beta_=(d.step()==0)?1.0:d.g().squaredNorm()/(d.gOld().squaredNorm()+eps_);
+	const double beta_=(d.step()==0)?1.0:d.g().dot(d.g()-d.gOld())/(d.gOld().squaredNorm()+eps_);
+	cgd_*=beta_;
+	cgd_.noalias()-=d.g();
+	//compute new position
+	d.p().noalias()+=gamma_*cgd_;
+}
+
+void CG::init(int dim){
+	if(OPT_PRINT_FUNC>0) std::cout<<"CG::init(int):\n";
+	Model::init(dim);
+	cgd_=Eigen::VectorXd::Zero(dim);
+	std::srand(std::time(NULL));
+}
+
 //reading - file
 
 Model& read(Model& model, const char* file){
@@ -928,6 +968,16 @@ RPROP& read(RPROP& rprop, const char* file){
 	return rprop;
 }
 
+CG& read(CG& cg, const char* file){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(CG&,const char*):\n";
+	FILE* reader=fopen(file,"r");
+	if(reader==NULL) throw std::runtime_error("read(CG&,const char*): Could not open file.");
+	read(static_cast<Model&>(cg),reader);
+	read(cg,reader);
+	fclose(reader); reader=NULL;
+	return cg;
+}
+
 //reading - file pointer
 
 Data& read(Data& data, FILE* reader){
@@ -973,7 +1023,6 @@ Model& read(Model& model, FILE* reader){
 			model.algo()=ALGO::read(string::to_upper(strlist.at(1)).c_str());
 		} else if(strlist.at(0)=="GAMMA"){
 			model.gamma()=std::atof(strlist.at(1).c_str());
-			model.gamma0()=model.gamma();
 		} else if(strlist.at(0)=="ALPHA"){
 			model.alpha()=std::atof(strlist.at(1).c_str());
 		} else if(strlist.at(0)=="LAMBDA"){
@@ -1098,6 +1147,12 @@ RPROP& read(RPROP& rprop, FILE* reader){
 	return rprop;
 }
 
+CG& read(CG& cg, FILE* reader){
+	if(OPT_PRINT_FUNC>0) std::cout<<"read(CG&,FILE*):\n";
+	read(static_cast<Model&>(cg),reader);
+	return cg;
+}
+
 //operators - comparison
 
 bool operator==(const SGD& obj1, const SGD& obj2){
@@ -1151,6 +1206,9 @@ bool operator==(const BFGS& obj1, const BFGS& obj2){
 bool operator==(const RPROP& obj1, const RPROP& obj2){
 	return true;
 }
+bool operator==(const CG& obj1, const CG& obj2){
+	return true;
+}
 
 }
 
@@ -1194,7 +1252,6 @@ template <> int nbytes(const Opt::Model& obj){
 	size+=sizeof(Opt::ALGO::type);//algo_
 	size+=sizeof(Opt::DECAY::type);//decay_
 	size+=sizeof(double);//gamma_
-	size+=sizeof(double);//gamma0_
 	size+=sizeof(double);//gmax_
 	size+=sizeof(double);//gmin_
 	size+=sizeof(double);//alpha_
@@ -1283,6 +1340,12 @@ template <> int nbytes(const Opt::RPROP& obj){
 	size+=nbytes(obj.dx());//dx_
 	return size;
 }
+template <> int nbytes(const Opt::CG& obj){
+	int size=0;
+	size+=nbytes(static_cast<const Opt::Model&>(obj));
+	size+=nbytes(obj.cgd());//cgd_
+	return size;
+}
 
 //**********************************************
 // packing
@@ -1322,7 +1385,6 @@ template <> int pack(const Opt::Model& obj, char* arr){
 	std::memcpy(arr+pos,&obj.algo(),sizeof(Opt::ALGO::type)); pos+=sizeof(Opt::ALGO::type);//algo_
 	std::memcpy(arr+pos,&obj.decay(),sizeof(Opt::DECAY::type)); pos+=sizeof(Opt::DECAY::type);//decay_
 	std::memcpy(arr+pos,&obj.gamma(),sizeof(double)); pos+=sizeof(double);//gamma_
-	std::memcpy(arr+pos,&obj.gamma0(),sizeof(double)); pos+=sizeof(double);//gamma0_
 	std::memcpy(arr+pos,&obj.gmax(),sizeof(double)); pos+=sizeof(double);//gmax_
 	std::memcpy(arr+pos,&obj.gmin(),sizeof(double)); pos+=sizeof(double);//gmin_
 	std::memcpy(arr+pos,&obj.alpha(),sizeof(double)); pos+=sizeof(double);//alpha_
@@ -1411,6 +1473,12 @@ template <> int pack(const Opt::RPROP& obj, char* arr){
 	pos+=pack(obj.dx(),arr+pos);//dex_
 	return pos;
 }
+template <> int pack(const Opt::CG& obj, char* arr){
+	int pos=0;
+	pos+=pack(static_cast<const Opt::Model&>(obj),arr+pos);
+	pos+=pack(obj.cgd(),arr+pos);//cgd_
+	return pos;
+}
 
 //**********************************************
 // unpacking
@@ -1450,7 +1518,6 @@ template <> int unpack(Opt::Model& obj, const char* arr){
 	std::memcpy(&obj.algo(),arr+pos,sizeof(Opt::ALGO::type)); pos+=sizeof(Opt::ALGO::type);//algo_
 	std::memcpy(&obj.decay(),arr+pos,sizeof(Opt::DECAY::type)); pos+=sizeof(Opt::DECAY::type);//decay_
 	std::memcpy(&obj.gamma(),arr+pos,sizeof(double)); pos+=sizeof(double);//gamma_
-	std::memcpy(&obj.gamma0(),arr+pos,sizeof(double)); pos+=sizeof(double);//gamma0_
 	std::memcpy(&obj.gmax(),arr+pos,sizeof(double)); pos+=sizeof(double);//gmax_
 	std::memcpy(&obj.gmin(),arr+pos,sizeof(double)); pos+=sizeof(double);//gmin_
 	std::memcpy(&obj.alpha(),arr+pos,sizeof(double)); pos+=sizeof(double);//alpha_
@@ -1537,6 +1604,12 @@ template <> int unpack(Opt::RPROP& obj, const char* arr){
 	pos+=unpack(static_cast<Opt::Model&>(obj),arr+pos);
 	pos+=unpack(obj.delta(),arr+pos);//delta_
 	pos+=unpack(obj.dx(),arr+pos);//dx_
+	return pos;
+}
+template <> int unpack(Opt::CG& obj, const char* arr){
+	int pos=0;
+	pos+=unpack(static_cast<Opt::Model&>(obj),arr+pos);
+	pos+=unpack(obj.cgd(),arr+pos);//cgd_
 	return pos;
 }
 
