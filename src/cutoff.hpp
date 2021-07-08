@@ -13,7 +13,21 @@
 #include <iosfwd> 
 // ann - math
 #include "math_const.hpp"
-#include "math_special.hpp"
+
+//************************************************************
+// NORMALIZATION SCHEMES
+//************************************************************
+
+struct NormN{
+	enum type{
+		UNKNOWN=-1,
+		UNIT=0,
+		VOL=1
+	};
+	static type read(const char* str);
+	static const char* name(const NormN::type& t);
+};
+std::ostream& operator<<(std::ostream& out, const NormN::type& t);
 
 namespace cutoff{
 
@@ -64,7 +78,7 @@ public:
 
 //==== Cos ====
 
-class Cos: public Func{
+class Cos final: public Func{
 private:
 	double prci_;
 public:
@@ -82,7 +96,7 @@ public:
 
 //==== Tanh ====
 
-class Tanh: public Func{
+class Tanh final: public Func{
 public:
 	//constructors/destructors
 	Tanh():Func(){name_=Name::TANH;}
