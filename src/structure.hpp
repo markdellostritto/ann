@@ -9,12 +9,12 @@
 #include <iosfwd>
 //Eigen
 #include <Eigen/Dense>
-// ann - typedefs
-#include "typedef.hpp"
 // ann - cell
 #include "cell.hpp"
 // ann - serialize
 #include "serialize.hpp"
+// ann - typedef
+#include "typedef.hpp"
 
 #ifndef STRUC_PRINT_FUNC
 #define STRUC_PRINT_FUNC 0
@@ -22,6 +22,10 @@
 
 #ifndef STRUC_PRINT_STATUS
 #define STRUC_PRINT_STATUS 0
+#endif
+
+#ifndef STRUC_PRINT_DATA
+#define STRUC_PRINT_DATA 0
 #endif
 
 //**********************************************************************************************
@@ -47,6 +51,8 @@ struct AtomType{
 	bool force;
 	//nnp
 	bool symm;
+	//neigh
+	bool neigh;
 	//==== constructors/destructors ====
 	AtomType(){defaults();}
 	~AtomType(){}
@@ -93,6 +99,32 @@ public:
 };
 
 //**********************************************************************************************
+//Neighbor
+//**********************************************************************************************
+
+class Neighbor{
+private:
+	Eigen::Vector3d r_;//distance vector pointing from neighbor to central atom
+	double dr_;//norm of r_;
+	int type_;
+	int index_;
+public:
+	Neighbor():dr_(0.0),type_(-1),index_(-1),r_(Eigen::Vector3d::Zero()){};
+	~Neighbor(){};
+	
+	Eigen::Vector3d& r(){return r_;}
+	const Eigen::Vector3d& r()const{return r_;}
+	double& dr(){return dr_;}
+	const double& dr()const{return dr_;}
+	int& type(){return type_;}
+	const int& type()const{return type_;}
+	int& index(){return index_;}
+	const int& index()const{return index_;}
+	
+	void clear();
+};
+
+//**********************************************************************************************
 //AtomData
 //**********************************************************************************************
 
@@ -112,11 +144,13 @@ protected:
 	std::vector<double>	charge_;//charge
 	std::vector<double>	spin_;//spin
 	//vector properties
-	std::vector<vec3d>	posn_;//position
-	std::vector<vec3d>	vel_;//velocity
-	std::vector<vec3d>	force_;//force
+	std::vector<Vec3d>	posn_;//position
+	std::vector<Vec3d>	vel_;//velocity
+	std::vector<Vec3d>	force_;//force
 	//nnp
-	std::vector<vecXd>	symm_;//symmetry function
+	std::vector<VecXd>	symm_;//symmetry function
+	//neighbor
+	std::vector<std::vector<Neighbor> > neigh_;//neighbors
 public:
 	//==== constructors/destructors ====
 	AtomData(){}
@@ -147,15 +181,18 @@ public:
 	std::vector<double>& spin(){return spin_;}
 	const std::vector<double>& spin()const{return spin_;}
 	//vector properties
-	std::vector<vec3d>& posn(){return posn_;}
-	const std::vector<vec3d>& posn()const{return posn_;}
-	std::vector<vec3d>& vel(){return vel_;}
-	const std::vector<vec3d>& vel()const{return vel_;}
-	std::vector<vec3d>& force(){return force_;}
-	const std::vector<vec3d>& force()const{return force_;}
+	std::vector<Vec3d>& posn(){return posn_;}
+	const std::vector<Vec3d>& posn()const{return posn_;}
+	std::vector<Vec3d>& vel(){return vel_;}
+	const std::vector<Vec3d>& vel()const{return vel_;}
+	std::vector<Vec3d>& force(){return force_;}
+	const std::vector<Vec3d>& force()const{return force_;}
 	//nnp
-	std::vector<vecXd>& symm(){return symm_;}
-	const std::vector<vecXd>& symm()const{return symm_;}
+	std::vector<VecXd>& symm(){return symm_;}
+	const std::vector<VecXd>& symm()const{return symm_;}
+	//neighbor
+	std::vector<std::vector<Neighbor> >& neigh(){return neigh_;}
+	const std::vector<std::vector<Neighbor> >& neigh()const{return neigh_;}
 	
 	//==== access - atoms ====
 	//basic properties
@@ -175,16 +212,19 @@ public:
 	double& spin(int i){return spin_[i];}
 	const double& spin(int i)const{return spin_[i];}
 	//vector properties
-	vec3d& posn(int i){return posn_[i];}
-	const vec3d& posn(int i)const{return posn_[i];}
-	vec3d& vel(int i){return vel_[i];}
-	const vec3d& vel(int i)const{return vel_[i];}
-	vec3d& force(int i){return force_[i];}
-	const vec3d& force(int i)const{return force_[i];}
+	Vec3d& posn(int i){return posn_[i];}
+	const Vec3d& posn(int i)const{return posn_[i];}
+	Vec3d& vel(int i){return vel_[i];}
+	const Vec3d& vel(int i)const{return vel_[i];}
+	Vec3d& force(int i){return force_[i];}
+	const Vec3d& force(int i)const{return force_[i];}
 	//nnp
-	vecXd& symm(int i){return symm_[i];}
-	const vecXd& symm(int i)const{return symm_[i];}
-		
+	VecXd& symm(int i){return symm_[i];}
+	const VecXd& symm(int i)const{return symm_[i];}
+	//neighbor
+	std::vector<Neighbor>& neigh(int i){return neigh_[i];}
+	const std::vector<Neighbor>& neigh(int i)const{return neigh_[i];}
+	
 	//==== member functions ====
 	void clear();
 	void resize(int nAtoms, const AtomType& atomT);
@@ -201,6 +241,7 @@ class Structure: public Cell, public Thermo, public AtomData{
 public:
 	//==== constructors/destructors ====
 	Structure(){}
+	Structure(int nAtoms, const AtomType& atomT){resize(nAtoms,atomT);}
 	~Structure(){}
 	
 	//==== operators ====
@@ -213,6 +254,7 @@ public:
 	static void write_binary(const Structure& struc, const char* file);
 	static void read_binary(Structure& struc, const char* file);
 	static Structure& make_super(const Eigen::Vector3i& s, const Structure& ad1, Structure& ad2);
+	static void neigh_list(Structure& struc, double rc);
 };
 
 //**********************************************************************************************
@@ -290,6 +332,7 @@ namespace serialize{
 	
 	template <> int nbytes(const AtomType& obj);
 	template <> int nbytes(const Thermo& obj);
+	template <> int nbytes(const Neighbor& obj);
 	template <> int nbytes(const AtomData& obj);
 	template <> int nbytes(const Structure& obj);
 	
@@ -299,6 +342,7 @@ namespace serialize{
 	
 	template <> int pack(const AtomType& obj, char* arr);
 	template <> int pack(const Thermo& obj, char* arr);
+	template <> int pack(const Neighbor& obj, char* arr);
 	template <> int pack(const AtomData& obj, char* arr);
 	template <> int pack(const Structure& obj, char* arr);
 	
@@ -308,6 +352,7 @@ namespace serialize{
 	
 	template <> int unpack(AtomType& obj, const char* arr);
 	template <> int unpack(Thermo& obj, const char* arr);
+	template <> int unpack(Neighbor& obj, const char* arr);
 	template <> int unpack(AtomData& obj, const char* arr);
 	template <> int unpack(Structure& obj, const char* arr);
 	

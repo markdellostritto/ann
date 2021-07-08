@@ -12,6 +12,8 @@
 #include "print.hpp"
 // ann - structure
 #include "structure.hpp"
+// ann - math
+#include "math_const.hpp"
 
 //**********************************************************************************************
 //AtomType
@@ -22,7 +24,7 @@ std::ostream& operator<<(std::ostream& out, const AtomType& atomT){
 	if(atomT.name)		out<<"name ";
 	if(atomT.an)		out<<"an ";
 	if(atomT.type)		out<<"type ";
-	if(atomT.index)		out<<"index ";
+	if(atomT.index)	out<<"index ";
 	//serial properties
 	if(atomT.mass)		out<<"mass ";
 	if(atomT.charge)	out<<"charge ";
@@ -30,28 +32,32 @@ std::ostream& operator<<(std::ostream& out, const AtomType& atomT){
 	//vector properties
 	if(atomT.posn)		out<<"posn ";
 	if(atomT.vel)		out<<"vel ";
-	if(atomT.force)		out<<"force ";
+	if(atomT.force)	out<<"force ";
 	//nnp
 	if(atomT.symm)		out<<"symm ";
+	//neigh
+	if(atomT.neigh)	out<<"neigh ";
 	return out;
 }
 
 void AtomType::defaults(){
 	//basic properties
-	name	=false;
+	name		=false;
 	an		=false;
-	type	=false;
+	type		=false;
 	index	=false;
 	//serial properties
-	mass	=false;
+	mass		=false;
 	charge	=false;
-	spin	=false;
+	spin		=false;
 	//vector properties
-	posn	=false;
+	posn		=false;
 	vel		=false;
 	force	=false;
 	//nnp
-	symm	=false;
+	symm		=false;
+	//neigh
+	neigh	=false;
 }
 
 //**********************************************************************************************
@@ -90,6 +96,17 @@ Thermo& Thermo::make_super(const Eigen::Vector3i& s, const Thermo& thermo1, Ther
 }
 
 //**********************************************************************************************
+//Neighbor
+//**********************************************************************************************
+
+void Neighbor::clear(){
+	r_.setZero();
+	dr_=0.0;
+	type_=-1;
+	index_=-1;
+}
+
+//**********************************************************************************************
 //AtomData
 //**********************************************************************************************
 
@@ -120,6 +137,8 @@ void AtomData::clear(){
 	force_.clear();
 	//nnp
 	symm_.clear();
+	//neigh
+	neigh_.clear();
 }
 
 //==== resizing ====
@@ -146,6 +165,8 @@ void AtomData::resize(int nAtoms, const AtomType& atomT){
 	if(atomT.force)	force_.resize(nAtoms,Eigen::Vector3d::Zero());
 	//nnp
 	if(atomT.symm)	symm_.resize(nAtoms);
+	//neigh
+	if(atomT.neigh)	neigh_.resize(nAtoms);
 }
 
 //==== static functions ====
@@ -176,6 +197,8 @@ AtomData& AtomData::make_super(const Eigen::Vector3i& s, const AtomData& ad1, At
 					if(atomT.force)	ad2.force(count)=ad1.force(n);
 					//nnp
 					if(atomT.symm)	ad2.symm(count)=ad1.symm(n);
+					//neigh
+					if(atomT.neigh)	ad2.neigh(count)=ad1.neigh(n);
 					//increment
 					++count;
 				}
@@ -301,6 +324,57 @@ Structure& Structure::make_super(const Eigen::Vector3i& s, const Structure& stru
 		}
 	}
 	return struc2;
+}
+
+void Structure::neigh_list(Structure& struc, double rc){
+	//local variables
+	Eigen::Vector3d tmp;
+	const double rc2=rc*rc;
+	//lattice vector shifts
+	const int shellx=floor(2.0*rc/struc.R().row(0).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the x-dir.
+	const int shelly=floor(2.0*rc/struc.R().row(1).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the y-dir.
+	const int shellz=floor(2.0*rc/struc.R().row(2).lpNorm<Eigen::Infinity>());//number of repeated unit cells needed in the z-dir.
+	const int Rsize=(2*shellx+1)*(2*shelly+1)*(2*shellz+1);
+	if(STRUC_PRINT_DATA>0) std::cout<<"Rsize = "<<Rsize<<"\n";
+	if(STRUC_PRINT_DATA>0) std::cout<<"shell = ("<<shellx<<","<<shelly<<","<<shellz<<") = "<<(2*shellx+1)*(2*shelly+1)*(2*shellz+1)<<"\n";
+	std::vector<Eigen::Vector3d> R_(Rsize);
+	int count=0;
+	for(int ix=-shellx; ix<=shellx; ++ix){
+		for(int iy=-shelly; iy<=shelly; ++iy){
+			for(int iz=-shellz; iz<=shellz; ++iz){
+				R_[count++].noalias()=ix*struc.R().col(0)+iy*struc.R().col(1)+iz*struc.R().col(2);
+			}
+		}
+	}
+	//loop over all atoms
+	if(STRUC_PRINT_DATA>0) std::cout<<"computing neighbor list\n";
+	for(int i=0; i<struc.nAtoms(); ++i){
+		//clear the neighbor list
+		struc.neigh(i).clear();
+		//loop over all atoms
+		for(int j=0; j<struc.nAtoms(); ++j){
+			const Eigen::Vector3d rIJ_=struc.diff(struc.posn(i),struc.posn(j),tmp);
+			//loop over lattice vector shifts - atom j
+			for(int n=0; n<Rsize; ++n){
+				//alter the rIJ_ distance by a lattice vector shift
+				const Eigen::Vector3d rIJt_=rIJ_-R_[n];
+				const double dIJ2=rIJt_.squaredNorm();
+				if(math::constant::ZERO<dIJ2 && dIJ2<=rc2){
+					struc.neigh(i).push_back(Neighbor());
+					struc.neigh(i).back().r()=rIJt_;
+					struc.neigh(i).back().dr()=std::sqrt(dIJ2);
+					struc.neigh(i).back().type()=struc.type(j);
+					const Eigen::Vector3d rIJf_=struc.RInv()*rIJt_;
+					if(
+						-0.5<=rIJf_[0] && rIJf_[0]<=0.5 &&
+						-0.5<=rIJf_[1] && rIJf_[1]<=0.5 &&
+						-0.5<=rIJf_[2] && rIJf_[2]<=0.5
+					) struc.neigh(i).back().index()=j;
+					//if(struc.neigh(i).back().index()>=0) std::cout<<"neigh index "<<struc.neigh(i).back().index()<<"\n";
+				}
+			}
+		}
+	}
 }
 
 //**********************************************************************************************
@@ -649,6 +723,8 @@ namespace serialize{
 		size+=sizeof(obj.force);
 		//nnp
 		size+=sizeof(obj.symm);
+		//neigh
+		size+=sizeof(obj.neigh);
 		return size;
 	}
 	template <> int nbytes(const Thermo& obj){
@@ -658,6 +734,15 @@ namespace serialize{
 		size+=sizeof(obj.ewald());
 		size+=sizeof(obj.temp());
 		size+=sizeof(obj.press());
+		return size;
+	}
+	template <> int nbytes(const Neighbor& obj){
+		if(STRUC_PRINT_FUNC>0) std::cout<<"nbytes(const Neighbor&)\n";
+		int size=0;
+		size+=sizeof(double)*3;//r_
+		size+=sizeof(double);//dr_
+		size+=sizeof(int);//type_
+		size+=sizeof(int);//index_
 		return size;
 	}
 	template <> int nbytes(const AtomData& obj){
@@ -682,6 +767,15 @@ namespace serialize{
 		if(obj.atomType().force)  size+=nbytes(obj.force());
 		//nnp
 		if(obj.atomType().symm) size+=nbytes(obj.symm());
+		//neigh
+		if(obj.atomType().neigh){
+			for(int i=0; i<obj.nAtoms(); ++i){
+				size+=sizeof(int);
+				for(int j=0; j<obj.neigh(i).size(); ++j){
+					size+=nbytes(obj.neigh(i)[j]);
+				}
+			}
+		}
 		//return
 		return size;
 	}
@@ -716,6 +810,8 @@ namespace serialize{
 		std::memcpy(arr+pos,&obj.force,sizeof(bool)); pos+=sizeof(bool);
 		//nnp
 		std::memcpy(arr+pos,&obj.symm,sizeof(bool)); pos+=sizeof(bool);
+		//neigh
+		std::memcpy(arr+pos,&obj.neigh,sizeof(bool)); pos+=sizeof(bool);
 		return pos;
 	}
 	template <> int pack(const Thermo& obj, char* arr){
@@ -725,6 +821,15 @@ namespace serialize{
 		std::memcpy(arr+pos,&obj.ewald(),sizeof(double)); pos+=sizeof(double);
 		std::memcpy(arr+pos,&obj.temp(),sizeof(double)); pos+=sizeof(double);
 		std::memcpy(arr+pos,&obj.press(),sizeof(double)); pos+=sizeof(double);
+		return pos;
+	}
+	template <> int pack(const Neighbor& obj, char* arr){
+		if(STRUC_PRINT_FUNC>0) std::cout<<"pack(const Neighbor&,char*):\n";
+		int pos=0;
+		pos+=pack(obj.r(),arr+pos);
+		std::memcpy(arr+pos,&obj.dr(),sizeof(double)); pos+=sizeof(double);
+		std::memcpy(arr+pos,&obj.type(),sizeof(int)); pos+=sizeof(int);
+		std::memcpy(arr+pos,&obj.index(),sizeof(int)); pos+=sizeof(int);
 		return pos;
 	}
 	template <> int pack(const AtomData& obj, char* arr){
@@ -749,6 +854,16 @@ namespace serialize{
 		if(obj.atomType().force)  pos+=pack(obj.force(),arr+pos);
 		//nnp
 		if(obj.atomType().symm) pos+=pack(obj.symm(),arr+pos);
+		//neigh
+		if(obj.atomType().neigh){
+			for(int i=0; i<obj.nAtoms(); ++i){
+				const int s=obj.neigh(i).size();
+				std::memcpy(arr+pos,&s,sizeof(int)); pos+=sizeof(int);
+				for(int j=0; j<s; ++j){
+					pos+=pack(obj.neigh(i)[j],arr+pos);
+				}
+			}
+		}
 		//return
 		return pos;
 	}
@@ -783,6 +898,8 @@ namespace serialize{
 		std::memcpy(&obj.force,arr+pos,sizeof(bool)); pos+=sizeof(bool);
 		//nnp
 		std::memcpy(&obj.symm,arr+pos,sizeof(bool)); pos+=sizeof(bool);
+		//neigh
+		std::memcpy(&obj.neigh,arr+pos,sizeof(bool)); pos+=sizeof(bool);
 		return pos;
 	}
 	template <> int unpack(Thermo& obj, const char* arr){
@@ -792,6 +909,15 @@ namespace serialize{
 		std::memcpy(&obj.ewald(),arr+pos,sizeof(double)); pos+=sizeof(double);
 		std::memcpy(&obj.temp(),arr+pos,sizeof(double)); pos+=sizeof(double);
 		std::memcpy(&obj.press(),arr+pos,sizeof(double)); pos+=sizeof(double);
+		return pos;
+	}
+	template <> int unpack(Neighbor& obj, const char* arr){
+		if(STRUC_PRINT_FUNC>0) std::cout<<"unpack(Neighbor&,const char*):\n";
+		int pos=0;
+		pos+=unpack(obj.r(),arr+pos);
+		std::memcpy(&obj.dr(),arr+pos,sizeof(double)); pos+=sizeof(double);
+		std::memcpy(&obj.type(),arr+pos,sizeof(int)); pos+=sizeof(int);
+		std::memcpy(&obj.index(),arr+pos,sizeof(int)); pos+=sizeof(int);
 		return pos;
 	}
 	template <> int unpack(AtomData& obj, const char* arr){
@@ -820,6 +946,21 @@ namespace serialize{
 		if(obj.atomType().force)  pos+=unpack(obj.force(),arr+pos);
 		//nnp
 		if(obj.atomType().symm) pos+=unpack(obj.symm(),arr+pos);
+		//neigh
+		if(obj.atomType().neigh){
+			for(int i=0; i<obj.nAtoms(); ++i){
+				int s=-1;
+				std::memcpy(&s,arr+pos,sizeof(int)); pos+=sizeof(int);
+				if(s<0) throw std::runtime_error("Invalid number of neighbors\n");
+				obj.neigh(i).clear();
+				if(s>0){
+					obj.neigh(i).resize(s);
+					for(int j=0; j<s; ++j){
+						pos+=unpack(obj.neigh(i)[j],arr+pos);
+					}
+				}
+			}
+		}
 		//return
 		return pos;
 	}
