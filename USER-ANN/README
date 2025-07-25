@@ -1,5 +1,0 @@
-This is a package for atomic neural network energy and force calculations in LAMMPS.
-
-There are slight differences between the files in this folder and the files in the parent folder,
-mostly in the names, in order to make them more compatible with older versions of c/c++
-and the LAMMPS file system.
