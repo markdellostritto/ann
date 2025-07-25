@@ -1,4 +1,4 @@
-# ANN - Atomic Nueral Network
+# AtomicNN - Atomic Nueral Network
 
 Author: Mark J. DelloStritto
 
@@ -8,79 +8,103 @@ for molecular dynamics simulations.
 
 ## CODE ORGANIZATION
 
-**NEURAL NETWORK POTENTIAL**
+**MACHINE LEARNING**
 * nn.hpp               - neural network
-* nn_pot.hpp           - neural network potential
-* cutoff.hpp           - distance cutoff
-* atom.hpp             - stores atom properties
-* nn_pot_train_mpi.hpp - nn pot - training - MPI
+* batch.hpp            - organizing samples into batches
+* data.hpp             - organizing training/validation/testing data
+* pca.hpp              - principal component analysis
 * nn_train.hpp         - nn - training
 * nn_fit.hpp           - nn - function fitting
-* batch.hpp            - organizing samples into batches
 
-**BASIS - RADIAL**
-* basis_radial.hpp    - radial basis (table of radial symmetry functions)
-* symm_radial.hpp     - radial symmetry function header
-* symm_radial_g1.hpp  - "G1" symmetry function [1]
-* symm_radial_g2.hpp  - "G2" symmetry function [1]
-* symm_radial_t1.hpp  - "T1" symmetry function (tanh)
+**NEURAL NETWORK POTENTIAL**
+* nnp.hpp     - neural network potential
+* type.hpp    - stores atom properties
+* nnpte.hpp   - nnp - training - energy only
+* nnptef.hpp  - nnp - training - energy and force
+* nnpteq.hpp  - nnp - training - energy and charge (qeq)
+* nnptes.hpp  - nnp - training - energy and spin
+* nnptk.hpp   - nnp - kalman filter
+* nnpce.hpp   - nnp - compute - energy - single structure
+* nnpces.hpp  - nnp - compute - energy - simulation
 
-**BASIS - ANGULAR**
-* basis_angular.hpp   - angular basis (table of angular symmetry functions)
-* symm_angular.hpp    - angular symmetry function header
-* symm_angular_g3.hpp - "G3" symmetry function [1]
-* symm_angular_g4.hpp - "G4" symmetry function [1]
+**BASIS**
+* cutoff.hpp        - cutoff types
+* basis.hpp         - stores symmetry functions and cutoff
+* basis_radial.hpp  - radial basis (table of radial symmetry functions)
+* basis_angular.hpp - angular basis (table of angular symmetry functions)
 
 **STRUCTURE**
+* atom_type.hpp - type of atom data
 * cell.hpp      - unit cell
-* cell_list.hpp - divides unit cell into grid
+* neighbor.hpp  - nearest neighbor list (images included - yes)
+* pair.hpp      - nearest neighbor list (images included - no)
+* state.hpp     - thermodynamic state variables (e.g. energy, temperature, pressure)
 * structure.hpp - atomic trajectories/properties
-* sim.hpp - time series of structures
+* sim.hpp       - time series of structures
 
 **FORMAT**
-* format.hpp - stores possible formats
-* vasp.hpp   - read/write VASP files
-* qe.hpp     - read/write QE files
-* lammps.hpp - read/write LAMMPS files
-* xyz.hpp    - read/write XYZ files
-* cp2k.hpp   - read/write CP2K files
-* ann.hpp    - read/write ANN files
+* format.hpp       - stores possible formats
+* vasp.hpp         - read/write - VASP - header 
+* vasp_struc.hpp   - read/write - VASP - structure 
+* vasp_sim.hpp     - read/write - VASP - simulation 
+* qe.hpp           - read/write - QE - header 
+* qe_struc.hpp     - read/write - QE - structure
+* xyz.hpp          - read/write - XYZ - header
+* xyz_struc.hpp    - read/write - XYZ - structure 
+* xyz_sim.hpp      - read/write - XYZ - simulation
+* cp2k.hpp         - read/write - CP2K - header
+* cp2k_struc.hpp   - read/write - CP2K - structure
+* cp2k_sim.hpp     - read/write - CP2K - simulation
+* ame_struc.hpp    - read/write - AME - structure
 
 **MATH**
-* math_const.hpp   - mathematical constants
-* math_special.hpp - special functions
-* math_func.hpp    - function evalulation
-* math_cmp.hpp     - comparison functions
-* accumulator.hpp  - statistical accumulator
+* const.hpp        - mathematical constants
+* special.hpp      - special functions
+* func.hpp         - function evalulation
+* cmp.hpp          - comparison functions
+* reduce.hpp       - data reduction
+* corr.hpp         - correlation measures
 * eigen.hpp        - Eigen utilities
-* lmat.hpp         - lower triangular matrix
+* matrix.hpp       - matrix utilities
 * random.hpp       - random number generation
-* optimize.hpp     - optimization
+* rbf.hpp          - radial basis functions
+* poly.hpp         - polynomial functions
+* interp.hpp       - interpolation
+* hist.hpp         - histogram
+
+**OPTIMIZATION**
+* algo.hpp         - optimization algorithms
+* decay.hpp        - step decay schedules
+* loss.hpp         - loss functions
+* stop.hpp         - stop conditions
+* objective.hpp    - objective function
+* kalman.hpp       - kalman filter
 
 **CHEMISTRY**
 * units.hpp   - physical units
 * ptable.hpp  - physical constants
-* ewald3D.hpp - ewald sums
+* alias.hpp   - function for element name aliases
+
+**STRING**
+* print.hpp     - utilities for formatted output
+* parse.hpp     - utilities for parsing input
+* string.hpp    - string utilities
+* token.hpp     - string tokenizer
+
+**MEMORY**
+* map.hpp       - mapping two different objects to each other
+* serialize.hpp - serialization of complex objects
+* lmat.hpp      - lower triangular matrix
 
 **UTILITY**
 * compiler.hpp  - utilities for printing compiler information
 * typedef.hpp   - global typdefs
-* print.hpp     - utilities for formatted output
-* serialize.hpp - serialization of complex objects
-* map.hpp       - mapping two different objects to each other
-* string.hpp    - string utilities
 * time.hpp      - program timing
 
 **MULTITHREADING**
-* parallel.hpp - utilities for thread distribution
-* mpi_util.hpp - utilities for mpi communication
-
-**TEST**
-* test_unit.cpp   - test - unit
-* test_mem.cpp    - test - memory
-* test_foramt.cpp - test - format
-
-![Code Layout](/code_layout.png)
+* comm.hpp      - MPI communicator storage
+* dist.hpp      - parallel data distribution
+* mpif.hpp      - MPI function utility
 
 ## INSTALLATION
 
@@ -88,21 +112,48 @@ This code requires the Eigen Matrix Library (http://eigen.tuxfamily.org)
 
 The Eigen library is a header library, and thus does not need to be compiled. 
 The location of the Eigen library must be specified in the Makefile.
+In addition, one needs to specify the location of the "src" directory in the Makefile.
 The compiler can be specified with COMP and supports COMP=gnu and COMP=intel
+An MPI installation is required.
 
-**Makefile options:**
-* make train   - make training binary for NNPs
-* make test    - make testing binaries
-* make convert - make conversion binary
-* make fit     - make training binary for fitting functions
-* make compute - make utility for computing energies/forces of separate structures with an existing potential
-* make compute_sim - make utility for computing energies/forces of a simulation with an existing potential
-* make intgrad - make utility for computing interated gradients
-* make clean   - removes all object files
+**Makefile options - calculation:** 
+* make nn_fit - Neural Network function fitting
+* make nnpte - Neural Network Potential Training - Energy 
+* make nnptefr1 - Neural Network Potential Training - Energy + Forces
+* make nnptefr2 - Neural Network Potential Training - Energy + Forces (recommended)
+* make nnptefr3 - Neural Network Potential Training - Energy + Forces
+* make nnpce - Neural Network Potential Computation - Energy (single structure)
+* make nnpces - Neural Network Potential Computation - Energy (simulation)
+* make qeqm - computes QEQ charges
+* make qtpiem - computes QTPIE charges
+* make torch - make "torch" md code
+* make convert_struc - convert single structure file
+* make convert_sim - convert simulation file
+* make print_struc - read and print structure file
+* make make_basis - make atomic basis functions from template file
+* make distmat - make code to compute distance matrix
+**Makefile options - testing:**
+* make test_loss - prints all loss functions and their gradients
+* make test_opt - prints test of optimization algorithms
+* make test_math_special - test of special functions
+* make test_nn_unit - unit test of neural network code
+* make test_nn_neuron - unit test of neuron functions
+* make test_nn_grad - unit test of the gradients of a neural network 
+* make test_nn_cost - unit test of the cost function of a neural network
+* make test_pca_gauss - unit test of prinical component analaysis code - Gaussian distribution
+* make test_kspace_coul - test of kspace code - Coulomb interactions
+* make test_kspace_london - test of kspace code - London dispersion interactions
+* make test_pot_coul_cut - unit tests - potential - Coulomb - cutoff
+* make test_pot_coul_long - unit tests - potential - Coulomb - ewald
+* make test_nnp_symm - unit test for nnp - symmetry functions
+* make test_nnp_cutoff - unit test for nnp - cutoff
+* make test_basis_radial - unit test for nnp - basis - radial
+* make test_basis_angular - unit test for nnp - basis - angular
+* make clean - removes all object files
 
 ## EXECUTION
 
-The code is executed taking a single argument, the parameter file, and
+The nnp training code is executed taking a single argument, the parameter file, and
 all output is sent to standard output.  The parameter file provides all data files
 necessary for training, valiadation, and testing as well as all parameters defining
 the neural network potential and the training process.  The binary can be run in
@@ -145,7 +196,7 @@ and forces are computed for this data.
 
 ## NEURAL NETWORK POTENTIAL - SPECIFICATION
 
-The neural network potential for a set of species is stored in one file, as although some aspects
+The neural network potential for a set of species is stored in one file as, though some aspects
 of the potential are solely associated with each species (e.g. the basis), the neural network Hamiltonian
 is defined by the combination of all species.
 
@@ -216,7 +267,7 @@ over the training data.
 There are three basic types of optimization:
 
 * stochastic descent (rprop)
-* gradient descent (sdg,sdm,nag,adagrad,adadelta,adam,nadam)
+* gradient descent (sdg,sdm,nag,adagrad,adadelta,adam,nadam,yogi,yoni)
 * conjugate-gradient (bfgs)
 
 All gradient descent algorithms require a descent parameter (gamma).  Many also require 
@@ -239,13 +290,14 @@ decay of the optimization step.
 
 The ADAM algorithm is also effective, though it requires a good choice of gamma, and is 
 one of the best gradient descent methods available. It is recommended that one use a small gamma (around 1e-3) 
-and a small batch size (typically 32-128) , as the smaller 
+and a small batch size (typically 4-32) , as the smaller 
 batch size results in a stochastic gradient direction which tends to benefit 
 training performance. For more difficult systems, one might consider using 
 the NADAM algorithm, with is ADAM with a Nesterov-style momentum term which results in a more stable 
 gradient in the optimization step.
 
-All other algorithms work to some degree, but are not recommended.
+The YOGI algorithm can often yield better results than ADAM, and the YONI algorithm adds stability
+to YOGI via Nesterov momentum, and tends to improve results further.
 
 When restarting, all optimization parameters (lambda, gamma, decay, etc.) are overwritten by the 
 values provided in the parameter file. There are times when this is not desirable, i.e. when restarting 
@@ -275,13 +327,34 @@ of uniquely assigning all possible atomic configurations to lists of interatomic
 make it impossible to generate an accurate NNP.
 
 When specifying each set of symmetry functions, one must include the cutoff distance, the cutoff function,
-the type of symmetry function, and the normalization scheme.  The normalization scheme can be either 
-UNIT or VOL, corresponding to "unit" normalization or "volume" normalization, respectively.  For unit 
-normalization, the inputs to the neural network are not normalized at all, making them suitable only for
-activation functions whose gradients remain constant as the input goes to infinity.  For volume normalization,
-the inputs are scaled by a constant related to the cutoff volume, guaranteeing they will lie within a 
-small range, thereby making it possible to use activation functions whose gradients go to zero quickly
-as the the inputs move away from zero.
+and the type of symmetry function.  One must also specify the parameters of the radial and angular 
+functions.  We have created a utility to assist in this process: "make_basis.exe".  This utility uses an
+atomic radius provided by the user to generate basis functions for all elements.
+
+## FORCES
+
+While one can theoretically train on energies alone, this is very challengning and requires a great
+deal of data.  A more effective approach is to instead train on energies and forces.  Unfortunately,
+training on forces is computationally demanding, such that in most cases only about 1% of forces
+are actually used for training purposes.  An alternative approach is to expand the data set by 
+generating new structures with randomly perturbed positions and using a Taylor series approximation
+to compute the reference energy of the perturbed structure.  This is the main approach used to train
+on energies and forces used in "nnptefr".  As such, one must set the distance perturbation width, the
+perturbation distribution, the number of added structures, and the perturbation method.  Generally,
+a uniform distribution using a constant perturbation method with a width of 8.0e-3 and 32 added
+structures yields the greatest improvement in accuracy.
+
+Three versions are included: nnptefr1, nnptefr2, and nnptefr3
+All three have the same basic functionality, but differ in their parallel construction.
+nnptefr1: The code is parallized over groups of processors, where the number of groups
+is equal to the batch.  Thus, one can use more processors than the batch size, such that each
+group of processors will compute the energy and forces of a single structure.
+nnptefr2: The code is parallelized over the batch, such that the batch size must match
+the number of processors.
+nnptefr3: The code is parallelized over the batch, such that the batch size must match
+the number of processors.  The structures are first loaded and then sorted according to
+the number of atoms, such that each process has an equal load after the structures
+are distributed such that the average number of atoms is equal for each process.
 
 ## WRITING
 
@@ -340,7 +413,7 @@ the calculation, only the computational efficiency.  We illustrate the paralleli
 An add-on package for LAMMPS is included so that the neural network potential may be used
 for molecular dynamics simulations.  The potential reads in the same neural network potential
 files output by the training code.
-Installation of the package is documented in the README files in USER-ANN
+Installation of the package is documented in the README files in ML-ATOMNN
 
 ## FILE FORMATS
 
@@ -351,11 +424,7 @@ A number of different file formats can be read to obtain atomic structures, forc
 * QE output - Quantum Espresso does not aggregate all relevant information in a single file, however, all relevant information 
 is included in the standard output. Thus, if one pipes the output into a file, this can be read for training.
 * CP2K output - A CP2K output file (only if the type of calculation is ENERGY)
-* XYZ files - In addition to the standard XYZ format, one must also included the energy and lattice constants in the xyz file.
-Thus, in the commment section, one must include a given comment, followed by the energy, followed by the x, y, and z lattice constants.
-(Currently, only orthorhombic cells are implemented).
-* ANN file - special format designed for this code
-* BINARY file - a binary file storing the cell, energy, positions, charges (if specified), and symmetry functions of a given structure
+* XYZ files (extended) - Standard XYZ file with positions, forces, "Lattice", "potential_energy", and "pbc" included.
 
 ## PARAMETER FILE REFERENCE
 
@@ -377,13 +446,9 @@ Boolean values may be specified as true using "1", "true", or "t", and they may 
 	* __QE__ - Quantum Espresso output 
 	* __CP2K__ - CP2K output
 	* __XYZ__ - modified XYZ format
-	* __ANN__ - ANN format
-	* __BINARY__ - binary file
 * __units__ (string) - The unit system (follows LAMMPS conventions). Possible values:
 	* __au__ - atomic units
 	* __metal__ - metal units
-* __charge__ (boolean) - Whether the atoms have a constant charge. If "true," then ewald energies are computed for each
-structure and removed, allowing one to train on the remainder.
 
 ### PARAMETERS - DATA
 
@@ -398,6 +463,11 @@ Each __atom__ entry can be followed by a species name, a flag designating a prop
 * __mass__ (float) - The mass of the atom in mass units, provided for convenience and clarity but most of the time not used.
 * __energy__ (float) - The vacuum energy of the atom in energy units.
 * __charge__ (float) - The charge of the atom in charge units (used only if "charge" is true).
+* __chi__ (float) - The electronegativity of the atom (only for charge equilibration)
+* __eta__ (float) - The idempotential of the atom (only for charge equilibration)
+* __rvdw__ (float) - The vdw radius of the atom
+* __rcov__ (float) - The covalent radius of the atom
+* __c6__ (float) - The london dispersion coefficient of the atom
 * __basis__ (string) - The name of the file containing the basis for a given atom.
 * __nh__ (integers) - Array of integers specifying the number of nodes per hidden layer from left (closest to input) to right (closest to output).
 
@@ -406,7 +476,7 @@ Each __atom__ entry can be followed by a species name, a flag designating a prop
 * __file_ann__ (string) - The name of the file where the neural network potential will be stored.
 * __file_restart__ (string) - The name of the file where the restart information will be stored.
 * __restart__ (boolean) - Whether the optimization will be restarted from a restart file.
-* __norm__ (boolean) - Whether to normalize the energies by the number of atoms when writing.
+* __reset__ (boolean) - Whether the optimization algorithm is reset when restart is true.
 
 ### OPTIMIZATION
 
@@ -418,17 +488,24 @@ Each __atom__ entry can be followed by a species name, a flag designating a prop
 	* __adadelta__ - ADADELTA
 	* __rmsprop__ - RMSPROP
 	* __adam__ - ADAM
+	* __adamw__ - ADAM - weight decay
+	* __adab__ - ADABelief
+	* __yogi__ - YOGI
+	* __yoni__ - YONI (YOGI+momentum)
+	* __nadam__ - NADAM
 	* __amsgrad__ - AMSGRAD
 	* __bfgs__ - BFGS
 	* __rprop__ - RPROP
-* __opt_val__ - (string) Optimization value, determining how to stop optimization.
-	* __ftol_abs__ - Stop when the absolute value of the objective function is below the tolerance.
-	* __ftol_rel__ - Stop when the change in the value of the objective function is below the tolerance.
-	* __xtol_rel__ - Stop when the change in the parameters is below the tolerance.
+	* __cg__ - conjugate gradient
+* __stop__ - (string) determining how to stop optimization.
+	* __fabs__ - Stop when the absolute value of the objective function is below the tolerance.
+	* __frel__ - Stop when the change in the value of the objective function is below the tolerance.
+	* __xrel__ - Stop when the change in the parameters is below the tolerance.
 * __loss__ - (string) Defines the type of loss function.
 	* __mse__ - mean squared error
 	* __mae__ - mean absolute error
 	* __huber__ - Huber loss function
+	* __asinh__ - ASINH loss function
 * __decay__ - (string) Decay function.
 	* __const__ - Constant decay; no change in the step.
 	* __exp__ - Exponential decay.
@@ -441,50 +518,99 @@ Each __atom__ entry can be followed by a species name, a flag designating a prop
 * __n_print__ - (int) Print the error to standard output every "n_print" steps.
 * __n_write__ - (int) Write the restart file every "n_write" steps.
 * __gamma__ - (float) Optimization step size (gradient descent), must be greater than zero (overrides restart)
-* __eta__ - (float) Memory term for gradient descent methods which use momentum, must be between zero and one (overrides restart).
-* __alpha__ - (int) Decay rate for the optimization step __gamma__ (overrides restart).
-* __pow__ - (float) Sets the power for power law decay of the optimization step (overrides restart).
-* __step__ - (int) Sets the step of the decay function, the optimization count is not affected (overrides restart).
-* __labmda__ - (float) Parameter setting the influence of weight decay (overrides restart) (default: 0.0).
-* __mix__ - (float) mixing parameter for Polyak-Ruppert averaging (0 - no mixing) (default: 0.0)
+* __delta__ - (float) width parameter for the loss function (only impacts Huber and Asinh)
+* __beta__ - (float) exponential averaging parameter for error
+* __norm__ - (string) normalization method in the loss function
+	* __none__ - the energy is not normalized
+	* __linear__ - the energy is normalized by the number of atoms
+	* __sqrt__ - the energy is normalized by the square root of the number of atoms
+	* __cbrt__ - the energy is normalized by the cube root of the number of atoms
 
 ### NN POTENTIAL
 
 * __r_cut__ - (float) The cutoff radius of the potential in distance units, must be greater than zero.
-* __transfer__ - (string) The name of the transfer function. Possible values:
-	* __tanh__ - hyperbolic tanh function
+* __neuron__ - (string) The name of the neuron activation function. Possible values:
+	* __linear__ - linear function
 	* __sigmoid__ - sigmoid function
-	* __arctan__ - normalized ArcTan function
+	* __tanh__ - hyperbolic tanh function
 	* __isru__ - inverse square root unit
-	* __softsign__ - softsign function
-	* __softplus__ - softplus function
-	* __softplus2__ - softplus function with ln(2) substracted
+	* __arctan__ - normalized ArcTan function
 	* __relu__ - rectified linear function
 	* __elu__ - exponential linear function
+	* __tanhre__ - TANHRE activation function
+	* __sqre__ - SQRE activation function
+	* __swish__ - SWISH activation function
 	* __gelu__ - gaussian error linear function
-	* __lin__ - linear function
-* __dist__ - (string) Distribution used to generate the random initial values of the neural network.  Possible values:
+	* __mish__ - MISH activation function
+	* __sinsig__ - SINSIG activation function
+	* __asinh__ - ASINH activation function
+	* __softplus__ - softplus function (with ln(2) substracted)
+	* __logcosh__ - ln(cosh(x)) activation function
+	* __sqplus__ - squareplus activation function
+* __dist_b__ - (string) Distribution used to generate the random initial values of neural network biases.  Possible values:
 	* __normal__ - Normal distribution (default).
 	* __exp__ - Exponential distribution.
-* __sigma__ - Width of the distribution used to generate the random initial values of the neural network.
+* __dist_w__ - (string) Distribution used to generate the random initial values of neural network weights.  Possible values:
+        * __normal__ - Normal distribution (default).
+        * __exp__ - Exponential distribution
+* __sigma_b__ - Width of the distribution used to generate the random initial biases of the neural network.
+* __sigma_w__ - Width of the distribution used to generate the random initial weights of the neural network.
 * __init__ - (string) Initialization method used to normalize the random initial values of the neural network. Possible values:
 	* __rand__ - No normalization, all values are simply drawn from a given random distribution.
 	* __xavier__ - The random distribution for each layer is normalized by the inverse of the square root of the size of the previous layer.
 	* __he__ - The random distribution for each layer is normalized by the inverse of twice the square root of the size of the previous layer.
 	* __mean__ - Same as "he", but the denominator is the root of the average of the previous and next layers.
 * __n_batch__ - (int) Number of structures in the batch, must be less than the total number of structures owned by a process
-* __pre_cond__ - (bool) Whether to precondition the inputs by shifting to zero using the average and scaling the magnitude by the inverse of the standard deviation.
-* __calc_force__ - (bool) Whether to compute the forces on the atoms at the end of optimization. An expensive calculation that is often unnecessary, though useful for testing purposes.
+* __prescale__ - (string) input scaling method
+	* __none__ - no input scaling
+	* __dev__ - scale by inverse of standard deviation
+	* __minmax__ - scale by the difference between the min and max
+	* __max__ - scale by the max
+* __prebias__ - (string) input biasing method
+	* __none__ - no input biasing
+	* __mean__ - bias by the mean
+	* __mid__ - bias by the midpoint b/w min and max
+	* __min__ - bias by the minimum
+* __inscale__ - (float) input scaling constant
+* __inbias__ - (float) input biasing constant
 
-### OUTPUT
+### FORCES (nnptefr)
 
-* __write_basis__  - Whether to write the basis as a function of distance/angle to file.
-* __write_energy__ - Whether to write the training/validation/testing energies to file.
-* __write_ewald__  - Whether to write the training/validation/testing ewald energies to file.
-* __write_force__  - Whether to write the force on each atom to file.
-* __write_input__  - Whether to write the inputs to file.
-* __write_corr__   - Whether to write the input correlations to file.
-* __write_symm__   - Whether to write the symmetry function values to binary files for restarting.
+* __rdist__ - (string) The distribution of the position perturbation.
+	* __uniform__ - uniform distribution
+	* __normal__ - normal distribution
+	* __exp__ - exponential distribution
+	* __sech__ - sech distribution
+	* __cosine__ - cosine distribution
+* __rdelta__ - (float) Position perturbation.
+* __nadd__ - (int) number of added structures.
+* __perturb__ - (string) The type of position perturbation
+	* __constant__ - "rdist" determines the width of the distribution
+	* __covalent__ - the width is "rdist" times the covalent radius
+
+### WRITING
+
+* __write coul__   - Whether to write the coulomb energies if computed
+* __write vdw__    - Whether to write the vdW energies if computed
+* __write rep__    - Whether to write the repulsive energies if computed
+* __write energy__ - Whether to write the nnp energies
+* __write force__  - Whether to write the force on each atom to file.
+* __write input__  - Whether to write the inputs to file.
+
+### COMPUTATION
+
+* __compute coul__   - Whether to compute and subtract an external Coulomb potential
+* __compute vdw__    - Whether to compute and subtract an external vdW potential
+* __compute rep__    - Whether to compute and subtract an external replusive potential
+* __compute force__  - Whether to compute the forces on the atoms at the end of the optimization
+* __compute norm__   - Whether to normalize the energies by the number of atoms
+* __compute zero__   - Whether to bias the energies by the atomic energy
+
+### EXTERNAL POTENTIALS
+
+* __pot_coul__ - External potential - Coulomb
+* __pot_vdw__  - External potential - vdW
+* __pot_rep__  - External potential - repulsive
 
 ## REFERENCES
 
