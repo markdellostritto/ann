@@ -1,0 +1,9 @@
+###############################################################################
+# COMPILERS AND FLAGS
+###############################################################################
+
+CXX_THREAD=mpiicpc
+CXX_SERIAL=icpc
+#CXX_FLAGS=-std=c++11 -w -O3 -march=native -inline-forceinline -DEIGEN_NO_DEBUG -DNDEBUG
+CXX_FLAGS=-std=c++11 -w -O3 -march=native -inline-forceinline -DMKL_DIRECT_CALL -DEIGEN_NO_DEBUG -DEIGEN_USE_MKL_ALL  -L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl
+
