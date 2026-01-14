@@ -164,7 +164,8 @@ int main(int argc, char* argv[]){
 		} else if(fileFormat==FILE_FORMAT::XYZ){
 			XYZ::read(sfile,interval,sim.atomT(),sim);
 		} else throw std::invalid_argument("Invalid file format.");
-		if(nprint<0) nprint=sim.timesteps()/10;
+		if(nprint<=0) nprint=sim.timesteps()/10;
+		if(nprint<=0) nprint=1;
 		
 		//======== print the data to screen ========
 		std::cout<<"SIMULATION = \n"<<sim<<"\n";
@@ -176,6 +177,7 @@ int main(int argc, char* argv[]){
 		groupV.build(sim.frame(0));
 		
 		//======== compute the requested properties ========
+		std::cout<<"computing dist hist\n";
 		const int nbins=(rmax-rmin)/dr;
 		dhist.init(rmin,rmax,nbins);
 		Eigen::Vector3d drt;
