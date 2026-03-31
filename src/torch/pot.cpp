@@ -11,8 +11,8 @@ Pot::Name Pot::Name::read(const char* str){
 	else if(std::strcmp(str,"LJ_LONG")==0) return Pot::Name::LJ_LONG;
 	else if(std::strcmp(str,"LJ_SM")==0) return Pot::Name::LJ_SM;
 	else if(std::strcmp(str,"LDAMP_CUT")==0) return Pot::Name::LDAMP_CUT;
-	else if(std::strcmp(str,"LDAMP_DSF")==0) return Pot::Name::LDAMP_DSF;
 	else if(std::strcmp(str,"LDAMP_LONG")==0) return Pot::Name::LDAMP_LONG;
+	else if(std::strcmp(str,"LDAMP_DSF")==0) return Pot::Name::LDAMP_DSF;
 	else if(std::strcmp(str,"COUL_CUT")==0) return Pot::Name::COUL_CUT;
 	else if(std::strcmp(str,"COUL_WOLF")==0) return Pot::Name::COUL_WOLF;
 	else if(std::strcmp(str,"COUL_DSF")==0) return Pot::Name::COUL_DSF;
@@ -23,7 +23,7 @@ Pot::Name Pot::Name::read(const char* str){
 	else if(std::strcmp(str,"QEQ_GL")==0) return Pot::Name::QEQ_GL;
 	else if(std::strcmp(str,"SPIN_EX")==0) return Pot::Name::SPIN_EX;
 	else if(std::strcmp(str,"NNPE")==0) return Pot::Name::NNPE;
-	else return Pot::Name::UNKNOWN;
+	else return Pot::Name::NONE;
 }
 
 const char* Pot::Name::name(const Pot::Name& t){
@@ -33,8 +33,8 @@ const char* Pot::Name::name(const Pot::Name& t){
 		case Pot::Name::LJ_LONG: return "LJ_LONG";
 		case Pot::Name::LJ_SM: return "LJ_SM";
 		case Pot::Name::LDAMP_CUT: return "LDAMP_CUT";
-		case Pot::Name::LDAMP_DSF: return "LDAMP_DSF";
 		case Pot::Name::LDAMP_LONG: return "LDAMP_LONG";
+		case Pot::Name::LDAMP_DSF: return "LDAMP_DSF";
 		case Pot::Name::COUL_CUT: return "COUL_CUT";
 		case Pot::Name::COUL_WOLF: return "COUL_WOLF";
 		case Pot::Name::COUL_DSF: return "COUL_DSF";
@@ -45,7 +45,7 @@ const char* Pot::Name::name(const Pot::Name& t){
 		case Pot::Name::QEQ_GL: return "QEQ_GL";
 		case Pot::Name::SPIN_EX: return "SPIN_EX";
 		case Pot::Name::NNPE: return "NNPE";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -56,8 +56,8 @@ std::ostream& operator<<(std::ostream& out, const Pot::Name& t){
 		case Pot::Name::LJ_LONG: out<<"LJ_LONG"; break;
 		case Pot::Name::LJ_SM: out<<"LJ_SM"; break;
 		case Pot::Name::LDAMP_CUT: out<<"LDAMP_CUT"; break;
-		case Pot::Name::LDAMP_DSF: out<<"LDAMP_DSF"; break;
 		case Pot::Name::LDAMP_LONG: out<<"LDAMP_LONG"; break;
+		case Pot::Name::LDAMP_DSF: out<<"LDAMP_DSF"; break;
 		case Pot::Name::COUL_CUT: out<<"COUL_CUT"; break;
 		case Pot::Name::COUL_WOLF: out<<"COUL_WOLF"; break;
 		case Pot::Name::COUL_DSF: out<<"COUL_DSF"; break;
@@ -68,7 +68,7 @@ std::ostream& operator<<(std::ostream& out, const Pot::Name& t){
 		case Pot::Name::QEQ_GL: out<<"QEQ_GL"; break;
 		case Pot::Name::SPIN_EX: out<<"SPIN_EX"; break;
 		case Pot::Name::NNPE: out<<"NNPE"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }

@@ -9,7 +9,6 @@
 #include "torch/pot_lj_long.hpp"
 #include "torch/pot_lj_sm.hpp"
 #include "torch/pot_ldamp_cut.hpp"
-#include "torch/pot_ldamp_dsf.hpp"
 #include "torch/pot_ldamp_long.hpp"
 #include "torch/pot_coul_cut.hpp"
 #include "torch/pot_coul_wolf.hpp"
@@ -42,9 +41,6 @@ namespace ptnl{
 			}break;
 			case Pot::Name::LDAMP_CUT:{
 				pot.reset(new PotLDampCut());
-			}break;
-			case Pot::Name::LDAMP_DSF:{
-				pot.reset(new PotLDampDSF());
 			}break;
 			case Pot::Name::LDAMP_LONG:{
 				pot.reset(new PotLDampLong());
@@ -106,10 +102,6 @@ namespace ptnl{
 			case Pot::Name::LDAMP_CUT:{
 				pot.reset(new PotLDampCut());
 				static_cast<PotLDampCut&>(*pot).read(token);
-			}break;
-			case Pot::Name::LDAMP_DSF:{
-				pot.reset(new PotLDampDSF());
-				static_cast<PotLDampDSF&>(*pot).read(token);
 			}break;
 			case Pot::Name::LDAMP_LONG:{
 				pot.reset(new PotLDampLong());
@@ -175,7 +167,6 @@ namespace ptnl{
 			case Pot::Name::LJ_LONG: out<<static_cast<const PotLJLong&>(*pot); break;
 			case Pot::Name::LJ_SM: out<<static_cast<const PotLJSm&>(*pot); break;
 			case Pot::Name::LDAMP_CUT: out<<static_cast<const PotLDampCut&>(*pot); break;
-			case Pot::Name::LDAMP_DSF: out<<static_cast<const PotLDampDSF&>(*pot); break;
 			case Pot::Name::LDAMP_LONG: out<<static_cast<const PotLDampLong&>(*pot); break;
 			case Pot::Name::COUL_CUT: out<<static_cast<const PotCoulCut&>(*pot); break;
 			case Pot::Name::COUL_WOLF: out<<static_cast<const PotCoulWolf&>(*pot); break;
@@ -212,7 +203,6 @@ namespace serialize{
 				case ptnl::Pot::Name::LJ_LONG: size+=nbytes(static_cast<const ptnl::PotLJLong&>(*obj)); break;
 				case ptnl::Pot::Name::LJ_SM: size+=nbytes(static_cast<const ptnl::PotLJSm&>(*obj)); break;
 				case ptnl::Pot::Name::LDAMP_CUT: size+=nbytes(static_cast<const ptnl::PotLDampCut&>(*obj)); break;
-				case ptnl::Pot::Name::LDAMP_DSF: size+=nbytes(static_cast<const ptnl::PotLDampDSF&>(*obj)); break;
 				case ptnl::Pot::Name::LDAMP_LONG: size+=nbytes(static_cast<const ptnl::PotLDampLong&>(*obj)); break;
 				case ptnl::Pot::Name::COUL_CUT: size+=nbytes(static_cast<const ptnl::PotCoulCut&>(*obj)); break;
 				case ptnl::Pot::Name::COUL_WOLF: size+=nbytes(static_cast<const ptnl::PotCoulWolf&>(*obj)); break;
@@ -246,7 +236,6 @@ namespace serialize{
 				case ptnl::Pot::Name::LJ_LONG: pos+=pack(static_cast<const ptnl::PotLJLong&>(*obj),arr+pos); break;
 				case ptnl::Pot::Name::LJ_SM: pos+=pack(static_cast<const ptnl::PotLJSm&>(*obj),arr+pos); break;
 				case ptnl::Pot::Name::LDAMP_CUT: pos+=pack(static_cast<const ptnl::PotLDampCut&>(*obj),arr+pos); break;
-				case ptnl::Pot::Name::LDAMP_DSF: pos+=pack(static_cast<const ptnl::PotLDampDSF&>(*obj),arr+pos); break;
 				case ptnl::Pot::Name::LDAMP_LONG: pos+=pack(static_cast<const ptnl::PotLDampLong&>(*obj),arr+pos); break;
 				case ptnl::Pot::Name::COUL_CUT: pos+=pack(static_cast<const ptnl::PotCoulCut&>(*obj),arr+pos); break;
 				case ptnl::Pot::Name::COUL_WOLF: pos+=pack(static_cast<const ptnl::PotCoulWolf&>(*obj),arr+pos); break;
@@ -273,7 +262,7 @@ namespace serialize{
 		int null=1;
 		std::memcpy(&null,arr+pos,sizeof(int)); pos+=sizeof(int);
 		if(!null){
-			ptnl::Pot::Name name=ptnl::Pot::Name::UNKNOWN;
+			ptnl::Pot::Name name=ptnl::Pot::Name::NONE;
 			std::memcpy(&name,arr+pos,sizeof(ptnl::Pot::Name)); pos+=sizeof(ptnl::Pot::Name);
 			ptnl::make(obj,name);
 			switch(obj->name()){
@@ -282,7 +271,6 @@ namespace serialize{
 				case ptnl::Pot::Name::LJ_LONG: pos+=unpack(static_cast<ptnl::PotLJLong&>(*obj),arr+pos); break;
 				case ptnl::Pot::Name::LJ_SM: pos+=unpack(static_cast<ptnl::PotLJSm&>(*obj),arr+pos); break;
 				case ptnl::Pot::Name::LDAMP_CUT: pos+=unpack(static_cast<ptnl::PotLDampCut&>(*obj),arr+pos); break;
-				case ptnl::Pot::Name::LDAMP_DSF: pos+=unpack(static_cast<ptnl::PotLDampDSF&>(*obj),arr+pos); break;
 				case ptnl::Pot::Name::LDAMP_LONG: pos+=unpack(static_cast<ptnl::PotLDampLong&>(*obj),arr+pos); break;
 				case ptnl::Pot::Name::COUL_CUT: pos+=unpack(static_cast<ptnl::PotCoulCut&>(*obj),arr+pos); break;
 				case ptnl::Pot::Name::COUL_WOLF: pos+=unpack(static_cast<ptnl::PotCoulWolf&>(*obj),arr+pos); break;

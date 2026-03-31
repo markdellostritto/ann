@@ -36,8 +36,8 @@ public:
 			LJ_LONG,
 			LJ_SM,
 			LDAMP_CUT,
-			LDAMP_DSF,
 			LDAMP_LONG,
+			LDAMP_DSF,
 			COUL_CUT,
 			COUL_WOLF,
 			COUL_DSF,
@@ -48,10 +48,10 @@ public:
 			QEQ_GL,
 			SPIN_EX,
 			NNPE,
-			UNKNOWN
+			NONE
 		};
 		//constructor
-		Name():t_(Type::UNKNOWN){}
+		Name():t_(Type::NONE){}
 		Name(Type t):t_(t){}
 		//operators
 		operator Type()const{return t_;}
@@ -71,7 +71,7 @@ protected:
 	double rc2_;//cutoff radius squared
 public:
 	//==== contructors/destructors ====
-	Pot():rc_(0.0),rc2_(0.0),ntypes_(0),name_(Name::UNKNOWN){}
+	Pot():rc_(0.0),rc2_(0.0),ntypes_(0),name_(Name::NONE){}
 	Pot(const Name& name):rc_(0.0),rc2_(0.0),ntypes_(0),name_(name){}
 	~Pot(){}
 	
