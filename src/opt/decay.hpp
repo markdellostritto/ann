@@ -26,7 +26,7 @@ public:
 	class Name{
 	public:
 		enum Type{
-			UNKNOWN,
+			NONE,
 			CONST,
 			EXP,
 			GAUSS,
@@ -35,7 +35,7 @@ public:
 			STEP
 		};
 		//constructor
-		Name():t_(Type::UNKNOWN){}
+		Name():t_(Type::NONE){}
 		Name(Type t):t_(t){}
 		//operators
 		operator Type()const{return t_;}
@@ -53,7 +53,7 @@ private:
 	double alpha_;
 public:
 	//==== constructors/destructors ====
-	Decay():name_(Name::UNKNOWN),alpha_(0.0),period_(0){}
+	Decay():name_(Name::NONE),alpha_(0.0),period_(0){}
 	Decay(const Name& name, double alpha):name_(name),alpha_(alpha),period_(0){}
 	~Decay(){}
 	

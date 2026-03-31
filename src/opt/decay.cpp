@@ -28,7 +28,7 @@ std::ostream& operator<<(std::ostream& out, const Decay::Name& name){
 		case Decay::Name::SQRT: out<<"SQRT"; break;
 		case Decay::Name::INV: out<<"INV"; break;
 		case Decay::Name::STEP: out<<"STEP"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -40,7 +40,7 @@ Decay::Name Decay::Name::read(const char* str){
 	else if(std::strcmp(str,"SQRT")==0) return Decay::Name::SQRT;
 	else if(std::strcmp(str,"INV")==0) return Decay::Name::INV;
 	else if(std::strcmp(str,"STEP")==0) return Decay::Name::STEP;
-	else return Decay::Name::UNKNOWN;
+	else return Decay::Name::NONE;
 }
 
 //***************************************************
@@ -86,7 +86,7 @@ void Decay::read(Token& token){
 	name_=Decay::Name::read(string::to_upper(token.next()).c_str());
 	alpha_=std::atof(token.next().c_str());
 	if(!token.end()) period_=std::atoi(token.next().c_str());
-	if(name_==opt::Decay::Name::UNKNOWN) throw std::invalid_argument("opt::Decay::read(Token&): invalid name.");
+	if(name_==opt::Decay::Name::NONE) throw std::invalid_argument("opt::Decay::read(Token&): invalid name.");
 	if(alpha_<0) throw std::invalid_argument("opt::Decay::read(Token&): invalid alpha.");
 }
 
@@ -134,7 +134,7 @@ template <> int unpack(opt::Decay& decay, const char* arr){
 	std::memcpy(&decay.name(),arr+pos,sizeof(opt::Decay::Name)); pos+=sizeof(opt::Decay::Name);
 	std::memcpy(&decay.period(),arr+pos,sizeof(int)); pos+=sizeof(int);
 	std::memcpy(&decay.alpha(),arr+pos,sizeof(double)); pos+=sizeof(double);
-	if(decay.name()==opt::Decay::Name::UNKNOWN) throw std::invalid_argument("opt::Decay::read(Token&): invalid name.");
+	if(decay.name()==opt::Decay::Name::NONE) throw std::invalid_argument("opt::Decay::read(Token&): invalid name.");
 	if(decay.alpha()<0) throw std::invalid_argument("opt::Decay::read(Token&): invalid alpha.");
 	return pos;
 }
