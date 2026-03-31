@@ -12,7 +12,7 @@ Name Name::read(const char* str){
 	else if(std::strcmp(str,"CHARGE")==0) return Name::CHARGE;
 	else if(std::strcmp(str,"VELOCITY")==0) return Name::VELOCITY;
 	else if(std::strcmp(str,"TEMP")==0) return Name::TEMP;
-	else return Name::UNKNOWN;
+	else return Name::NONE;
 }
 
 const char* Name::name(const Name& t){
@@ -22,7 +22,7 @@ const char* Name::name(const Name& t){
 		case Name::CHARGE: return "CHARGE";
 		case Name::VELOCITY: return "VELOCITY";
 		case Name::TEMP: return "TEMP";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -33,7 +33,7 @@ std::ostream& operator<<(std::ostream& out, const Name& t){
 		case Name::CHARGE: out<<"CHARGE"; break;
 		case Name::VELOCITY: out<<"VELOCITY"; break;
 		case Name::TEMP: out<<"TEMP"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }

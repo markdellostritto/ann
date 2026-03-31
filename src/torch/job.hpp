@@ -19,10 +19,10 @@ public:
 		SP,
 		MC,
 		MD,
-		UNKNOWN
+		NONE
 	};
 	//constructor
-	Job():t_(Type::UNKNOWN){}
+	Job():t_(Type::NONE){}
 	Job(Type t):t_(t){}
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const Job& sys);

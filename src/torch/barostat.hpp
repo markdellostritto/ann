@@ -12,10 +12,10 @@ public:
 		NONE,
 		ISO,
 		ANISO,
-		UNKNOWN
+		NONE
 	};
 	//constructor
-	Barostat():t_(Type::UNKNOWN){}
+	Barostat():t_(Type::NONE){}
 	Barostat(Type t):t_(t){}
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const Barostat& b);

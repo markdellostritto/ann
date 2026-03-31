@@ -25,10 +25,10 @@ public:
 			VSCALE,
 			BERENDSEN,
 			LANGEVIN,
-			UNKNOWN
+			NONE
 		};
 		//constructor
-		Name():t_(Type::UNKNOWN){}
+		Name():t_(Type::NONE){}
 		Name(Type t):t_(t){}
 		//operators
 		friend std::ostream& operator<<(std::ostream& out, const Name& name);
@@ -46,7 +46,7 @@ protected:
 	double T_;//target temperature
 public:
 	//==== constructors/destructors ===
-	Thermostat():name_(Name::UNKNOWN){}
+	Thermostat():name_(Name::NONE){}
 	Thermostat(const Name& name):name_(name){}
 	virtual ~Thermostat(){}
 	

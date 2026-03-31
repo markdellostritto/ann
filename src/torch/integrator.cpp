@@ -18,7 +18,7 @@ Integrator::Name Integrator::Name::read(const char* str){
 	else if(std::strcmp(str,"VSCALE")==0) return Integrator::Name::VSCALE;
 	else if(std::strcmp(str,"BERENDSEN")==0) return Integrator::Name::BERENDSEN;
 	else if(std::strcmp(str,"LANGEVIN")==0) return Integrator::Name::LANGEVIN;
-	else return Integrator::Name::UNKNOWN;
+	else return Integrator::Name::NONE;
 }
 
 const char* Integrator::Name::name(const Integrator::Name& t){
@@ -28,7 +28,7 @@ const char* Integrator::Name::name(const Integrator::Name& t){
 		case Integrator::Name::VSCALE: return "VSCALE";
 		case Integrator::Name::BERENDSEN: return "BERENDSEN";
 		case Integrator::Name::LANGEVIN: return "LANGEVIN";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -39,7 +39,7 @@ std::ostream& operator<<(std::ostream& out, const Integrator::Name& t){
 		case Integrator::Name::VSCALE: out<<"VSCALE"; break;
 		case Integrator::Name::BERENDSEN: out<<"BERENDSEN"; break;
 		case Integrator::Name::LANGEVIN: out<<"LANGEVIN"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }

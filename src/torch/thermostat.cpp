@@ -17,7 +17,7 @@ Thermostat::Name Thermostat::Name::read(const char* str){
 	else if(std::strcmp(str,"VSCALE")==0) return Thermostat::Name::VSCALE;
 	else if(std::strcmp(str,"BERENDSEN")==0) return Thermostat::Name::BERENDSEN;
 	else if(std::strcmp(str,"LANGEVIN")==0) return Thermostat::Name::LANGEVIN;
-	else return Thermostat::Name::UNKNOWN;
+	else return Thermostat::Name::NONE;
 }
 
 const char* Thermostat::Name::name(const Thermostat::Name& t){
@@ -26,7 +26,7 @@ const char* Thermostat::Name::name(const Thermostat::Name& t){
 		case Thermostat::Name::VSCALE: return "VSCALE";
 		case Thermostat::Name::BERENDSEN: return "BERENDSEN";
 		case Thermostat::Name::LANGEVIN: return "LANGEVIN";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -36,7 +36,7 @@ std::ostream& operator<<(std::ostream& out, const Thermostat::Name& t){
 		case Thermostat::Name::VSCALE: out<<"VSCALE"; break;
 		case Thermostat::Name::BERENDSEN: out<<"BERENDSEN"; break;
 		case Thermostat::Name::LANGEVIN: out<<"LANGEVIN"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }

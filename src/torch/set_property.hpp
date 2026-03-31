@@ -24,10 +24,10 @@ public:
 		CHARGE,
 		VELOCITY,
 		TEMP,
-		UNKNOWN
+		NONE
 	};
 	//constructor
-	Name():t_(Type::UNKNOWN){}
+	Name():t_(Type::NONE){}
 	Name(Type t):t_(t){}
 	//operators
 	friend std::ostream& operator<<(std::ostream& out, const Name& name);
@@ -51,7 +51,7 @@ protected:
 	Group group_;
 public:
 	//==== constructors/destructors ====
-	Base():name_(Name::UNKNOWN){}
+	Base():name_(Name::NONE){}
 	Base(const Name& name):name_(name){}
 	virtual ~Base(){}
 	
