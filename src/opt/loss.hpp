@@ -16,14 +16,14 @@ namespace opt{
 struct Loss{
 public:
 	enum Type{
-		UNKNOWN,
+		NONE,
 		MSE,
 		MAE,
 		HUBER,
 		ASINH
 	};
 	//constructor
-	Loss():t_(Type::UNKNOWN){}
+	Loss():t_(Type::NONE){}
 	Loss(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}

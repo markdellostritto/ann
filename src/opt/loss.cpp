@@ -19,7 +19,7 @@ std::ostream& operator<<(std::ostream& out, const Loss& loss){
 		case Loss::MAE: out<<"MAE"; break;
 		case Loss::HUBER: out<<"HUBER"; break;
 		case Loss::ASINH: out<<"ASINH"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -30,7 +30,7 @@ const char* Loss::name(const Loss& loss){
 		case Loss::MAE: return "MAE";
 		case Loss::HUBER: return "HUBER";
 		case Loss::ASINH: return "ASINH";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -39,7 +39,7 @@ Loss Loss::read(const char* str){
 	else if(std::strcmp(str,"MAE")==0) return Loss::MAE;
 	else if(std::strcmp(str,"HUBER")==0) return Loss::HUBER;
 	else if(std::strcmp(str,"ASINH")==0) return Loss::ASINH;
-	else return Loss::UNKNOWN;
+	else return Loss::NONE;
 }
 
 //==== error ====
