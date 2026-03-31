@@ -47,10 +47,10 @@ namespace units{
 			LJ,//lj units (unitless)
 			AU,//atomic units
 			METAL,//metal units
-			UNKNOWN
+			NONE
 		};
 		//constructor
-		System():t_(Type::UNKNOWN){}
+		System():t_(Type::NONE){}
 		System(Type t):t_(t){}
 		//operators
 		operator Type()const{return t_;}
@@ -71,7 +71,7 @@ namespace units{
 			LJ,
 			BOHR,
 			ANGSTROM,
-			UNKNOWN
+			NONE
 		};
 	};
 	std::ostream& operator<<(std::ostream& out, const Dist::unit& t);
@@ -80,7 +80,7 @@ namespace units{
 		enum unit{
 			LJ,
 			ELECTRON,
-			UNKNOWN
+			NONE
 		};
 	};
 	std::ostream& operator<<(std::ostream& out, const Charge::unit& t);
@@ -90,7 +90,7 @@ namespace units{
 			LJ,
 			ELECTRON,
 			DALTON,
-			UNKNOWN
+			NONE
 		};
 	};
 	std::ostream& operator<<(std::ostream& out, const Mass::unit& t);
@@ -100,7 +100,7 @@ namespace units{
 			LJ,
 			AU,
 			FEMTOSECONDS,
-			UNKNOWN
+			NONE
 		};
 	};
 	std::ostream& operator<<(std::ostream& out, const Time::unit& t);

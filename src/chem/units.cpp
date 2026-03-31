@@ -20,7 +20,7 @@ System System::read(const char* str){
 	if(std::strcmp(str,"LJ")==0) return System::LJ;
 	else if(std::strcmp(str,"AU")==0) return System::AU;
 	else if(std::strcmp(str,"METAL")==0) return System::METAL;
-	else return System::UNKNOWN;
+	else return System::NONE;
 }
 
 const char* System::name(const System& t){
@@ -28,7 +28,7 @@ const char* System::name(const System& t){
 		case System::LJ: return "LJ";
 		case System::AU: return "AU";
 		case System::METAL: return "METAL";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -37,7 +37,7 @@ std::ostream& operator<<(std::ostream& out, const System& t){
 		case System::LJ: out<<"LJ"; break;
 		case System::AU: out<<"AU"; break;
 		case System::METAL: out<<"METAL"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -51,7 +51,7 @@ std::ostream& operator<<(std::ostream& out, const Dist::unit& t){
 		case Dist::LJ: out<<"LJ"; break;
 		case Dist::BOHR: out<<"BOHR"; break;
 		case Dist::ANGSTROM: out<<"ANGSTROM"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -60,7 +60,7 @@ std::ostream& operator<<(std::ostream& out, const Charge::unit& t){
 	switch(t){
 		case Charge::LJ: out<<"LJ"; break;
 		case Charge::ELECTRON: out<<"ELECTRON"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -70,7 +70,7 @@ std::ostream& operator<<(std::ostream& out, const Mass::unit& t){
 		case Mass::LJ: out<<"LJ"; break;
 		case Mass::ELECTRON: out<<"ELECTRON"; break;
 		case Mass::DALTON: out<<"DALTON"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -80,7 +80,7 @@ std::ostream& operator<<(std::ostream& out, const Time::unit& t){
 		case Time::AU: out<<"AU"; break;
 		case Time::FEMTOSECONDS: out<<"FEMTOSECONDS"; break;
 		case Time::LJ: out<<"LJ"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -159,10 +159,10 @@ System Consts::system_=System::METAL;
 
 //==== units ====
 
-Time::unit Consts::time_=Time::UNKNOWN;
-Dist::unit Consts::dist_=Dist::UNKNOWN;
-Charge::unit Consts::charge_=Charge::UNKNOWN;
-Mass::unit Consts::mass_=Mass::UNKNOWN;
+Time::unit Consts::time_=Time::NONE;
+Dist::unit Consts::dist_=Dist::NONE;
+Charge::unit Consts::charge_=Charge::NONE;
+Mass::unit Consts::mass_=Mass::NONE;
 
 //==== fundamental constants ====
 
