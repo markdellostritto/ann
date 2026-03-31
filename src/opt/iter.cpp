@@ -43,8 +43,8 @@ void Iterator::defaults(){
 	//stopping
 		tol_=0;
 		max_=0;
-		stop_=Stop::UNKNOWN;
-		loss_=Loss::UNKNOWN;
+		stop_=Stop::NONE;
+		loss_=Loss::NONE;
 }
 
 }
