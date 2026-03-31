@@ -167,34 +167,6 @@ private:
 std::ostream& operator<<(std::ostream& out, const Mode& mode);
 
 //************************************************************
-// Regularization
-//************************************************************
-
-class Regularization{
-public:
-	enum Type{
-		LASSO,
-		RIDGE,
-		HUBER,
-		ASINH,
-		NONE
-	};
-	//constructor
-	Regularization():t_(Type::NONE){}
-	Regularization(Type t):t_(t){}
-	//operators
-	operator Type()const{return t_;}
-	//member functions
-	static Regularization read(const char* str);
-	static const char* name(const Regularization& reg);
-private:
-	Type t_;
-	//prevent automatic conversion for other built-in types
-	//template<typename T> operator T() const;
-};
-std::ostream& operator<<(std::ostream& out, const Regularization& reg);
-
-//************************************************************
 // NNPTEFR - Neural Network Potential - Optimization
 //************************************************************
 
@@ -224,6 +196,7 @@ public:
 		bool restart_; //flag - whether to restart
 		bool reset_;   //flag - whether to reset optimization
 		bool wparams_; //flag - whether to write the parameters to file
+		bool sparams_; //flag - whether to write the parameters to file
 	//batch
 		std::vector<double> normt_;
 		std::vector<double> normv_;
@@ -237,7 +210,6 @@ public:
 		Norm norm_;
 		PreScale prescale_;
 		PreBias prebias_;
-		Regularization reg_;
 		double inscale_,inbias_;
 		double delta_,deltai_,delta2_;//loss width
 		double beta_,betai_;//exponential averageing
@@ -263,7 +235,7 @@ public:
 	void train(int batchSize, const std::vector<Structure>& struc_train, const std::vector<Structure>& struc_val);//train potential
 	void error_cost(const Eigen::VectorXd& x, const std::vector<Structure>& struc_train, const std::vector<Structure>& struc_val);//compute error for a potential
 	void error_cost_o1(const Eigen::VectorXd& x, const std::vector<Structure>& struc_train, const std::vector<Structure>& struc_val);//compute error for a potential
-	void error_dodp(const Eigen::VectorXd& x, const std::vector<Structure>& struc_train, const std::vector<Structure>& struc_val);//compute error for a potential
+	//void error_dodp(const Eigen::VectorXd& x, const std::vector<Structure>& struc_train, const std::vector<Structure>& struc_val);//compute error for a potential
 	
 	//==== static functions ====
 	static void read(const char* file, NNPTEFR& nnpte);
@@ -291,6 +263,8 @@ public:
 		const bool& reset()const{return reset_;}
 		bool& wparams(){return wparams_;}
 		const bool& wparams()const{return wparams_;}
+		bool& sparams(){return sparams_;}
+		const bool& sparams()const{return sparams_;}
 	//nnp
 		NNP& nnp(){return nnp_;}
 		const NNP& nnp()const{return nnp_;}
@@ -311,8 +285,6 @@ public:
 		const std::shared_ptr<opt::algo::Base>& algo()const{return algo_;}
 		Norm& norm(){return norm_;}
 		const Norm& norm()const{return norm_;}
-		Regularization& reg(){return reg_;}
-		const Regularization& reg()const{return reg_;}
 		PreScale& prescale(){return prescale_;}
 		const PreScale& prescale()const{return prescale_;}
 		PreBias& prebias(){return prebias_;}

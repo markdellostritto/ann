@@ -84,6 +84,7 @@ template <> int nbytes(const NNPTEFR& obj){
 		size+=sizeof(bool);//restart
 		size+=sizeof(bool);//reset
 		size+=sizeof(bool);//wparams
+		size+=sizeof(bool);//sparams
 	//optimization
 		size+=nbytes(obj.batcht_);
 		size+=nbytes(obj.batchv_);
@@ -94,7 +95,6 @@ template <> int nbytes(const NNPTEFR& obj){
 		size+=sizeof(Norm);
 		size+=sizeof(PreScale);
 		size+=sizeof(PreBias);
-		size+=sizeof(Regularization);
 		size+=sizeof(double);//inscale_
 		size+=sizeof(double);//inbias_
 		size+=sizeof(double);//delta_
@@ -125,6 +125,7 @@ template <> int pack(const NNPTEFR& obj, char* arr){
 		std::memcpy(arr+pos,&obj.restart_,sizeof(bool)); pos+=sizeof(bool);
 		std::memcpy(arr+pos,&obj.reset_,sizeof(bool)); pos+=sizeof(bool);
 		std::memcpy(arr+pos,&obj.wparams_,sizeof(bool)); pos+=sizeof(bool);
+		std::memcpy(arr+pos,&obj.sparams_,sizeof(bool)); pos+=sizeof(bool);
 	//optimization
 		pos+=pack(obj.batcht_,arr+pos);
 		pos+=pack(obj.batchv_,arr+pos);
@@ -135,7 +136,6 @@ template <> int pack(const NNPTEFR& obj, char* arr){
 		std::memcpy(arr+pos,&obj.norm_,sizeof(Norm)); pos+=sizeof(Norm);
 		std::memcpy(arr+pos,&obj.prescale_,sizeof(PreScale)); pos+=sizeof(PreScale);
 		std::memcpy(arr+pos,&obj.prebias_,sizeof(PreBias)); pos+=sizeof(PreBias);
-		std::memcpy(arr+pos,&obj.reg_,sizeof(Regularization)); pos+=sizeof(Regularization);
 		std::memcpy(arr+pos,&obj.inscale_,sizeof(double)); pos+=sizeof(double);
 		std::memcpy(arr+pos,&obj.inbias_,sizeof(double)); pos+=sizeof(double);
 		std::memcpy(arr+pos,&obj.delta_,sizeof(double)); pos+=sizeof(double);
@@ -166,6 +166,7 @@ template <> int unpack(NNPTEFR& obj, const char* arr){
 		std::memcpy(&obj.restart_,arr+pos,sizeof(bool)); pos+=sizeof(bool);
 		std::memcpy(&obj.reset_,arr+pos,sizeof(bool)); pos+=sizeof(bool);
 		std::memcpy(&obj.wparams_,arr+pos,sizeof(bool)); pos+=sizeof(bool);
+		std::memcpy(&obj.sparams_,arr+pos,sizeof(bool)); pos+=sizeof(bool);
 	//optimization
 		pos+=unpack(obj.batcht_,arr+pos);
 		pos+=unpack(obj.batchv_,arr+pos);
@@ -176,7 +177,6 @@ template <> int unpack(NNPTEFR& obj, const char* arr){
 		std::memcpy(&obj.norm_,arr+pos,sizeof(Norm)); pos+=sizeof(Norm);
 		std::memcpy(&obj.prescale_,arr+pos,sizeof(PreScale)); pos+=sizeof(PreScale);
 		std::memcpy(&obj.prebias_,arr+pos,sizeof(PreBias)); pos+=sizeof(PreBias);
-		std::memcpy(&obj.reg_,arr+pos,sizeof(Regularization)); pos+=sizeof(Regularization);
 		std::memcpy(&obj.inscale_,arr+pos,sizeof(double)); pos+=sizeof(double);
 		std::memcpy(&obj.inbias_,arr+pos,sizeof(double)); pos+=sizeof(double);
 		std::memcpy(&obj.delta_,arr+pos,sizeof(double)); pos+=sizeof(double);
@@ -359,42 +359,6 @@ Mode Mode::read(const char* str){
 }
 
 //************************************************************
-// Regularization
-//************************************************************
-
-std::ostream& operator<<(std::ostream& out, const Regularization& reg){
-	switch(reg){
-		case Regularization::NONE: out<<"NONE"; break;
-		case Regularization::LASSO: out<<"LASSO"; break;
-		case Regularization::RIDGE: out<<"RIDGE"; break;
-		case Regularization::HUBER: out<<"HUBER"; break;
-		case Regularization::ASINH: out<<"ASINH"; break;
-		default: out<<"NONE"; break;
-	}
-	return out;
-}
-
-const char* Regularization::name(const Regularization& reg){
-	switch(reg){
-		case Regularization::NONE: return "NONE";
-		case Regularization::LASSO: return "LASSO";
-		case Regularization::RIDGE: return "RIDGE";
-		case Regularization::HUBER: return "HUBER";
-		case Regularization::ASINH: return "ASINH";
-		default: return "NONE";
-	}
-}
-
-Regularization Regularization::read(const char* str){
-	if(std::strcmp(str,"NONE")==0) return Regularization::NONE;
-	else if(std::strcmp(str,"LASSO")==0) return Regularization::LASSO;
-	else if(std::strcmp(str,"RIDGE")==0) return Regularization::RIDGE;
-	else if(std::strcmp(str,"HUBER")==0) return Regularization::HUBER;
-	else if(std::strcmp(str,"ASINH")==0) return Regularization::ASINH;
-	else return Regularization::NONE;
-}
-
-//************************************************************
 // NNPTEFR - Neural Network Potential - Optimization
 //************************************************************
 
@@ -411,6 +375,7 @@ std::ostream& operator<<(std::ostream& out, const NNPTEFR& nnpte){
 	out<<"restart      = "<<nnpte.restart_<<"\n";
 	out<<"reset        = "<<nnpte.reset_<<"\n";
 	out<<"wparams      = "<<nnpte.wparams_<<"\n";
+	out<<"sparams      = "<<nnpte.sparams_<<"\n";
 	//optimization
 	out<<"algo         = "<<nnpte.algo_<<"\n";
 	out<<"decay        = "<<nnpte.decay_<<"\n";
@@ -425,7 +390,6 @@ std::ostream& operator<<(std::ostream& out, const NNPTEFR& nnpte){
 	out<<"beta         = "<<nnpte.beta()<<"\n";
 	out<<"eta          = "<<nnpte.eta()<<"\n";
 	out<<"norm         = "<<nnpte.norm()<<"\n";
-	out<<"reg          = "<<nnpte.reg()<<"\n";
 	out<<"prescale     = "<<nnpte.prescale()<<"\n";
 	out<<"prebias      = "<<nnpte.prebias()<<"\n";
 	out<<"inscale      = "<<nnpte.inscale()<<"\n";
@@ -453,11 +417,11 @@ void NNPTEFR::defaults(){
 		restart_=false;
 		reset_=false;
 		wparams_=false;
+		sparams_=false;
 	//optimization
 		norm_=Norm::NONE;
-		prescale_=PreScale::IDENTITY;
-		prebias_=PreBias::IDENTITY;
-		reg_=Regularization::NONE;
+		prescale_=PreScale::NONE;
+		prebias_=PreBias::NONE;
 		inscale_=1.0;
 		inbias_=0.0;
 		delta_=1.0;
@@ -644,10 +608,10 @@ void NNPTEFR::train(int batchSize, const std::vector<Structure>& struc_train, co
 	for(int n=0; n<nTypes_; ++n){
 		cost_[n].resize(nnp_.nnh(n).nn());
 	}
-	dodp_.resize(nTypes_);
+	/*dodp_.resize(nTypes_);
 	for(int n=0; n<nTypes_; ++n){
 		dodp_[n].resize(nnp_.nnh(n).nn());
-	}
+	}*/
 	
 	//====== compute the number of atoms of each element ======
 	if(NNPTEFR_PRINT_STATUS>0 && WORLD.rank()==0) std::cout<<"computing the number of atoms of each element\n";
@@ -680,7 +644,7 @@ void NNPTEFR::train(int batchSize, const std::vector<Structure>& struc_train, co
 	
 	//====== collect input statistics ======
 	//resize arrays
-	N.resize(nTypes_,0);
+	N.resize(nTypes_,0.0);
 	max_in.resize(nTypes_);
 	min_in.resize(nTypes_);
 	har_in.resize(nTypes_);
@@ -905,35 +869,22 @@ void NNPTEFR::train(int batchSize, const std::vector<Structure>& struc_train, co
 		rmse_t_a_=0;
 		rmse_v_a_=0;
 	}
-	//weight mask
-	Eigen::VectorXd wm;
-	if(reg_!=Regularization::NONE){
-		wm=Eigen::VectorXd::Zero(nParams);
-		int count=0;
-		for(int n=0; n<nTypes_; ++n){
-			for(int m=0; m<nnp_.nnh(n).nn().nBias(); ++m){
-				wm[count++]=0.0;
-			}
-			for(int m=0; m<nnp_.nnh(n).nn().nWeight(); ++m){
-				wm[count++]=1.0;
-			}
-		}
-	}
 	
 	//====== print input statistics and bias ======
 	if(NNPTEFR_PRINT_DATA>-1 && WORLD.rank()==0){
 		char* strbuf=new char[print::len_buf];
 		std::cout<<print::buf(strbuf)<<"\n";
 		std::cout<<print::title("OPT - DATA",strbuf)<<"\n";
-		std::cout<<"N-PARAMS    = \n\t"<<nParams<<"\n";
-		std::cout<<"AVG - INPUT = \n"; for(int i=0; i<avg_in.size(); ++i) std::cout<<"\t"<<avg_in[i].transpose()<<"\n";
-		std::cout<<"HAR - INPUT = \n"; for(int i=0; i<har_in.size(); ++i) std::cout<<"\t"<<har_in[i].transpose()<<"\n";
-		std::cout<<"MAX - INPUT = \n"; for(int i=0; i<max_in.size(); ++i) std::cout<<"\t"<<max_in[i].transpose()<<"\n";
-		std::cout<<"MIN - INPUT = \n"; for(int i=0; i<min_in.size(); ++i) std::cout<<"\t"<<min_in[i].transpose()<<"\n";
-		std::cout<<"DEV - INPUT = \n"; for(int i=0; i<dev_in.size(); ++i) std::cout<<"\t"<<dev_in[i].transpose()<<"\n";
-		std::cout<<"RMS - INPUT = \n"; for(int i=0; i<rms_in.size(); ++i) std::cout<<"\t"<<rms_in[i].transpose()<<"\n";
-		std::cout<<"PRE-BIAS    = \n"; for(int i=0; i<inpb_.size(); ++i) std::cout<<"\t"<<inpb_[i].transpose()<<"\n";
-		std::cout<<"PRE-SCALE   = \n"; for(int i=0; i<inpw_.size(); ++i) std::cout<<"\t"<<inpw_[i].transpose()<<"\n";
+		std::cout<<"N-PARAMS    = "<<nParams<<"\n";
+		std::cout<<"NUM - INPUT = ";   for(int i=0; i<nTypes_; ++i) std::cout<<N[i]<<" "; std::cout<<"\n";
+		std::cout<<"AVG - INPUT = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<avg_in[i].transpose()<<"\n";
+		std::cout<<"HAR - INPUT = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<har_in[i].transpose()<<"\n";
+		std::cout<<"MAX - INPUT = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<max_in[i].transpose()<<"\n";
+		std::cout<<"MIN - INPUT = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<min_in[i].transpose()<<"\n";
+		std::cout<<"DEV - INPUT = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<dev_in[i].transpose()<<"\n";
+		std::cout<<"RMS - INPUT = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<rms_in[i].transpose()<<"\n";
+		std::cout<<"PRE-BIAS    = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<inpb_[i].transpose()<<"\n";
+		std::cout<<"PRE-SCALE   = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<inpw_[i].transpose()<<"\n";
 		std::cout<<print::buf(strbuf)<<"\n";
 		delete[] strbuf;
 	}
@@ -960,7 +911,7 @@ void NNPTEFR::train(int batchSize, const std::vector<Structure>& struc_train, co
 		rmse_t_a.resize(size);
 		rmse_v_a.resize(size);
 	}
-	params_.resize(size,Eigen::VectorXd::Zero(nParams));
+	if(sparams_) params_.resize(size,Eigen::VectorXd::Zero(nParams));
 	//print status header to standard output
 	if(WORLD.rank()==0) printf("opt gamma loss_t loss_v rmse_t rmse_v rmse_t_a rmse_v_a\n");
 	//start the clock
@@ -1005,7 +956,7 @@ void NNPTEFR::train(int batchSize, const std::vector<Structure>& struc_train, co
 				rmse_v[t]=error_[3];
 				rmse_t_a[t]=rmse_t_a_*betaii;
 				rmse_v_a[t]=rmse_v_a_*betaii;
-				params_[t]=obj_.p();
+				if(sparams_) params_[t]=obj_.p();
 				printf("%8i %12.10e %12.10e %12.10e %12.10e %12.10e %12.10e %12.10e\n",
 					step[t],gamma[t],loss_t[t],loss_v[t],rmse_t[t],rmse_v[t],rmse_t_a[t],rmse_v_a[t]
 				);
@@ -1024,30 +975,6 @@ void NNPTEFR::train(int batchSize, const std::vector<Structure>& struc_train, co
 			obj_.val()=error_[0];//loss - train
 			obj_.gamma()=decay_.step(obj_.gamma(),iter_);
 			algo_->step(obj_);
-			//weight decay
-			switch(reg_){
-				case Regularization::NONE: break;
-				case Regularization::LASSO:{
-					for(int n=0; n<nParams; ++n){
-						obj_.p()[n]-=obj_.gamma()*eta_*wm[n]*math::special::sgn(obj_.pOld()[n]);
-					}
-				} break;
-				case Regularization::RIDGE:{
-					for(int n=0; n<nParams; ++n){
-						obj_.p()[n]-=obj_.gamma()*eta_*wm[n]*obj_.pOld()[n];
-					}
-				} break;
-				case Regularization::HUBER:{
-					for(int n=0; n<nParams; ++n){
-						obj_.p()[n]-=obj_.gamma()*eta_*wm[n]*obj_.pOld()[n]/sqrt(1.0+obj_.pOld()[n]*obj_.pOld()[n]);
-					}
-				} break;
-				case Regularization::ASINH:{
-					for(int n=0; n<nParams; ++n){
-						obj_.p()[n]-=obj_.gamma()*eta_*wm[n]*asinh(obj_.pOld()[n]);
-					}
-				} break;
-			}
 			//compute the difference
 			obj_.dv()=std::fabs(obj_.val()-obj_.valOld());
 			obj_.dp()=(obj_.p()-obj_.pOld()).norm();
@@ -1100,7 +1027,7 @@ void NNPTEFR::train(int batchSize, const std::vector<Structure>& struc_train, co
 	}
 	
 	//====== write the parameters ======
-	if(WORLD.rank()==0 && wparams_){
+	if(WORLD.rank()==0 && wparams_ && sparams_){
 		FILE* writer_p_=NULL;
 		if(!restart_) writer_p_=fopen(file_params_.c_str(),"w");
 		else writer_p_=fopen(file_params_.c_str(),"a");
@@ -1114,10 +1041,12 @@ void NNPTEFR::train(int batchSize, const std::vector<Structure>& struc_train, co
 		fclose(writer_p_);
 		writer_p_=NULL;
 	}
-
+	
 	//====== bcast the parameters ======
-	for(int t=0; t<size; ++t){
-		MPI_Bcast(params_[t].data(),params_[t].size(),MPI_DOUBLE,0,WORLD.mpic());
+	if(sparams_){
+		for(int t=0; t<size; ++t){
+			MPI_Bcast(params_[t].data(),params_[t].size(),MPI_DOUBLE,0,WORLD.mpic());
+		}
 	}
 	
 	//====== unpack final parameters ======
@@ -1414,7 +1343,7 @@ void NNPTEFR::error_cost_o1(const Eigen::VectorXd& x, const std::vector<Structur
 	}
 }
 
-void NNPTEFR::error_dodp(const Eigen::VectorXd& x, const std::vector<Structure>& struc_train, const std::vector<Structure>& struc_val){
+/*void NNPTEFR::error_dodp(const Eigen::VectorXd& x, const std::vector<Structure>& struc_train, const std::vector<Structure>& struc_val){
 	if(NNPTEFR_PRINT_FUNC>0) std::cout<<"NNPTEFR::error(const Eigen::VectorXd&):\n";
 	
 	//====== reset the error ======
@@ -1544,7 +1473,7 @@ void NNPTEFR::error_dodp(const Eigen::VectorXd& x, const std::vector<Structure>&
 			error_[3]+=(dE*dE)/(nAtoms*nAtoms);//rmse - val
 		}
 	}
-}
+}*/
 
 void NNPTEFR::read(const char* file, NNPTEFR& nnpte){
 	if(NN_PRINT_FUNC>0) std::cout<<"NNPTEFR::read(const char*,NNPTEFR&):\n";
@@ -1591,6 +1520,8 @@ void NNPTEFR::read(FILE* reader, NNPTEFR& nnpte){
 			nnpte.reset()=string::boolean(token.next().c_str());//restarting
 		} else if(tag=="WRITE_PARAMS"){
 			nnpte.wparams()=string::boolean(token.next().c_str());
+		} else if(tag=="SAVE_PARAMS"){
+			nnpte.sparams()=string::boolean(token.next().c_str());
 		} 
 		//optimization
 		if(tag=="LOSS"){
@@ -1622,8 +1553,6 @@ void NNPTEFR::read(FILE* reader, NNPTEFR& nnpte){
 			nnpte.eta()=std::atof(token.next().c_str());
 		} else if(tag=="NORM"){
 			nnpte.norm()=Norm::read(string::to_upper(token.next()).c_str());
-		} else if(tag=="REG"){
-			nnpte.reg()=Regularization::read(string::to_upper(token.next()).c_str());
 		} else if(tag=="PRESCALE"){
 			nnpte.prescale()=PreScale::read(string::to_upper(token.next()).c_str());
 		} else if(tag=="PREBIAS"){
@@ -1650,7 +1579,7 @@ int main(int argc, char* argv[]){
 		Mode mode=Mode::TRAIN;
 	//atom format
 		AtomType atomT;
-		atomT.name=true; atomT.an=true; atomT.type=true; atomT.index=true;
+		atomT.name=true; atomT.an=false; atomT.type=true; atomT.index=true;
 		atomT.posn=true; atomT.force=true; atomT.symm=true;
 		atomT.charge=false;
 	//flags - compute
@@ -1684,13 +1613,13 @@ int main(int argc, char* argv[]){
 		NNPTEFR nnpte;//nn potential optimization data
 		std::vector<std::vector<int> > nh;//hidden layer configuration
 		NN::ANNP annp;//neural network initialization parameters
+	//pca
+		int ngrid=50;
 	//taylor series
 		rng::dist::Name rdist=rng::dist::Name::NONE;
 		Perturb perturb=Perturb::NONE;
 		double rdelta=0.0;
 		int nadd=0;
-	//pca
-		int ngrid=50;
 	//data names
 		static const char* const dnames[] = {"TRAINING","VALIDATION","TESTING"};
 	//structures - format
@@ -1937,8 +1866,8 @@ int main(int argc, char* argv[]){
 				if(tag=="COMPUTE"){
 					const std::string ctype=string::to_upper(token.next());
 					if(ctype=="COUL") compute.coul=string::boolean(token.next().c_str());
-					else if(ctype=="VDWS") compute.vdws=string::boolean(token.next().c_str());
 					else if(ctype=="VDWL") compute.vdwl=string::boolean(token.next().c_str());
+					else if(ctype=="VDWS") compute.vdws=string::boolean(token.next().c_str());
 					else if(ctype=="REP") compute.rep=string::boolean(token.next().c_str());
 					else if(ctype=="FORCE") compute.force=string::boolean(token.next().c_str());
 					else if(ctype=="NORM") compute.norm=string::boolean(token.next().c_str());
@@ -1973,7 +1902,8 @@ int main(int argc, char* argv[]){
 			//======== read - nnpte =========
 			if(NNPTEFR_PRINT_STATUS>0) std::cout<<"reading neural network training parameters\n";
 			NNPTEFR::read(reader,nnpte);
-			
+			if(compute.pca) nnpte.sparams()=true;
+
 			//======== read - annp =========
 			if(NNPTEFR_PRINT_STATUS>0) std::cout<<"reading neural network parameters\n";
 			NN::ANNP::read(reader,annp);
@@ -2059,8 +1989,8 @@ int main(int argc, char* argv[]){
 			std::cout<<print::buf(strbuf)<<"\n";
 			std::cout<<print::title("COMPUTE FLAGS",strbuf)<<"\n";
 			std::cout<<"coul  = "<<compute.coul<<"\n";
-			std::cout<<"vdws  = "<<compute.vdws<<"\n";
 			std::cout<<"vdwl  = "<<compute.vdwl<<"\n";
+			std::cout<<"vdws  = "<<compute.vdws<<"\n";
 			std::cout<<"rep   = "<<compute.rep<<"\n";
 			std::cout<<"force = "<<compute.force<<"\n";
 			std::cout<<"norm  = "<<compute.norm<<"\n";
@@ -2077,8 +2007,8 @@ int main(int argc, char* argv[]){
 			std::cout<<print::buf(strbuf)<<"\n";
 			std::cout<<print::title("EXTERNAL POTENTIAL",strbuf)<<"\n";
 			if(compute.coul) std::cout<<"COUL = "<<pot_coul<<"\n";
-			if(compute.vdws) std::cout<<"VDWS = "<<pot_vdw_s<<"\n";
 			if(compute.vdwl) std::cout<<"VDWL = "<<pot_vdw_l<<"\n";
+			if(compute.vdws) std::cout<<"VDWS = "<<pot_vdw_s<<"\n";
 			if(compute.rep)  std::cout<<"REP  = "<<pot_rep<<"\n";
 			std::cout<<print::buf(strbuf)<<"\n";
 			std::cout<<print::title("TYPES",strbuf)<<"\n";
@@ -2112,6 +2042,7 @@ int main(int argc, char* argv[]){
 		//general parameters
 		MPI_Bcast(&unitsys,1,MPI_INT,0,WORLD.mpic());
 		MPI_Bcast(&nadd,1,MPI_INT,0,WORLD.mpic());
+		MPI_Bcast(&ngrid,1,MPI_INT,0,WORLD.mpic());
 		MPI_Bcast(&perturb,1,MPI_INT,0,WORLD.mpic());
 		MPI_Bcast(&rdist,1,MPI_INT,0,WORLD.mpic());
 		MPI_Bcast(&rdelta,1,MPI_DOUBLE,0,WORLD.mpic());
@@ -2138,8 +2069,8 @@ int main(int argc, char* argv[]){
 		MPI_Bcast(&write.input,1,MPI_C_BOOL,0,WORLD.mpic());
 		//external potential
 		if(compute.coul) thread::bcast(WORLD.mpic(),0,pot_coul);
-		if(compute.vdws) thread::bcast(WORLD.mpic(),0,pot_vdw_l);
-		if(compute.vdwl) thread::bcast(WORLD.mpic(),0,pot_vdw_s);
+		if(compute.vdwl) thread::bcast(WORLD.mpic(),0,pot_vdw_l);
+		if(compute.vdws) thread::bcast(WORLD.mpic(),0,pot_vdw_s);
 		if(compute.rep) thread::bcast(WORLD.mpic(),0,pot_rep);
 		//batch
 		MPI_Bcast(&nBatch,1,MPI_INT,0,WORLD.mpic());
@@ -2824,7 +2755,7 @@ int main(int argc, char* argv[]){
 		std::vector<Reduce<1> > r1_energy(nData);
 		std::vector<Reduce<2> > r2_energy(nData);
 		std::vector<Reduce<1> > r1_force(nData);
-		std::vector<std::vector<Reduce<2> > > r2_force(nData,std::vector<Reduce<2> >(3));
+		std::vector<std::vector<Reduce<2> > > r2_force(nData,std::vector<Reduce<2> >(nData));
 		
 		//======== compute the final energies ========
 		if(NNPTEFR_PRINT_STATUS>-1 && WORLD.rank()==0) std::cout<<"computing final energies\n";
@@ -3050,8 +2981,8 @@ int main(int argc, char* argv[]){
 		}
 		
 		//======== compute the final forces ========
-		if(NNPTEFR_PRINT_STATUS>-1 && WORLD.rank()==0 && compute.force) std::cout<<"computing final forces\n";
 		if(compute.force && write.force){
+			if(NNPTEFR_PRINT_STATUS>-1 && WORLD.rank()==0) std::cout<<"computing final forces\n";
 			for(int n=0; n<nData; ++n){
 				if(dist_struc[n].size()>0){
 					//compute forces
@@ -3081,7 +3012,7 @@ int main(int argc, char* argv[]){
 					std::vector<Reduce<1> > r1fv(WORLD.size());
 					thread::gather(r1_force[n],r1fv,WORLD.mpic());
 					if(WORLD.rank()==0) for(int i=1; i<WORLD.size(); ++i) r1_force[n]+=r1fv[i];
-					for(int i=0; i<3; ++i){
+					for(int i=0; i<nData; ++i){
 						std::vector<Reduce<2> > r2fv(WORLD.size());
 						thread::gather(r2_force[n][i],r2fv,WORLD.mpic());
 						if(WORLD.rank()==0) for(int j=1; j<WORLD.size(); ++j) r2_force[n][i]+=r2fv[j];
@@ -3360,7 +3291,7 @@ int main(int argc, char* argv[]){
 				}
 			}
 		}
-
+		
 		//======== stop the wall clock ========
 		if(WORLD.rank()==0){
 			clock_wall.end();

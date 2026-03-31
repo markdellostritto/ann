@@ -59,7 +59,7 @@ std::ostream& operator<<(std::ostream& out, const Perturb& perturb);
 class PreScale{
 public:
 	enum Type{
-		NONE,
+		IDENTITY,
 		DEV,
 		MINMAX,
 		MAX,
@@ -87,7 +87,7 @@ std::ostream& operator<<(std::ostream& out, const PreScale& preScale);
 class PreBias{
 public:
 	enum Type{
-		NONE,
+		IDENTITY,
 		MEAN,
 		HAR,
 		RMS,
@@ -117,12 +117,11 @@ std::ostream& operator<<(std::ostream& out, const PreBias& preBias);
 class Norm{
 public:
 	enum Type{
-		NONE,
+		IDENTITY,
 		LINEAR,
 		SQRT,
 		CBRT,
 		LOG,
-		POW,
 		NONE
 	};
 	//constructor
@@ -168,35 +167,6 @@ private:
 std::ostream& operator<<(std::ostream& out, const Mode& mode);
 
 //************************************************************
-// Regularization
-//************************************************************
-
-class Regularization{
-public:
-	enum Type{
-		NONE,
-		LASSO,
-		RIDGE,
-		HUBER,
-		ASINH,
-		NONE
-	};
-	//constructor
-	Regularization():t_(Type::NONE){}
-	Regularization(Type t):t_(t){}
-	//operators
-	operator Type()const{return t_;}
-	//member functions
-	static Regularization read(const char* str);
-	static const char* name(const Regularization& reg);
-private:
-	Type t_;
-	//prevent automatic conversion for other built-in types
-	//template<typename T> operator T() const;
-};
-std::ostream& operator<<(std::ostream& out, const Regularization& reg);
-
-//************************************************************
 // NNPTEFR - Neural Network Potential - Optimization
 //************************************************************
 
@@ -216,6 +186,7 @@ public:
 		NNP nnp_;//the neural network potential
 		std::vector<NN::Cost> cost_;//gradient of the cost functions
 		std::vector<NN::DODP> dodp_;//gradient of the cost functions
+		std::vector<Eigen::VectorXd> params_;
 	//input/output
 		std::string file_params_;   //file - stores parameters
 		std::string file_error_;   //file - stores error
@@ -238,7 +209,6 @@ public:
 		Norm norm_;
 		PreScale prescale_;
 		PreBias prebias_;
-		Regularization reg_;
 		double inscale_,inbias_;
 		double delta_,deltai_,delta2_;//loss width
 		double beta_,betai_;//exponential averageing
@@ -271,6 +241,9 @@ public:
 	static void read(FILE* reader, NNPTEFR& nnpte);
 	
 	//==== access ====
+	//random
+		int& seed(){return seed_;}
+		const int& seed()const{return seed_;}
 	//elements
 		int nTypes()const{return nTypes_;}
 	//files
@@ -282,6 +255,8 @@ public:
 		const std::string& file_ann()const{return file_ann_;}
 		std::string& file_restart(){return file_restart_;}
 		const std::string& file_restart()const{return file_restart_;}
+		std::vector<Eigen::VectorXd>& params(){return params_;}
+		const std::vector<Eigen::VectorXd>& params()const{return params_;}
 	//flags
 		bool& restart(){return restart_;}
 		const bool& restart()const{return restart_;}
@@ -293,8 +268,6 @@ public:
 		NNP& nnp(){return nnp_;}
 		const NNP& nnp()const{return nnp_;}
 	//optimization
-		int& seed(){return seed_;}
-		const int& seed()const{return seed_;}
 		std::mt19937& rngen(){return rngen_;}
 		const std::mt19937& rngen()const{return rngen_;}
 		const Batch& batcht()const{return batcht_;}
@@ -309,8 +282,6 @@ public:
 		const std::shared_ptr<opt::algo::Base>& algo()const{return algo_;}
 		Norm& norm(){return norm_;}
 		const Norm& norm()const{return norm_;}
-		Regularization& reg(){return reg_;}
-		const Regularization& reg()const{return reg_;}
 		PreScale& prescale(){return prescale_;}
 		const PreScale& prescale()const{return prescale_;}
 		PreBias& prebias(){return prebias_;}
