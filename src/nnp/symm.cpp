@@ -36,7 +36,7 @@
 int main(int argc, char* argv[]){
 	//======== global variables ========
 	//units
-		units::System unitsys=units::System::UNKNOWN;
+		units::System unitsys=units::System::NONE;
 	//atom format
 		AtomType atomT;
 		atomT.name=true; atomT.an=true; atomT.type=true; atomT.index=true;
@@ -230,8 +230,8 @@ int main(int argc, char* argv[]){
 		std::cout<<nnp<<"\n";
 		
 		//========= check the data =========
-		if(format==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
-		if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
+		if(format==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
+		if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
 		if(types.size()==0) throw std::invalid_argument("Invalid number of types.");
 		
 		//======== set the unit system ========

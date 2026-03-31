@@ -58,7 +58,7 @@ parallel::Comm WORLD;//all processors
 int main(int argc, char* argv[]){
 	//======== global variables ========
 	//units
-		units::System unitsys=units::System::UNKNOWN;
+		units::System unitsys=units::System::NONE;
 	//structures - format
 		AtomType atomT;
 		atomT.name=true; atomT.an=false; atomT.type=true; atomT.index=false;
@@ -245,9 +245,9 @@ int main(int argc, char* argv[]){
 		MPI_Barrier(WORLD.label());
 		
 		//======== check the parameters ========
-		if(format==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
-		if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
-		if(loss==Opt::Loss::UNKNOWN) throw std::invalid_argument("Invalid loss function.");
+		if(format==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
+		if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
+		if(loss==Opt::Loss::NONE) throw std::invalid_argument("Invalid loss function.");
 		if(error_scale<=0) throw std::invalid_argument("Invalid error scaling.");
 		
 		//======== set the unit system ========

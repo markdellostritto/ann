@@ -161,7 +161,7 @@ std::ostream& operator<<(std::ostream& out, const Mode& mode){
 		case Mode::TRAIN: out<<"TRAIN"; break;
 		case Mode::TEST: out<<"TEST"; break;
 		case Mode::SYMM: out<<"SYMM"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -171,7 +171,7 @@ const char* Mode::name(const Mode& mode){
 		case Mode::TRAIN: return "TRAIN";
 		case Mode::TEST: return "TEST";
 		case Mode::SYMM: return "SYMM";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -179,7 +179,7 @@ Mode Mode::read(const char* str){
 	if(std::strcmp(str,"TRAIN")==0) return Mode::TRAIN;
 	else if(std::strcmp(str,"TEST")==0) return Mode::TEST;
 	else if(std::strcmp(str,"SYMM")==0) return Mode::SYMM;
-	else return Mode::UNKNOWN;
+	else return Mode::NONE;
 }
 
 //************************************************************
@@ -893,7 +893,7 @@ void NNPTK::read(FILE* reader, NNPTK& nnptk){
 int main(int argc, char* argv[]){
 	//======== global variables ========
 	//units
-		units::System unitsys=units::System::UNKNOWN;
+		units::System unitsys=units::System::NONE;
 	//mode
 		Mode mode=Mode::TRAIN;
 	//structures - format
@@ -1259,9 +1259,9 @@ int main(int argc, char* argv[]){
 			if(mode==Mode::TRAIN && data[0].size()==0) throw std::invalid_argument("No training data provided.");
 			if(mode==Mode::TRAIN && data[1].size()==0) throw std::invalid_argument("No validation data provided.");
 			if(mode==Mode::TEST && data[2].size()==0) throw std::invalid_argument("No test data provided.");
-			if(mode==Mode::UNKNOWN) throw std::invalid_argument("Invalid calculation mode");
-			if(format==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
-			if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
+			if(mode==Mode::NONE) throw std::invalid_argument("Invalid calculation mode");
+			if(format==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
+			if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
 			if(types.size()==0) throw std::invalid_argument("Invalid number of types.");
 		}
 		
