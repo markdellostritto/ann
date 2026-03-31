@@ -33,7 +33,7 @@ struct STYLE_ATOM{
 		BOND,
 		ATOMIC,
 		CHARGE,
-		UNKNOWN
+		NONE
 	};
 	static STYLE_ATOM::type read(const char* str);
 };

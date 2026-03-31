@@ -10,7 +10,7 @@
 
 struct FILE_FORMAT{
 	enum type{
-		UNKNOWN,//Unknown format
+		NONE,//Unknown format
 		XDATCAR,//VASP xdatcar file
 		POSCAR,//VASP poscar file
 		OUTCAR,//VASP outcar file

@@ -18,7 +18,7 @@ FILE_FORMAT::type FILE_FORMAT::read(const char* str){
 	else if(std::strcmp(str,"GAUSSIAN")==0) return FILE_FORMAT::GAUSSIAN;
 	else if(std::strcmp(str,"RAW")==0) return FILE_FORMAT::RAW;
 	else if(std::strcmp(str,"BINARY")==0) return FILE_FORMAT::BINARY;
-	else return FILE_FORMAT::UNKNOWN;
+	else return FILE_FORMAT::NONE;
 }
 
 static const char* name(const FILE_FORMAT::type& format){
@@ -34,7 +34,7 @@ static const char* name(const FILE_FORMAT::type& format){
 		case FILE_FORMAT::GAUSSIAN: return "GAUSSIAN";
 		case FILE_FORMAT::RAW: return "RAW";
 		case FILE_FORMAT::BINARY: return "BINARY";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -51,7 +51,7 @@ std::ostream& operator<<(std::ostream& out, FILE_FORMAT::type& format){
 		case FILE_FORMAT::GAUSSIAN: out<<"GAUSSIAN"; break;
 		case FILE_FORMAT::RAW: out<<"RAW"; break;
 		case FILE_FORMAT::BINARY: out<<"BINARY"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
