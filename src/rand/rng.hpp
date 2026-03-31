@@ -30,7 +30,7 @@ namespace dist{
 	class Name{
 	public:
 		enum Type{
-			UNKNOWN,
+			NONE,
 			UNIFORM,
 			LAPLACE,
 			NORMAL,
@@ -41,7 +41,7 @@ namespace dist{
 			CAUCHY
 		};
 		//constructor
-		Name():t_(Type::UNKNOWN){}
+		Name():t_(Type::NONE){}
 		Name(Type t):t_(t){}
 		//operators
 		operator Type()const{return t_;}
@@ -66,7 +66,7 @@ namespace dist{
 		Name name_;
 	public:
 		//==== constructors/destructors ====
-		Base():name_(Name::UNKNOWN){}
+		Base():name_(Name::NONE){}
 		Base(Name name):name_(name){}
 		virtual ~Base(){};
 		

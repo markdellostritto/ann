@@ -28,7 +28,7 @@ namespace dist{
 			case Name::LOGISTIC: out<<"LOGISTIC"; break;
 			case Name::COSINE: out<<"COSINE"; break;
 			case Name::CAUCHY: out<<"CAUCHY"; break;
-			default: out<<"UNKNOWN"; break;
+			default: out<<"NONE"; break;
 		}
 		return out;
 	}
@@ -43,7 +43,7 @@ namespace dist{
 			case Name::LOGISTIC: return "LOGISTIC";
 			case Name::COSINE: return "COSINE";
 			case Name::CAUCHY: return "CAUCHY";
-			default: return "UNKNOWN";
+			default: return "NONE";
 		}
 	}
 
@@ -56,7 +56,7 @@ namespace dist{
 		else if(std::strcmp(str,"LOGISTIC")==0) return Name::LOGISTIC;
 		else if(std::strcmp(str,"COSINE")==0) return Name::COSINE;
 		else if(std::strcmp(str,"CAUCHY")==0) return Name::CAUCHY;
-		else return Name::UNKNOWN;
+		else return Name::NONE;
 	}
 	
 	//==== Uniform ====
