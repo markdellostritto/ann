@@ -18,10 +18,10 @@ public:
 		GMEAN,
 		HMEAN,
 		QMEAN,
-		UNKNOWN
+		NONE
 	};
 	//constructor
-	Mix():t_(Type::UNKNOWN){}
+	Mix():t_(Type::NONE){}
 	Mix(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}
@@ -41,7 +41,7 @@ std::ostream& operator<<(std::ostream& out, const Mix& mix){
 		case Mix::GMEAN: out<<"GMEAN"; break;
 		case Mix::HMEAN: out<<"HMEAN"; break;
 		case Mix::QMEAN: out<<"QMEAN"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -53,7 +53,7 @@ const char* Mix::name(const Mix& mix){
 		case Mix::GMEAN: return "GMEAN";
 		case Mix::HMEAN: return "HMEAN";
 		case Mix::QMEAN: return "QMEAN";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -63,7 +63,7 @@ Mix Mix::read(const char* str){
 	else if(std::strcmp(str,"GMEAN")==0) return Mix::GMEAN;
 	else if(std::strcmp(str,"HMEAN")==0) return Mix::HMEAN;
 	else if(std::strcmp(str,"QMEAN")==0) return Mix::QMEAN;
-	else return Mix::UNKNOWN;
+	else return Mix::NONE;
 }
 
 int main(int argc, char* argv[]){
@@ -84,11 +84,11 @@ int main(int argc, char* argv[]){
 		std::vector<double> rcutl;
 		std::vector<std::string> types;
 	//basis - radial
-		PhiRN phiRN;
+		BasisR::Name rName;
 		int nR=0;
 		std::vector<double> eta;
 	//basis - angular
-		PhiAN phiAN;
+		BasisA::Name aName;
 		int nA=0;
 		std::vector<double> zeta;
 		std::vector<int> lambda;
@@ -160,7 +160,7 @@ int main(int argc, char* argv[]){
 		//radial basis
 		std::cout<<"reading radial basis\n";
 		token.read(string::trim_right(fgets(input,string::M,reader),string::COMMENT),string::WS); token.next();
-		phiRN=PhiRN::read(token.next().c_str());
+		rName=BasisR::Name::read(token.next().c_str());
 		nR=std::atoi(token.next().c_str());
 		for(int i=0; i<nR; ++i){
 			token.read(string::trim_right(fgets(input,string::M,reader),string::COMMENT),string::WS);
@@ -169,7 +169,7 @@ int main(int argc, char* argv[]){
 		//angular basis
 		std::cout<<"reading angular basis\n";
 		token.read(string::trim_right(fgets(input,string::M,reader),string::COMMENT),string::WS); token.next();
-		phiAN=PhiAN::read(token.next().c_str());
+		aName=BasisA::Name::read(token.next().c_str());
 		nA=std::atoi(token.next().c_str());
 		for(int i=0; i<nA; ++i){
 			token.read(string::trim_right(fgets(input,string::M,reader),string::COMMENT),string::WS);
@@ -182,8 +182,8 @@ int main(int argc, char* argv[]){
 		fclose(reader);
 		reader=NULL;
 		
-		if(mix_radial==Mix::UNKNOWN) throw std::invalid_argument("Invalid radial mixing scheme.\n");
-		if(mix_angular==Mix::UNKNOWN) throw std::invalid_argument("Invalid angular mixing scheme.\n");
+		if(mix_radial==Mix::NONE) throw std::invalid_argument("Invalid radial mixing scheme.\n");
+		if(mix_angular==Mix::NONE) throw std::invalid_argument("Invalid angular mixing scheme.\n");
 		
 		//======== write basis files ========
 		for(int i=0; i<ntypes; ++i){
@@ -217,7 +217,7 @@ int main(int argc, char* argv[]){
 				fprintf(writer,"basis_radial %s\n",types[j].c_str());
 				fprintf(writer,"BasisR %s %6.4f %s %i\n",
 					Cutoff::Name::name(cutname),
-					rc,PhiRN::name(phiRN),nR
+					rc,BasisR::Name::name(rName),nR
 				);
 				double rs=0;
 				switch(mix_radial){
@@ -283,7 +283,7 @@ int main(int argc, char* argv[]){
 					fprintf(writer,"basis_angular %s %s\n",types[j].c_str(),types[k].c_str());
 					fprintf(writer,"BasisA %s %6.4f %s %i\n",
 						Cutoff::Name::name(cutname),
-						rc,PhiAN::name(phiAN),nA*nra
+						rc,BasisA::Name::name(aName),nA*nra
 					);
 					for(int l=0; l<nra; ++l){
 						double reta=0;
