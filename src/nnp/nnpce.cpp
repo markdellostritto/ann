@@ -61,7 +61,7 @@ int main(int argc, char* argv[]){
 	//==== timing ====
 		Clock clock;
 	//==== units ====
-		units::System unitsys=units::System::UNKNOWN;
+		units::System unitsys=units::System::NONE;
 	//==== thread ====
 		thread::Dist dist;
 	
@@ -186,8 +186,8 @@ int main(int argc, char* argv[]){
 			std::cout<<print::buf(strbuf)<<"\n";
 			
 			//==== check the parameters ====
-			if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
-			if(format==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
+			if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
+			if(format==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
 			if(data.size()==0) throw std::invalid_argument("No data");
 		
 		}

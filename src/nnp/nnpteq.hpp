@@ -38,10 +38,10 @@ public:
 		TRAIN,
 		TEST,
 		SYMM,
-		UNKNOWN
+		NONE
 	};
 	//constructor
-	Mode():t_(Type::UNKNOWN){}
+	Mode():t_(Type::NONE){}
 	Mode(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}
