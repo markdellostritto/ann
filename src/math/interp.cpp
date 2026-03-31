@@ -20,7 +20,7 @@ std::ostream& operator<<(std::ostream& out, const Name& name){
 		case Name::LINEAR: out<<"LINEAR"; break;
 		case Name::AKIMA: out<<"AKIMA"; break;
 		case Name::RBFI: out<<"RBFI"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -31,7 +31,7 @@ const char* Name::name(const Name& name){
 		case Name::LINEAR: return "LINEAR";
 		case Name::AKIMA: return "AKIMA";
 		case Name::RBFI: return "RBFI";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -40,7 +40,7 @@ Name Name::read(const char* str){
 	else if(std::strcmp(str,"LINEAR")==0) return Name::LINEAR;
 	else if(std::strcmp(str,"AKIMA")==0) return Name::AKIMA;
 	else if(std::strcmp(str,"RBFI")==0) return Name::RBFI;
-	else return Name::UNKNOWN;
+	else return Name::NONE;
 }
 
 //***************************************************
@@ -56,7 +56,7 @@ void Base::resize(int s){
 }
 
 void Base::clear(){
-	name_=Name::UNKNOWN;
+	name_=Name::NONE;
 }
 
 int Base::search(double x){

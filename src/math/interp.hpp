@@ -21,14 +21,14 @@ namespace interp{
 class Name{
 public:
 	enum Type{
-		UNKNOWN,
+		NONE,
 		CONST,
 		LINEAR,
 		AKIMA,
 		RBFI
 	};
 	//constructor
-	Name():t_(Type::UNKNOWN){}
+	Name():t_(Type::NONE){}
 	Name(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}
@@ -55,7 +55,7 @@ protected:
 	Eigen::VectorXd d_;
 public:
 	//==== constructors/destructors ====
-	Base():name_(Name::UNKNOWN){}
+	Base():name_(Name::NONE){}
 	Base(Name name):name_(name){}
 	Base(Name name, int s):name_(name){resize(s);}
 	virtual ~Base(){}
