@@ -12,7 +12,7 @@ STYLE_ATOM::type STYLE_ATOM::read(const char* str){
 	else if(std::strcmp(str,"BOND")==0) return STYLE_ATOM::BOND;
 	else if(std::strcmp(str,"ATOMIC")==0) return STYLE_ATOM::ATOMIC;
 	else if(std::strcmp(str,"CHARGE")==0) return STYLE_ATOM::CHARGE;
-	else return STYLE_ATOM::UNKNOWN;
+	else return STYLE_ATOM::NONE;
 }
 
 std::ostream& operator<<(std::ostream& out, STYLE_ATOM::type& t){
@@ -20,7 +20,7 @@ std::ostream& operator<<(std::ostream& out, STYLE_ATOM::type& t){
 	else if(t==STYLE_ATOM::BOND) out<<"BOND";
 	else if(t==STYLE_ATOM::ATOMIC) out<<"ATOMIC";
 	else if(t==STYLE_ATOM::CHARGE) out<<"CHARGE";
-	else out<<"UNKNOWN";
+	else out<<"NONE";
 	return out;
 }
 

@@ -45,7 +45,7 @@ int main(int argc, char* argv[]){
 		std::cout<<"file    = "<<file<<"\n";
 		
 		//check parameters
-		if(format==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid input format.");
+		if(format==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid input format.");
 		
 		//read
 		std::cout<<"reading structure\n";

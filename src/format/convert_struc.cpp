@@ -54,8 +54,8 @@ int main(int argc, char* argv[]){
 		std::cout<<"frac       = "<<atomT.frac<<"\n";
 		
 		//check parameters
-		if(format_in==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid input format.");
-		if(format_out==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid output format.");
+		if(format_in==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid input format.");
+		if(format_out==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid output format.");
 		
 		//read
 		std::cout<<"reading structure\n";
