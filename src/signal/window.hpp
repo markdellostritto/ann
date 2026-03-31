@@ -16,7 +16,7 @@ struct NAME{
 		IDENTITY,
 		GAUSSIAN,
 		BLACKMANHARRIS,
-		UNKNOWN
+		NONE
 	};
 	static NAME::type read(const char* str);
 };
@@ -28,8 +28,8 @@ protected:
 	NAME::type type_;
 public:
 	//constructors/destructors
-	Base():N_(0),type_(NAME::UNKNOWN){}
-	Base(int N):N_(N),type_(NAME::UNKNOWN){}
+	Base():N_(0),type_(NAME::NONE){}
+	Base(int N):N_(N),type_(NAME::NONE){}
 	virtual ~Base(){}
 	//access
 	int& N(){return N_;}
