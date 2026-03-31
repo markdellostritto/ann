@@ -31,7 +31,7 @@ std::ostream& operator<<(std::ostream& out, const Name& name){
 		case Name::BFGS: out<<"BFGS"; break;
 		case Name::RPROP: out<<"RPROP"; break;
 		case Name::CG: out<<"CG"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -54,7 +54,7 @@ const char* Name::name(const Name& name){
 		case Name::BFGS: return "BFGS";
 		case Name::RPROP: return "RPROP";
 		case Name::CG: return "CG";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -75,7 +75,7 @@ Name Name::read(const char* str){
 	else if(std::strcmp(str,"BFGS")==0) return Name::BFGS;
 	else if(std::strcmp(str,"RPROP")==0) return Name::RPROP;
 	else if(std::strcmp(str,"CG")==0) return Name::CG;
-	else return Name::UNKNOWN;
+	else return Name::NONE;
 }
 
 //***************************************************
@@ -674,7 +674,7 @@ std::ostream& operator<<(std::ostream& out, const std::shared_ptr<Base>& obj){
 		case Name::BFGS: out<<static_cast<const BFGS&>(*obj); break;
 		case Name::RPROP: out<<static_cast<const RPROP&>(*obj); break;
 		case Name::CG: out<<static_cast<const CG&>(*obj); break;
-		case Name::UNKNOWN: out<<"ALGO UKNOWN\n"; break;
+		case Name::NONE: out<<"ALGO UKNOWN\n"; break;
 	}
 	return out;
 }
@@ -697,7 +697,7 @@ std::shared_ptr<Base>& make(std::shared_ptr<Base>& obj, Name name){
 		case Name::BFGS: obj.reset(new BFGS()); break;
 		case Name::RPROP: obj.reset(new RPROP()); break;
 		case Name::CG: obj.reset(new CG()); break;
-		case Name::UNKNOWN: throw std::invalid_argument("opt::algo::make(Base*,Name): Invalid algorithm name."); break;
+		case Name::NONE: throw std::invalid_argument("opt::algo::make(Base*,Name): Invalid algorithm name."); break;
 	}
 	return obj;
 }
@@ -1119,7 +1119,7 @@ template <> int unpack(std::shared_ptr<opt::algo::Base>& obj, const char* arr){
 	int null=1;
 	std::memcpy(&null,arr+pos,sizeof(int)); pos+=sizeof(int);
 	if(!null){
-		opt::algo::Name name=opt::algo::Name::UNKNOWN;
+		opt::algo::Name name=opt::algo::Name::NONE;
 		std::memcpy(&name,arr+pos,sizeof(opt::algo::Name)); pos+=sizeof(opt::algo::Name);
 		opt::algo::make(obj,name);
 		switch(name){

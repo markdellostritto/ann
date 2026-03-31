@@ -29,7 +29,7 @@ namespace algo{
 class Name{
 public:
 	enum Type{
-		UNKNOWN,
+		NONE,
 		SGD,
 		SDM,
 		NAG,
@@ -48,7 +48,7 @@ public:
 		CG
 	};
 	//constructor
-	Name():t_(Type::UNKNOWN){}
+	Name():t_(Type::NONE){}
 	Name(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}
@@ -68,7 +68,7 @@ protected:
 	Name name_;
 public:
 	//==== constructors/destructors ====
-	Base():name_(Name::UNKNOWN),dim_(0){}
+	Base():name_(Name::NONE),dim_(0){}
 	Base(Name name):name_(name),dim_(0){}
 	virtual ~Base(){}
 	
