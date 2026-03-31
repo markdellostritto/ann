@@ -37,7 +37,7 @@ std::ostream& operator<<(std::ostream& out, const Init& init){
 		case Init::LECUN: out<<"LECUN"; break;
 		case Init::HE: out<<"HE"; break;
 		case Init::XAVIER: out<<"XAVIER"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -48,7 +48,7 @@ const char* Init::name(const Init& init){
 		case Init::LECUN: return "LECUN";
 		case Init::HE: return "HE";
 		case Init::XAVIER: return "XAVIER";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -57,7 +57,7 @@ Init Init::read(const char* str){
 	else if(std::strcmp(str,"LECUN")==0) return Init::LECUN;
 	else if(std::strcmp(str,"HE")==0) return Init::HE;
 	else if(std::strcmp(str,"XAVIER")==0) return Init::XAVIER;
-	else return Init::UNKNOWN;
+	else return Init::NONE;
 }
 
 //***********************************************************************
@@ -87,7 +87,7 @@ std::ostream& operator<<(std::ostream& out, const Neuron& neuron){
 		case Neuron::SQPLUS: out<<"SQPLUS"; break;
 		case Neuron::ATISH: out<<"ATISH"; break;
 		case Neuron::TEST: out<<"TEST"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -113,7 +113,7 @@ const char* Neuron::name(const Neuron& neuron){
 		case Neuron::SQPLUS: return "SQPLUS";
 		case Neuron::ATISH: return "ATISH";
 		case Neuron::TEST: return "TEST";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -137,7 +137,7 @@ Neuron Neuron::read(const char* str){
 	else if(std::strcmp(str,"SQPLUS")==0) return Neuron::SQPLUS;
 	else if(std::strcmp(str,"ATISH")==0) return Neuron::ATISH;
 	else if(std::strcmp(str,"TEST")==0) return Neuron::TEST;
-	else return Neuron::UNKNOWN;
+	else return Neuron::NONE;
 }
 
 //***********************************************************************
@@ -783,7 +783,6 @@ void AFFP::af_test(double c, const VecXd& z, VecXd& a){
 	const int size=z.size();
 	for(int i=0; i<size; ++i){
 		const double fexp=std::exp(-z[i]*z[i]);
-		//const double ferf=std::erf(z[i]);
 		const double zs=math::special::sgn(z[i]);
 		const double t=1.0/(1.0+0.3275911*z[i]*zs);
 		const double ferf=zs*(1.0-t*(0.254829592+t*(-0.284496736+t*(1.421413741+t*(-1.453152027+t*1.061405429))))*fexp);
@@ -794,7 +793,6 @@ void AFFPBP::af_test(double c, const VecXd& z, VecXd& a, VecXd& d){
 	const int size=z.size();
 	for(int i=0; i<size; ++i){
 		const double fexp=std::exp(-z[i]*z[i]);
-		//const double ferf=std::erf(z[i]);
 		const double zs=math::special::sgn(z[i]);
 		const double t=1.0/(1.0+0.3275911*z[i]*zs);
 		const double ferf=zs*(1.0-t*(0.254829592+t*(-0.284496736+t*(1.421413741+t*(-1.453152027+t*1.061405429))))*fexp);
@@ -806,7 +804,6 @@ void AFFPBP2::af_test(double c, const VecXd& z, VecXd& a, VecXd& d, VecXd& d2){
 	const int size=z.size();
 	for(int i=0; i<size; ++i){
 		const double fexp=std::exp(-z[i]*z[i]);
-		//const double ferf=std::erf(z[i]);
 		const double zs=math::special::sgn(z[i]);
 		const double t=1.0/(1.0+0.3275911*z[i]*zs);
 		const double ferf=zs*(1.0-t*(0.254829592+t*(-0.284496736+t*(1.421413741+t*(-1.453152027+t*1.061405429))))*fexp);
@@ -910,7 +907,7 @@ void ANN::defaults(){
 		dadz_.clear();
 		d2adz2_.clear();
 	//neuron
-		neuron_=Neuron::UNKNOWN;
+		neuron_=Neuron::NONE;
 		affp_.clear();
 		affpbp_.clear();
 		affpbp2_.clear();
@@ -1530,7 +1527,7 @@ void ANN::read(FILE* reader, ANN& nn){
 	token.read(fgets(input,MAX,reader),string::WS); token.next();
 	annp.neuron()=Neuron::read(token.next().c_str());
 	annp.c()=std::atof(token.next().c_str());
-	if(annp.neuron()==Neuron::UNKNOWN) throw std::invalid_argument("ANN::read(FILE*,ANN&): Invalid neuron.");
+	if(annp.neuron()==Neuron::NONE) throw std::invalid_argument("ANN::read(FILE*,ANN&): Invalid neuron.");
 	//==== resize the nueral newtork ====
 	if(NN_PRINT_STATUS>0) std::cout<<"resizing neural network\n";
 	nn.resize(annp,nodes);
@@ -1597,7 +1594,7 @@ void ANNP::defaults(){
 	dist_w_=rng::dist::Name::NORMAL;
 	init_=Init::RAND;
 	seed_=-1;
-	neuron_=NN::Neuron::UNKNOWN;
+	neuron_=NN::Neuron::NONE;
 }
 
 /**
@@ -2297,7 +2294,7 @@ namespace serialize{
 		int nlayer=0,nInp=0;
 		double c=1.0;
 		std::vector<int> nNodes;
-		NN::Neuron neuron=NN::Neuron::UNKNOWN;
+		NN::Neuron neuron=NN::Neuron::NONE;
 		//neuron type
 		std::memcpy(&neuron,arr+pos,sizeof(NN::Neuron)); pos+=sizeof(NN::Neuron);
 		std::memcpy(&c,arr+pos,sizeof(double)); pos+=sizeof(double);

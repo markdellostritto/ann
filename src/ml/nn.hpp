@@ -53,14 +53,14 @@ class Init{
 public:
 	//enum
 	enum Type{
-		UNKNOWN,
+		NONE,
 		RAND,
 		LECUN,
 		HE,
 		XAVIER
 	};
 	//constructor
-	Init():t_(Type::UNKNOWN){}
+	Init():t_(Type::NONE){}
 	Init(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}
@@ -82,7 +82,7 @@ class Neuron{
 public:
 	//type
 	enum Type{
-		UNKNOWN,
+		NONE,
 		//linear
 		LINEAR,
 		//sigmoidal
@@ -109,7 +109,7 @@ public:
 		TEST
 	};
 	//constructor
-	Neuron():t_(Type::UNKNOWN){}
+	Neuron():t_(Type::NONE){}
 	Neuron(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}

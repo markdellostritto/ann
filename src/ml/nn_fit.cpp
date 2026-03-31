@@ -218,8 +218,8 @@ int main(int argc, char* argv[]){
 			//==== check the parameters ====
 			if(dInp<=0) throw std::invalid_argument("Invalid input dimension");
 			if(dOut<=0) throw std::invalid_argument("Invalid output dimension");
-			if(nnopt.iter().stop()==opt::Stop::UNKNOWN) throw std::invalid_argument("Invalid stop function.");
-			if(nnopt.iter().loss()==opt::Loss::UNKNOWN) throw std::invalid_argument("Invalid loss function.");
+			if(nnopt.iter().stop()==opt::Stop::NONE) throw std::invalid_argument("Invalid stop function.");
+			if(nnopt.iter().loss()==opt::Loss::NONE) throw std::invalid_argument("Invalid loss function.");
 			
 			//==== initialize neural network ====
 			if(!nnopt.restart()){
