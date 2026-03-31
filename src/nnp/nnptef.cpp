@@ -201,31 +201,31 @@ template <> int unpack(NNPTE& obj, const char* arr){
 
 std::ostream& operator<<(std::ostream& out, const PreScale& prescale){
 	switch(prescale){
-		case PreScale::NONE: out<<"NONE"; break;
+		case PreScale::IDENTITY: out<<"IDENTITY"; break;
 		case PreScale::DEV: out<<"DEV"; break;
 		case PreScale::MINMAX: out<<"MINMAX"; break;
 		case PreScale::MAX: out<<"MAX"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
 
 const char* PreScale::name(const PreScale& prescale){
 	switch(prescale){
-		case PreScale::NONE: return "NONE";
+		case PreScale::IDENTITY: return "IDENTITY";
 		case PreScale::DEV: return "DEV";
 		case PreScale::MINMAX: return "MINMAX";
 		case PreScale::MAX: return "MAX";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
 PreScale PreScale::read(const char* str){
-	if(std::strcmp(str,"NONE")==0) return PreScale::NONE;
+	if(std::strcmp(str,"IDENTITY")==0) return PreScale::IDENTITY;
 	else if(std::strcmp(str,"DEV")==0) return PreScale::DEV;
 	else if(std::strcmp(str,"MINMAX")==0) return PreScale::MINMAX;
 	else if(std::strcmp(str,"MAX")==0) return PreScale::MAX;
-	else return PreScale::UNKNOWN;
+	else return PreScale::NONE;
 }
 
 //************************************************************
@@ -234,31 +234,31 @@ PreScale PreScale::read(const char* str){
 
 std::ostream& operator<<(std::ostream& out, const PreBias& prebias){
 	switch(prebias){
-		case PreBias::NONE: out<<"NONE"; break;
+		case PreBias::IDENTITY: out<<"IDENTITY"; break;
 		case PreBias::MEAN: out<<"MEAN"; break;
 		case PreBias::MID: out<<"MID"; break;
 		case PreBias::MIN: out<<"MIN"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
 
 const char* PreBias::name(const PreBias& prebias){
 	switch(prebias){
-		case PreBias::NONE: return "NONE";
+		case PreBias::IDENTITY: return "IDENTITY";
 		case PreBias::MEAN: return "MEAN";
 		case PreBias::MID: return "MID";
 		case PreBias::MIN: return "MIN";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
 PreBias PreBias::read(const char* str){
-	if(std::strcmp(str,"NONE")==0) return PreBias::NONE;
+	if(std::strcmp(str,"IDENTITY")==0) return PreBias::IDENTITY;
 	else if(std::strcmp(str,"MEAN")==0) return PreBias::MEAN;
 	else if(std::strcmp(str,"MID")==0) return PreBias::MID;
 	else if(std::strcmp(str,"MIN")==0) return PreBias::MIN;
-	else return PreBias::UNKNOWN;
+	else return PreBias::NONE;
 }
 
 //************************************************************
@@ -267,34 +267,34 @@ PreBias PreBias::read(const char* str){
 
 std::ostream& operator<<(std::ostream& out, const Norm& norm){
 	switch(norm){
-		case Norm::NONE: out<<"NONE"; break;
+		case Norm::IDENTITY: out<<"IDENTITY"; break;
 		case Norm::LINEAR: out<<"LINEAR"; break;
 		case Norm::SQRT: out<<"SQRT"; break;
 		case Norm::CBRT: out<<"CBRT"; break;
 		case Norm::LOG: out<<"LOG"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
 
 const char* Norm::name(const Norm& norm){
 	switch(norm){
-		case Norm::NONE: return "NONE";
+		case Norm::IDENTITY: return "IDENTITY";
 		case Norm::LINEAR: return "LINEAR";
 		case Norm::SQRT: return "SQRT";
 		case Norm::CBRT: return "CBRT";
 		case Norm::LOG: return "LOG";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
 Norm Norm::read(const char* str){
-	if(std::strcmp(str,"NONE")==0) return Norm::NONE;
+	if(std::strcmp(str,"IDENTITY")==0) return Norm::IDENTITY;
 	else if(std::strcmp(str,"LINEAR")==0) return Norm::LINEAR;
 	else if(std::strcmp(str,"SQRT")==0) return Norm::SQRT;
 	else if(std::strcmp(str,"CBRT")==0) return Norm::CBRT;
 	else if(std::strcmp(str,"LOG")==0) return Norm::LOG;
-	else return Norm::UNKNOWN;
+	else return Norm::NONE;
 }
 
 //************************************************************
@@ -306,7 +306,7 @@ std::ostream& operator<<(std::ostream& out, const Mode& mode){
 		case Mode::TRAIN: out<<"TRAIN"; break;
 		case Mode::TEST: out<<"TEST"; break;
 		case Mode::SYMM: out<<"SYMM"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -316,7 +316,7 @@ const char* Mode::name(const Mode& mode){
 		case Mode::TRAIN: return "TRAIN";
 		case Mode::TEST: return "TEST";
 		case Mode::SYMM: return "SYMM";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -324,7 +324,7 @@ Mode Mode::read(const char* str){
 	if(std::strcmp(str,"TRAIN")==0) return Mode::TRAIN;
 	else if(std::strcmp(str,"TEST")==0) return Mode::TEST;
 	else if(std::strcmp(str,"SYMM")==0) return Mode::SYMM;
-	else return Mode::UNKNOWN;
+	else return Mode::NONE;
 }
 
 //************************************************************
@@ -560,7 +560,7 @@ void NNPTE::train(int batchSize){
 	for(int i=0; i<struc_train_ref_.size(); ++i){
 		const int nAtoms=struc_train_ref_[i].nAtoms();
 		switch(norm_){
-			case Norm::NONE: normt_[i]=1.0; break;
+			case Norm::IDENTITY: normt_[i]=1.0; break;
 			case Norm::LINEAR: normt_[i]=1.0/nAtoms; break;
 			case Norm::SQRT: normt_[i]=1.0/sqrt(nAtoms); break;
 			case Norm::CBRT: normt_[i]=1.0/cbrt(nAtoms); break;
@@ -571,7 +571,7 @@ void NNPTE::train(int batchSize){
 	for(int i=0; i<struc_val_ref_.size(); ++i){
 		const int nAtoms=struc_val_ref_[i].nAtoms();
 		switch(norm_){
-			case Norm::NONE: normv_[i]=1.0; break;
+			case Norm::IDENTITY: normv_[i]=1.0; break;
 			case Norm::LINEAR: normv_[i]=1.0/nAtoms; break;
 			case Norm::SQRT: normv_[i]=1.0/sqrt(nAtoms); break;
 			case Norm::CBRT: normv_[i]=1.0/cbrt(nAtoms); break;
@@ -735,12 +735,12 @@ void NNPTE::train(int batchSize){
 				inpb_[n]=-min_in[n];
 			}
 		} break;
-		case PreBias::NONE:{
+		case PreBias::IDENTITY:{
 			for(int n=0; n<nTypes_; ++n){
 				inpb_[n]=Eigen::VectorXd::Constant(nnp_.nnh(n).nInput(),0.0);
 			}
 		}break;
-		case PreBias::UNKNOWN:
+		case PreBias::NONE:
 			throw std::invalid_argument("Invalid input bias.");
 		break;
 	}
@@ -779,7 +779,7 @@ void NNPTE::train(int batchSize){
 				inpw_[n]=Eigen::VectorXd::Constant(nnp_.nnh(n).nInput(),1.0);
 			}
 		}break;
-		case PreScale::UNKNOWN:
+		case PreScale::NONE:
 			throw std::invalid_argument("Invalid input scaling.");
 		break;
 	}
@@ -2036,7 +2036,7 @@ void NNPTE::read(FILE* reader, NNPTE& nnpte){
 int main(int argc, char* argv[]){
 	//======== global variables ========
 	//units
-		units::System unitsys=units::System::UNKNOWN;
+		units::System unitsys=units::System::NONE;
 	//mode
 		Mode mode=Mode::TRAIN;
 	//atom format
@@ -2447,9 +2447,9 @@ int main(int argc, char* argv[]){
 			if(mode==Mode::TRAIN && data[0].size()==0) throw std::invalid_argument("No data provided - training.");
 			if(mode==Mode::TRAIN && data[1].size()==0) throw std::invalid_argument("No data provided - validation.");
 			if(mode==Mode::TEST  && data[2].size()==0) throw std::invalid_argument("No data provided - testing.");
-			if(mode==Mode::UNKNOWN) throw std::invalid_argument("Invalid calculation mode");
-			if(format==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
-			if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
+			if(mode==Mode::NONE) throw std::invalid_argument("Invalid calculation mode");
+			if(format==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
+			if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
 			if(types.size()==0) throw std::invalid_argument("Invalid number of types.");
 		}
 		

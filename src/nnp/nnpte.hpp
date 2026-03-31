@@ -37,10 +37,10 @@ public:
 		DEV,
 		MINMAX,
 		MAX,
-		UNKNOWN
+		NONE
 	};
 	//constructor
-	PreScale():t_(Type::UNKNOWN){}
+	PreScale():t_(Type::NONE){}
 	PreScale(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}
@@ -65,10 +65,10 @@ public:
 		MEAN,
 		MID,
 		MIN,
-		UNKNOWN
+		NONE
 	};
 	//constructor
-	PreBias():t_(Type::UNKNOWN){}
+	PreBias():t_(Type::NONE){}
 	PreBias(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}
@@ -94,10 +94,10 @@ public:
 		SQRT,
 		CBRT,
 		LOG,
-		UNKNOWN
+		NONE
 	};
 	//constructor
-	Norm():t_(Type::UNKNOWN){}
+	Norm():t_(Type::NONE){}
 	Norm(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}
@@ -121,10 +121,10 @@ public:
 		TRAIN,
 		TEST,
 		SYMM,
-		UNKNOWN
+		NONE
 	};
 	//constructor
-	Mode():t_(Type::UNKNOWN){}
+	Mode():t_(Type::NONE){}
 	Mode(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}

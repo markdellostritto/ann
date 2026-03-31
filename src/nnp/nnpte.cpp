@@ -196,7 +196,7 @@ std::ostream& operator<<(std::ostream& out, const PreScale& prescale){
 		case PreScale::DEV: out<<"DEV"; break;
 		case PreScale::MINMAX: out<<"MINMAX"; break;
 		case PreScale::MAX: out<<"MAX"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -207,7 +207,7 @@ const char* PreScale::name(const PreScale& prescale){
 		case PreScale::DEV: return "DEV";
 		case PreScale::MINMAX: return "MINMAX";
 		case PreScale::MAX: return "MAX";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -216,7 +216,7 @@ PreScale PreScale::read(const char* str){
 	else if(std::strcmp(str,"DEV")==0) return PreScale::DEV;
 	else if(std::strcmp(str,"MINMAX")==0) return PreScale::MINMAX;
 	else if(std::strcmp(str,"MAX")==0) return PreScale::MAX;
-	else return PreScale::UNKNOWN;
+	else return PreScale::NONE;
 }
 
 //************************************************************
@@ -229,7 +229,7 @@ std::ostream& operator<<(std::ostream& out, const PreBias& prebias){
 		case PreBias::MEAN: out<<"MEAN"; break;
 		case PreBias::MID: out<<"MID"; break;
 		case PreBias::MIN: out<<"MIN"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -240,7 +240,7 @@ const char* PreBias::name(const PreBias& prebias){
 		case PreBias::MEAN: return "MEAN";
 		case PreBias::MID: return "MID";
 		case PreBias::MIN: return "MIN";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -249,7 +249,7 @@ PreBias PreBias::read(const char* str){
 	else if(std::strcmp(str,"MEAN")==0) return PreBias::MEAN;
 	else if(std::strcmp(str,"MID")==0) return PreBias::MID;
 	else if(std::strcmp(str,"MIN")==0) return PreBias::MIN;
-	else return PreBias::UNKNOWN;
+	else return PreBias::NONE;
 }
 
 //************************************************************
@@ -263,7 +263,7 @@ std::ostream& operator<<(std::ostream& out, const Norm& norm){
 		case Norm::SQRT: out<<"SQRT"; break;
 		case Norm::CBRT: out<<"CBRT"; break;
 		case Norm::LOG: out<<"LOG"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -275,7 +275,7 @@ const char* Norm::name(const Norm& norm){
 		case Norm::SQRT: return "SQRT";
 		case Norm::CBRT: return "CBRT";
 		case Norm::LOG: return "LOG";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -285,7 +285,7 @@ Norm Norm::read(const char* str){
 	else if(std::strcmp(str,"SQRT")==0) return Norm::SQRT;
 	else if(std::strcmp(str,"CBRT")==0) return Norm::CBRT;
 	else if(std::strcmp(str,"LOG")==0) return Norm::LOG;
-	else return Norm::UNKNOWN;
+	else return Norm::NONE;
 }
 
 //************************************************************
@@ -297,7 +297,7 @@ std::ostream& operator<<(std::ostream& out, const Mode& mode){
 		case Mode::TRAIN: out<<"TRAIN"; break;
 		case Mode::TEST: out<<"TEST"; break;
 		case Mode::SYMM: out<<"SYMM"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -307,7 +307,7 @@ const char* Mode::name(const Mode& mode){
 		case Mode::TRAIN: return "TRAIN";
 		case Mode::TEST: return "TEST";
 		case Mode::SYMM: return "SYMM";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -315,7 +315,7 @@ Mode Mode::read(const char* str){
 	if(std::strcmp(str,"TRAIN")==0) return Mode::TRAIN;
 	else if(std::strcmp(str,"TEST")==0) return Mode::TEST;
 	else if(std::strcmp(str,"SYMM")==0) return Mode::SYMM;
-	else return Mode::UNKNOWN;
+	else return Mode::NONE;
 }
 
 //************************************************************
@@ -509,7 +509,6 @@ void NNPTE::read_restart(const char* file){
 void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, const std::vector<Structure>& struc_val){
 	if(NNPTE_PRINT_FUNC>0) std::cout<<"NNPTE::train(NNP&,std::vector<Structure>&,int):\n";
 	//====== local function variables ======
-		char* strbuf=new char[print::len_buf];
 	//statistics
 		std::vector<int> N;//total number of inputs for each element
 		std::vector<Eigen::VectorXd> avg_in;//average of the inputs for each element (nnp_.nSpecies_ x nInput_)
@@ -608,6 +607,7 @@ void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, cons
 	MPI_Allreduce(MPI_IN_PLACE,nAtoms_.data(),nTypes_,MPI_DOUBLE,MPI_SUM,WORLD.mpic());
 	for(int i=0; i<nTypes_; ++i) nAtoms_[i]/=BATCH.size();
 	if(NNPTE_PRINT_DATA>-1 && WORLD.rank()==0){
+		char* strbuf=new char[print::len_buf];
 		std::cout<<print::buf(strbuf)<<"\n";
 		std::cout<<print::title("ATOM - DATA",strbuf)<<"\n";
 		for(int i=0; i<nTypes_; ++i){
@@ -616,6 +616,7 @@ void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, cons
 			std::cout<<name<<"("<<index<<") - "<<(int)nAtoms_[i]<<"\n";
 		}
 		std::cout<<print::buf(strbuf)<<"\n";
+		delete[] strbuf;
 	}
 	
 	//====== set the indices and batch size ======
@@ -625,7 +626,7 @@ void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, cons
 	
 	//====== collect input statistics ======
 	//resize arrays
-	N.resize(nTypes_);
+	N.resize(nTypes_,0.0);
 	max_in.resize(nTypes_);
 	min_in.resize(nTypes_);
 	avg_in.resize(nTypes_);
@@ -724,7 +725,7 @@ void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, cons
 				inpb_[n]=Eigen::VectorXd::Constant(nnp_.nnh(n).nInput(),0.0);
 			}
 		}break;
-		case PreBias::UNKNOWN:
+		case PreBias::NONE:
 			throw std::invalid_argument("Invalid input bias.");
 		break;
 	}
@@ -763,7 +764,7 @@ void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, cons
 				inpw_[n]=Eigen::VectorXd::Constant(nnp_.nnh(n).nInput(),1.0);
 			}
 		}break;
-		case PreScale::UNKNOWN:
+		case PreScale::NONE:
 			throw std::invalid_argument("Invalid input scaling.");
 		break;
 	}
@@ -819,16 +820,18 @@ void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, cons
 	
 	//====== print input statistics and bias ======
 	if(NNPTE_PRINT_DATA>-1 && WORLD.rank()==0){
+		char* strbuf=new char[print::len_buf];
 		std::cout<<print::buf(strbuf)<<"\n";
 		std::cout<<print::title("OPT - DATA",strbuf)<<"\n";
 		std::cout<<"N-PARAMS    = \n\t"<<nParams<<"\n";
-		std::cout<<"AVG - INPUT = \n"; for(int i=0; i<avg_in.size(); ++i) std::cout<<"\t"<<avg_in[i].transpose()<<"\n";
-		std::cout<<"MAX - INPUT = \n"; for(int i=0; i<max_in.size(); ++i) std::cout<<"\t"<<max_in[i].transpose()<<"\n";
-		std::cout<<"MIN - INPUT = \n"; for(int i=0; i<min_in.size(); ++i) std::cout<<"\t"<<min_in[i].transpose()<<"\n";
-		std::cout<<"DEV - INPUT = \n"; for(int i=0; i<dev_in.size(); ++i) std::cout<<"\t"<<dev_in[i].transpose()<<"\n";
-		std::cout<<"PRE-BIAS    = \n"; for(int i=0; i<inpb_.size(); ++i) std::cout<<"\t"<<inpb_[i].transpose()<<"\n";
-		std::cout<<"PRE-SCALE   = \n"; for(int i=0; i<inpw_.size(); ++i) std::cout<<"\t"<<inpw_[i].transpose()<<"\n";
+		std::cout<<"AVG - INPUT = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<avg_in[i].transpose()<<"\n";
+		std::cout<<"MAX - INPUT = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<max_in[i].transpose()<<"\n";
+		std::cout<<"MIN - INPUT = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<min_in[i].transpose()<<"\n";
+		std::cout<<"DEV - INPUT = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<dev_in[i].transpose()<<"\n";
+		std::cout<<"PRE-BIAS    = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<inpb_[i].transpose()<<"\n";
+		std::cout<<"PRE-SCALE   = \n"; for(int i=0; i<nTypes_; ++i) std::cout<<"\t"<<inpw_[i].transpose()<<"\n";
 		std::cout<<print::buf(strbuf)<<"\n";
+		delete[] strbuf;
 	}
 	
 	//====== execute the optimization ======
@@ -843,9 +846,8 @@ void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, cons
 	std::vector<int> step;
 	std::vector<double> gamma,loss_t,loss_v,rmse_t,rmse_v,rmse_t_a,rmse_v_a;
 	std::vector<Eigen::VectorXd> params;
+	const int size=(iter_.max()/iter_.nPrint()==0)?1:iter_.max()/iter_.nPrint();
 	if(WORLD.rank()==0){
-		int size=iter_.max()/iter_.nPrint();
-		if(size==0) ++size;
 		step.resize(size);
 		gamma.resize(size);
 		loss_t.resize(size);
@@ -918,7 +920,7 @@ void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, cons
 			}
 			//compute the new position
 			obj_.val()=error_[0];//loss - train
-			obj_.gamma()=decay_.step(obj_,iter_);
+			obj_.gamma()=decay_.step(obj_.gamma(),iter_);
 			algo_->step(obj_);
 			//compute the difference
 			obj_.dv()=std::fabs(obj_.val()-obj_.valOld());
@@ -1002,6 +1004,7 @@ void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, cons
 	for(int n=0; n<nTypes_; ++n) nnp_.nnh(n).nn()<<pElement_[n];
 	
 	if(NNPTE_PRINT_DATA>-1 && WORLD.rank()==0){
+		char* strbuf=new char[print::len_buf];
 		std::cout<<print::buf(strbuf)<<"\n";
 		std::cout<<print::title("TRAIN - SUMMARY",strbuf)<<"\n";
 		std::cout<<"N-STEP = "<<iter_.step()<<"\n";
@@ -1010,9 +1013,8 @@ void NNPTE::train(int batchSize, const std::vector<Structure>& struc_train, cons
 			std::cout<<"p = "; for(int i=0; i<obj_.p().size(); ++i) std::cout<<obj_.p()[i]<<" "; std::cout<<"\n";
 		}
 		std::cout<<print::buf(strbuf)<<"\n";
+		delete[] strbuf;
 	}
-	
-	delete[] strbuf;
 }
 
 /**
@@ -1599,7 +1601,7 @@ void NNPTE::read(FILE* reader, NNPTE& nnpte){
 int main(int argc, char* argv[]){
 	//======== global variables ========
 	//units
-		units::System unitsys=units::System::UNKNOWN;
+		units::System unitsys=units::System::NONE;
 	//mode
 		Mode mode=Mode::TRAIN;
 	//atom format
@@ -2010,9 +2012,9 @@ int main(int argc, char* argv[]){
 			if(mode==Mode::TRAIN && data[0].size()==0) throw std::invalid_argument("No data provided - training.");
 			if(mode==Mode::TRAIN && data[1].size()==0) throw std::invalid_argument("No data provided - validation.");
 			if(mode==Mode::TEST  && data[2].size()==0) throw std::invalid_argument("No data provided - testing.");
-			if(mode==Mode::UNKNOWN) throw std::invalid_argument("Invalid calculation mode");
-			if(format==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
-			if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
+			if(mode==Mode::NONE) throw std::invalid_argument("Invalid calculation mode");
+			if(format==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
+			if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
 			if(types.size()==0) throw std::invalid_argument("Invalid number of types.");
 		}
 		
@@ -2361,10 +2363,10 @@ int main(int argc, char* argv[]){
 			}
 			//compute energy
 			for(int n=0; n<3; ++n){
-				std::vector<double> evdwl(dist[n].size(),std::numeric_limits<double>::max());
+				std::vector<double> evdw(dist[n].size(),std::numeric_limits<double>::max());
 				for(int i=BATCH.rank(); i<dist[n].size(); i+=BATCH.size()){
 					NeighborList nlist(strucs[n][i],pot_vdw.rc());
-					evdwl[i]=pot_vdw.energy(strucs[n][i],nlist);
+					evdw[i]=pot_vdw.energy(strucs[n][i],nlist);
 					ralpha.push(pot_vdw.ksl().alpha());
 					rerrer.push(pot_vdw.ksl().errEr());
 					rerrek.push(pot_vdw.ksl().errEk());
@@ -2373,10 +2375,10 @@ int main(int argc, char* argv[]){
 					rnk[2].push(pot_vdw.ksl().nk()[2]*1.0);
 					rNK.push(pot_vdw.ksl().nk().prod());
 				}
-				MPI_Allreduce(MPI_IN_PLACE,evdwl.data(),evdwl.size(),MPI_DOUBLE,MPI_MIN,BATCH.mpic());
+				MPI_Allreduce(MPI_IN_PLACE,evdw.data(),evdw.size(),MPI_DOUBLE,MPI_MIN,BATCH.mpic());
 				for(int i=0; i<dist[n].size(); ++i){
-					strucs[n][i].evdwl()=evdwl[i];
-					strucs[n][i].pe()-=evdwl[i];
+					strucs[n][i].evdw()=evdw[i];
+					strucs[n][i].pe()-=evdw[i];
 				}
 			}
 			if(WORLD.rank()==0){
@@ -2670,7 +2672,7 @@ int main(int argc, char* argv[]){
 					clock.begin();
 					for(int i=0; i<dist[n].size(); ++i){
 						if(NNPTE_PRINT_STATUS>0) std::cout<<"structure-train["<<WORLD.rank()<<"]["<<i<<"]\n";
-						energy_r[dist[n].index(i)]=strucs[n][i].evdwl();
+						energy_r[dist[n].index(i)]=strucs[n][i].evdw();
 						natoms[dist[n].index(i)]=strucs[n][i].nAtoms();
 					}
 					clock.end();
