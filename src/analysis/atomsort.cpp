@@ -20,20 +20,20 @@
 
 Sort Sort::read(const char* str){
 	if(std::strcmp(str,"MOLECULE")==0) return Sort::MOLECULE;
-	else return Sort::UNKNOWN;
+	else return Sort::NONE;
 }
 
 const char* Sort::name(const Sort& t){
 	switch(t){
 		case Sort::MOLECULE: return "MOLECULE";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
 std::ostream& operator<<(std::ostream& out, const Sort& t){
 	switch(t){
 		case Sort::MOLECULE: out<<"MOLECULE"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -157,8 +157,8 @@ int main(int argc, char* argv[]){
 	std::cout<<"sort   = "<<sort<<"\n";
 	
 	//check parameters
-	if(format==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid format.");
-	if(sort==Sort::UNKNOWN) throw std::invalid_argument("Invalid sort.");
+	if(format==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid format.");
+	if(sort==Sort::NONE) throw std::invalid_argument("Invalid sort.");
 	
 	//read
 	std::cout<<"reading structure\n";

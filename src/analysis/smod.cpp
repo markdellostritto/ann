@@ -28,7 +28,7 @@ std::ostream& operator<<(std::ostream& out, const Operation& op){
 		case Operation::DILATE: out<<"DILATE"; break;
 		case Operation::REPLICATE: out<<"REPLICATE"; break;
 		case Operation::BOX: out<<"BOX"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -41,7 +41,7 @@ const char* Operation::name(const Operation& op){
 		case Operation::DILATE: return "DILATE";
 		case Operation::REPLICATE: return "REPLICATE";
 		case Operation::BOX: return "BOX";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -52,7 +52,7 @@ Operation Operation::read(const char* str){
 	else if(std::strcmp(str,"DILATE")==0) return Operation::DILATE;
 	else if(std::strcmp(str,"REPLICATE")==0) return Operation::REPLICATE;
 	else if(std::strcmp(str,"BOX")==0) return Operation::BOX;
-	else return Operation::UNKNOWN;
+	else return Operation::NONE;
 }
 
 //***********************************************************************
@@ -63,7 +63,7 @@ const char* Sort::name(const Sort& t){
 	switch(t){
 		case Sort::MOLECULE: return "MOLECULE";
 		case Sort::TYPE: return "TYPE";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -71,7 +71,7 @@ std::ostream& operator<<(std::ostream& out, const Sort& t){
 	switch(t){
 		case Sort::MOLECULE: out<<"MOLECULE"; break;
 		case Sort::TYPE: out<<"TYPE"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -79,7 +79,7 @@ std::ostream& operator<<(std::ostream& out, const Sort& t){
 Sort Sort::read(const char* str){
 	if(std::strcmp(str,"MOLECULE")==0) return Sort::MOLECULE;
 	else if(std::strcmp(str,"TYPE")==0) return Sort::TYPE;
-	else return Sort::UNKNOWN;
+	else return Sort::NONE;
 }
 
 //***********************************************************************
@@ -393,9 +393,9 @@ int main(int argc, char* argv[]){
 		std::cout<<print::buf(strbuf)<<"\n";
 		
 		//======== check the parameters ========
-		if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
-		if(iformat==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid input file format.");
-		if(oformat==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid output file format.");
+		if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
+		if(iformat==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid input file format.");
+		if(oformat==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid output file format.");
 		if(std::strlen(istruc)==0) throw std::invalid_argument("Empty input structure file.");
 		if(std::strlen(ostruc)==0) throw std::invalid_argument("Empty output structure file.");
 		

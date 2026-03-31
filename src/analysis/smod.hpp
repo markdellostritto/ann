@@ -11,7 +11,7 @@ class Operation{
 public:
 	//enum
 	enum Type{
-		UNKNOWN,
+		NONE,
 		SORT,
 		ROTATE,
 		TRANSLATE,
@@ -20,7 +20,7 @@ public:
 		BOX
 	};
 	//constructor
-	Operation():t_(Type::UNKNOWN){}
+	Operation():t_(Type::NONE){}
 	Operation(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}
@@ -41,12 +41,12 @@ std::ostream& operator<<(std::ostream& out, const Operation& op);
 class Sort{
 public:
 	enum Type{
-		UNKNOWN,
+		NONE,
 		MOLECULE,
 		TYPE
 	};
 	//constructor
-	Sort():t_(Type::UNKNOWN){}
+	Sort():t_(Type::NONE){}
 	Sort(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}

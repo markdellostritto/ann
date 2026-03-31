@@ -5,10 +5,10 @@ class Sort{
 public:
 	enum Type{
 		MOLECULE,
-		UNKNOWN
+		NONE
 	};
 	//constructor
-	Sort():t_(Type::UNKNOWN){}
+	Sort():t_(Type::NONE){}
 	Sort(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}

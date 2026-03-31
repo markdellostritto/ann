@@ -13,9 +13,9 @@ public:
 	struct Style{
 	public:
 		//enum
-		enum Type{ID,TYPE,NAME,UNKNOWN};
+		enum Type{ID,TYPE,NAME,NONE};
 		//constructor
-		Style():t_(Type::UNKNOWN){}
+		Style():t_(Type::NONE){}
 		Style(Type t):t_(t){}
 		//operators
 		operator Type()const{return t_;}

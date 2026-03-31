@@ -21,7 +21,7 @@ std::ostream& operator<<(std::ostream& out, const Group::Style& style){
 		case Group::Style::ID: out<<"ID"; break;
 		case Group::Style::TYPE: out<<"TYPE"; break;
 		case Group::Style::NAME: out<<"NAME"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -30,7 +30,7 @@ Group::Style Group::Style::read(const char* str){
 	if(std::strcmp(str,"ID")==0) return Group::Style::ID;
 	else if(std::strcmp(str,"TYPE")==0) return Group::Style::TYPE;
 	else if(std::strcmp(str,"NAME")==0) return Group::Style::NAME;
-	else return Group::Style::UNKNOWN;
+	else return Group::Style::NONE;
 }
 
 const char* Group::Style::name(const Group::Style& style){
@@ -38,7 +38,7 @@ const char* Group::Style::name(const Group::Style& style){
 		case Group::Style::ID: return "ID";
 		case Group::Style::TYPE: return "TYPE";
 		case Group::Style::NAME: return "NAME";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -53,7 +53,7 @@ std::ostream& operator<<(std::ostream& out, const Group& group){
 //modification
 
 void Group::clear(){
-	style_=Group::Style::UNKNOWN;
+	style_=Group::Style::NONE;
 	label_="NULL";
 	id_=string::hash("NULL");
 	atoms_.clear();
