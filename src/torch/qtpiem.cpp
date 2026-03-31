@@ -39,7 +39,7 @@ int main(int argc, char* argv[]){
 		std::shared_ptr<ptnl::Pot> pot;
 		std::vector<Type> types;
 	//units
-		units::System unitsys=units::System::UNKNOWN;
+		units::System unitsys=units::System::NONE;
 	//misc
 		bool error=true;
 		Clock clock;
@@ -119,7 +119,7 @@ int main(int argc, char* argv[]){
 		std::cout<<print::buf(str)<<"\n";
 		
 		//==== check the parameters ====
-		if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
+		if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
 		
 		//==== set the unit system ====
 		std::cout<<"setting the unit system\n";

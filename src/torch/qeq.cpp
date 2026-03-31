@@ -23,7 +23,7 @@ using math::constant::RadPI;
 
 std::ostream& operator<<(std::ostream& out, const QEQ& qeq){
 	if(qeq.pot()!=nullptr) out<<"qeq "<<qeq.pot()->name();
-	else out<<"qeq UNKNOWN";
+	else out<<"qeq NONE";
 	return out;
 }
 

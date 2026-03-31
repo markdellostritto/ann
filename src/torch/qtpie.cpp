@@ -27,7 +27,7 @@ const double QTPIE::c=0.06349363593424096978576330493463602015505389928227292408
 
 std::ostream& operator<<(std::ostream& out, const QTPIE& qtpie){
 	if(qtpie.pot()!=nullptr) out<<"qtpie "<<qtpie.pot()->name();
-	else out<<"qtpie UNKNOWN";
+	else out<<"qtpie NONE";
 	return out;
 }
 

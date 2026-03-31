@@ -33,7 +33,7 @@
 
 int main(int argc, char* argv[]){
 	//units
-		units::System unitsys=units::System::UNKNOWN;
+		units::System unitsys=units::System::NONE;
 	//files
 		std::string fparam;
 		std::string fstruc;

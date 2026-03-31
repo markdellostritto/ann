@@ -242,8 +242,8 @@ int main(int argc, char* argv[]){
 			std::cout<<print::buf(str)<<"\n";
 			
 			//==== check the parameters ====
-			if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
-			if(fileFormat==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
+			if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
+			if(fileFormat==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
 			if(nlat[0]<=0 || nlat[1]<=0 || nlat[2]<=0) throw std::invalid_argument("Invalid lattice.");
 			if(nasr<0) throw std::invalid_argument("Invalid number of asr iterations.");
 			N=nlat.prod();

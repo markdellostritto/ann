@@ -295,8 +295,8 @@ int main(int argc, char* argv[]){
 			//==== check the parameters ====
 			if(interval.end==0 || interval.beg==0 || (interval.end<interval.beg && interval.end>0)) throw std::invalid_argument("Invalid timestep interval.");
 			if(interval.end<0) throw std::invalid_argument("Parallel execution requires a preset ending timestep.");
-			if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
-			if(fileFormat==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
+			if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
+			if(fileFormat==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
 			if(nlat[0]<=0 || nlat[1]<=0 || nlat[2]<=0) throw std::invalid_argument("Invalid lattice.");
 			if(mass.size()==0) throw std::invalid_argument("Invalid mass vector.");
 			for(int i=0; i<mass.size(); ++i){

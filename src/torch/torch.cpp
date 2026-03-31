@@ -35,7 +35,7 @@
 
 int main(int argc, char* argv[]){
 	//units
-		units::System unitsys=units::System::UNKNOWN;
+		units::System unitsys=units::System::NONE;
 	//files
 		std::string fparam;
 		std::string fstruc;
@@ -174,7 +174,7 @@ int main(int argc, char* argv[]){
 				case Integrator::Name::VSCALE: std::cout<<static_cast<const VScale&>(*intg)<<"\n"; break;
 				case Integrator::Name::BERENDSEN: std::cout<<static_cast<const Berendsen&>(*intg)<<"\n"; break;
 				case Integrator::Name::LANGEVIN: std::cout<<static_cast<const Langevin&>(*intg)<<"\n"; break;
-				default: std::cout<<"INTEGRATOR = UNKNOWN\n";
+				default: std::cout<<"INTEGRATOR = NONE\n";
 			}
 		}
 		

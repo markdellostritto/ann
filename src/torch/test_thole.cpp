@@ -9,7 +9,7 @@
 
 int main(int argc, char* argv[]){
 	//units
-		units::System unitsys=units::System::UNKNOWN;
+		units::System unitsys=units::System::NONE;
 	//atom format
 		AtomType atomT;
 		atomT.name=true; atomT.an=true; atomT.type=true; atomT.index=true;
