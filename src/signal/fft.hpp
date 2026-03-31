@@ -28,7 +28,7 @@ namespace fourier{
 		enum type{
 			REAL=0,//real-valued
 			COMPLEX=1,//complex-valued
-			UNKNOWN=2
+			NONE=2
 		};
 	};
 	std::ostream& operator<<(std::ostream& out, const DataT::type& t);
