@@ -14,14 +14,14 @@ namespace opt{
 class Stop{
 public:
 	enum Type{
-		UNKNOWN=0,
+		NONE=0,
 		FABS=1,
 		FREL=2,
 		XABS=3,
 		XREL=4
 	};
 	//constructor
-	Stop():t_(Type::UNKNOWN){}
+	Stop():t_(Type::NONE){}
 	Stop(Type t):t_(t){}
 	//operators
 	operator Type()const{return t_;}

@@ -17,7 +17,7 @@ std::ostream& operator<<(std::ostream& out, const Stop& stop){
 		case Stop::FREL: out<<"FREL"; break;
 		case Stop::XABS: out<<"XABS"; break;
 		case Stop::XREL: out<<"XREL"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -28,7 +28,7 @@ const char* Stop::name(const Stop& stop){
 		case Stop::FREL: return "FREL";
 		case Stop::XABS: return "XABS";
 		case Stop::XREL: return "XREL";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -37,7 +37,7 @@ Stop Stop::read(const char* str){
 	else if(std::strcmp(str,"XABS")==0) return Stop::XABS;
 	else if(std::strcmp(str,"FREL")==0) return Stop::FREL;
 	else if(std::strcmp(str,"FABS")==0) return Stop::FABS;
-	else return Stop::UNKNOWN;
+	else return Stop::NONE;
 }
 
 }
