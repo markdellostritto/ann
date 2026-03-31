@@ -99,7 +99,7 @@ int main(int argc, char* argv[]){
 		std::cout<<"*********************************************************\n";
 		
 		//======== check the parameters ========
-		if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
+		if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
 		if(ts<=0) throw std::invalid_argument("Invalid timestep.");
 		
 		//======== read vacf ========

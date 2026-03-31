@@ -134,7 +134,7 @@ int main(int argc, char* argv[]){
 		std::cout<<print::buf(strbuf)<<"\n";
 		
 		//======== check the parameters ========
-		if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
+		if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
 		
 		//======== read the simulation ========
 		std::cout<<"reading simulation\n";

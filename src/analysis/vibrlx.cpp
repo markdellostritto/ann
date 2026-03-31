@@ -146,8 +146,8 @@ int main(int argc, char* argv[]){
 		
 		//======== check the parameters ========
 		if(interval.end==0 || interval.beg==0 || (interval.end<interval.beg && interval.end>0)) throw std::invalid_argument("Invalid timestep interval.");
-		if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
-		if(fileFormat==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
+		if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
+		if(fileFormat==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
 		if(atom1<0 || atom2<0) throw std::invalid_argument("Invalid atom indices.");
 		if(mass1<=0 || mass2<=0) throw std::invalid_argument("Invalid atom masses.");
 		if(ts<=0) throw std::invalid_argument("Invalid timestep.");

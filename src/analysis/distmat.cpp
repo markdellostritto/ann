@@ -123,8 +123,8 @@ int main(int argc, char* argv[]){
 		std::cout<<print::buf(strbuf,'*')<<"\n";
 		
 		//======== check the parameters ========
-		if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
-		if(fileFormat==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
+		if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
+		if(fileFormat==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
 		
 		//======== read the simulation ========
 		std::cout<<"reading simulation\n";

@@ -40,7 +40,6 @@ int main(int argc, char* argv[]){
 		char* input    =new char[string::M];
 		char* simstr   =new char[string::M];
 		char* strbuf   =new char[print::len_buf];
-		std::vector<std::string> strlist;
 	//==== simulation variables ====
 		Simulation sim;
 		Interval interval;
@@ -52,12 +51,12 @@ int main(int argc, char* argv[]){
 		Group group;
 		double fpmin=0.0,fpmax=0.0;
 	//==== atom type ====
-		sim.atomT().name	=true;
-		sim.atomT().mass	=true;
-		sim.atomT().type	=true;
-		sim.atomT().posn	=true;
-		sim.atomT().vel	=true;
-		sim.atomT().image	=true;
+		sim.atomT().name=true;
+		sim.atomT().mass=true;
+		sim.atomT().type=true;
+		sim.atomT().posn=true;
+		sim.atomT().vel=true;
+		sim.atomT().image=true;
 	//==== miscellaneous ====
 		bool error=false;
 	//==== units ====
@@ -96,7 +95,6 @@ int main(int argc, char* argv[]){
 			} else if(tag=="NPRINT"){
 				nprint=std::atoi(token.next().c_str());
 			} else if(tag=="BOX"){
-				if(strlist.size()!=4) throw std::invalid_argument("Invalid box specification");
 				box[0]=std::atof(token.next().c_str());
 				box[1]=std::atof(token.next().c_str());
 				box[2]=std::atof(token.next().c_str());
@@ -145,8 +143,8 @@ int main(int argc, char* argv[]){
 		std::cout<<print::buf(strbuf,'*')<<"\n";
 		
 		//======== check the parameters ========
-		if(unitsys==units::System::UNKNOWN) throw std::invalid_argument("Invalid unit system.");
-		if(fileFormat==FILE_FORMAT::UNKNOWN) throw std::invalid_argument("Invalid file format.");
+		if(unitsys==units::System::NONE) throw std::invalid_argument("Invalid unit system.");
+		if(fileFormat==FILE_FORMAT::NONE) throw std::invalid_argument("Invalid file format.");
 		if(ts<=0) throw std::invalid_argument("Invalid timestep.");
 		
 		//======== read the simulation ========
@@ -195,6 +193,8 @@ int main(int argc, char* argv[]){
 		//frequency - min/max - index
 		const int imin=(int)std::floor(fpmin/df);
 		const int imax=(int)std::ceil(fpmax/df);
+		std::cout<<"fint = ["<<fmin<<","<<fmax<<","<<df<<"]\n";
+		std::cout<<"pint = ["<<imin<<","<<imax<<","<<1<<"]\n";
 		
 		FFT1D fftvx(2*Nt,FFTW_FORWARD); fftvx.init();
 		FFT1D fftvy(2*Nt,FFTW_FORWARD); fftvy.init();
@@ -298,15 +298,20 @@ int main(int argc, char* argv[]){
 		//compute v2avg
 		std::cout<<"computing v2avg\n";
 		double v2avg=0.0;
+		double kavg=0.0;
 		for(int t=0; t<Nt; ++t){
 			double v2avgl=0;
 			for(int n=0; n<group.size(); ++n){
 				const int nn=group.atom(n);
 				v2avgl+=sim.frame(t).vel(nn).squaredNorm();
+				kavg+=0.5*sim.frame(t).mass(nn)*sim.frame(t).vel(nn).squaredNorm();
 			}
 			v2avg+=v2avgl;
 		}
 		v2avg/=Nt;
+		kavg/=Nt;
+		std::cout<<"v2avg = "<<v2avg<<"\n";
+		std::cout<<"kavg = "<<kavg*mvv_to_e<<"\n";
 		
 		//compute vdos
 		std::cout<<"computing vdos\n";
@@ -315,6 +320,12 @@ int main(int argc, char* argv[]){
 		for(int n=0; n<group.size(); ++n){
 			const int nn=group.atom(n);
 			const double mass=sim.frame(0).mass(nn);
+			//avg
+			double avg=0;
+			for(int t=0; t<Nt; ++t){
+				avg+=sim.frame(t).vel(nn).squaredNorm();
+			}
+			avg/=Nt;
 			//velocity transforms
 			for(int t=0; t<Nt; ++t){
 				fftvx.in(t)[0]=sim.frame(t).vel(nn)[0]; fftvx.in(t)[1]=0.0;
@@ -411,6 +422,7 @@ int main(int argc, char* argv[]){
 	delete[] paramfile;
 	delete[] input;
 	delete[] simstr;
+	delete[] strbuf;
 	
 	std::cout<<"exiting program\n";
 	if(error) return 1;
