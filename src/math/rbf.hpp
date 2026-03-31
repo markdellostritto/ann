@@ -18,10 +18,10 @@ public:
 			MULTIQUADRIC,
 			IMQUADRIC,
 			IQUADRATIC,
-			UNKNOWN
+			NONE
 		};
 		//constructor
-		Name():t_(Type::UNKNOWN){}
+		Name():t_(Type::NONE){}
 		Name(Type t):t_(t){}
 		//operators
 		operator Type()const{return t_;}
@@ -37,7 +37,7 @@ private:
 	double ieps2_;
 public:
 	//==== constructors/destructors ====
-	RBF():name_(Name::UNKNOWN){}
+	RBF():name_(Name::NONE){}
 	RBF(const Name& name, double eps):eps_(eps),ieps2_(1.0/(eps*eps)),name_(name){}
 	~RBF(){}
 	

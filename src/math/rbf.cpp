@@ -14,7 +14,7 @@ std::ostream& operator<<(std::ostream& out, const RBF::Name& name){
 		case RBF::Name::MULTIQUADRIC: out<<"MULTIQUADRIC"; break;
 		case RBF::Name::IMQUADRIC: out<<"IMQUADRIC"; break;
 		case RBF::Name::IQUADRATIC: out<<"IQUADRATIC"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
@@ -25,7 +25,7 @@ const char* RBF::Name::name(const RBF::Name& name){
 		case RBF::Name::MULTIQUADRIC: return "MULTIQUADRIC";
 		case RBF::Name::IMQUADRIC: return "IMQUADRIC";
 		case RBF::Name::IQUADRATIC: return "IQUADRATIC";
-		default: return "UNKNOWN";
+		default: return "NONE";
 	}
 }
 
@@ -34,7 +34,7 @@ RBF::Name RBF::Name::read(const char* str){
 	else if(std::strcmp(str,"MULTIQUADRIC")==0) return RBF::Name::MULTIQUADRIC;
 	else if(std::strcmp(str,"IMQUADRIC")==0) return RBF::Name::IMQUADRIC;
 	else if(std::strcmp(str,"IQUADRATIC")==0) return RBF::Name::IQUADRATIC;
-	else return RBF::Name::UNKNOWN;
+	else return RBF::Name::NONE;
 }
 
 double RBF::operator()(double r)const{
