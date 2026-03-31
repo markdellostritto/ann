@@ -15,13 +15,13 @@ namespace eigen{
 
 struct LIN_SOLVER{
 	enum type{
-		LLT=0,//cholesky decomposition
-		LDLT=1,//cholesky-variant
-		PPLU=2,//LU - partial pivoting
-		FPLU=3,//LU - full pivoting
-		HQR=4,//Householder QR
-		CPHQR=5,//Householder QR - column pivoting
-		UNKNOWN=-1
+		LLT,//cholesky decomposition
+		LDLT,//cholesky-variant
+		PPLU,//LU - partial pivoting
+		FPLU,//LU - full pivoting
+		HQR,//Householder QR
+		CPHQR,//Householder QR - column pivoting
+		NONE
 	};
 	static LIN_SOLVER::type read(const char* str);
 };

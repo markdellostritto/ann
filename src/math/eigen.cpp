@@ -14,7 +14,7 @@ LIN_SOLVER::type LIN_SOLVER::read(const char* str){
 	else if(std::strcmp(str,"FPLU")==0) return LIN_SOLVER::FPLU;
 	else if(std::strcmp(str,"HQR")==0) return LIN_SOLVER::HQR;
 	else if(std::strcmp(str,"CPHQR")==0) return LIN_SOLVER::CPHQR;
-	else return LIN_SOLVER::UNKNOWN;
+	else return LIN_SOLVER::NONE;
 }
 
 std::ostream& operator<<(std::ostream& out, const LIN_SOLVER::type& t){
@@ -25,7 +25,7 @@ std::ostream& operator<<(std::ostream& out, const LIN_SOLVER::type& t){
 		case LIN_SOLVER::FPLU: out<<"FPLU"; break;
 		case LIN_SOLVER::HQR: out<<"HQR"; break;
 		case LIN_SOLVER::CPHQR: out<<"CPHQR"; break;
-		default: out<<"UNKNOWN"; break;
+		default: out<<"NONE"; break;
 	}
 	return out;
 }
